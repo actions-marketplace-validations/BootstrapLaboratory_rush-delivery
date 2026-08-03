@@ -21,6 +21,10 @@ items:
   - title: Providers
     source: ../docs/providers.md
     slug: providers
+  - title: OCI Application Images
+    source: ../docs/oci-application-images.md
+    slug: oci-application-images
+    description: Publish verified application images and deploy immutable digests.
   - title: Development
     source: ../docs/development.md
     slug: development

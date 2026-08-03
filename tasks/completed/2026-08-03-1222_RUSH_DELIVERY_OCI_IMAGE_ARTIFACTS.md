@@ -53,12 +53,12 @@ metadata-driven target behavior, stage boundaries, and thin CI wrappers.
 - Dagger engine `v0.20.7` already exposes the required build, registry-auth, and
   publish APIs. This feature does not require an engine upgrade.
 - Align the GitHub Action's currently stale `dagger-version` default from
-  `v0.20.6` to `v0.20.7`, matching [`../dagger.json`](../dagger.json) and
-  [`../.devcontainer/Dockerfile`](../.devcontainer/Dockerfile).
+  `v0.20.6` to `v0.20.7`, matching [`../../dagger.json`](../../dagger.json) and
+  [`../../.devcontainer/Dockerfile`](../../.devcontainer/Dockerfile).
 - If implementation discovers that a newer Dagger engine is actually required,
   stop and update `dagger.json`, the devcontainer `DAGGER_VERSION`, the Action
   default, the installed CLI, and generated SDK together according to
-  [`../.ai/conventions.md`](../.ai/conventions.md). Confirm `dagger version`
+  [`../../.ai/conventions.md`](../../.ai/conventions.md). Confirm `dagger version`
   before regenerating or testing the module.
 - Run `dagger develop` only with the matching engine/CLI when generated SDK
   refresh is required; do not hand-edit generated files under `sdk`.
@@ -86,12 +86,12 @@ flowchart LR
 
 The existing public stages retain these responsibilities:
 
-| Stage   | Responsibility |
-| ------- | -------------- |
-| Detect  | Select deploy targets from Rush affected-project results, deploy tags, force inputs, and the services mesh. |
-| Build   | Run the declared Rush lifecycle and create compiled outputs. |
+| Stage   | Responsibility                                                                                                                    |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Detect  | Select deploy targets from Rush affected-project results, deploy tags, force inputs, and the services mesh.                       |
+| Build   | Run the declared Rush lifecycle and create compiled outputs.                                                                      |
 | Package | Materialize filesystem or OCI deploy artifacts and write the package manifest. OCI registry publication is a Package side effect. |
-| Deploy  | Consume packaged filesystem paths or immutable image references and run metadata-owned deploy scripts. |
+| Deploy  | Consume packaged filesystem paths or immutable image references and run metadata-owned deploy scripts.                            |
 
 Application images remain separate from Rush Delivery toolchain images and
 Rush installation caches. Do not reuse their metadata, provider names, image
@@ -352,150 +352,150 @@ Package failure without exposing credentials.
 
 ### Phase 1: Contract, Models, Schemas, And Compatibility Tests
 
-- [ ] Add failing parser/model/schema tests for `artifact.kind: oci_image`.
-- [ ] Add v2 manifest tests for filesystem, planned OCI, published OCI, and
+- [x] Add failing parser/model/schema tests for `artifact.kind: oci_image`.
+- [x] Add v2 manifest tests for filesystem, planned OCI, published OCI, and
       mixed artifacts.
-- [ ] Preserve current unversioned manifest parsing and filesystem-only output.
-- [ ] Add strict path, image, platform, digest, reference, source, evidence,
+- [x] Preserve current unversioned manifest parsing and filesystem-only output.
+- [x] Add strict path, image, platform, digest, reference, source, evidence,
       and unknown-field validation.
-- [ ] Add root `package-manifest` and `application-image-providers` schemas and
+- [x] Add root `package-manifest` and `application-image-providers` schemas and
       extend the root package-target schema.
-- [ ] Add schema-fixture coverage for every new schema and metadata shape.
+- [x] Add schema-fixture coverage for every new schema and metadata shape.
 
 ### Phase 2: Provider And Environment Boundary
 
-- [ ] Add an application-image provider model, parser, metadata path, schema,
+- [x] Add an application-image provider model, parser, metadata path, schema,
       metadata-contract validation, option parser, and resolver.
-- [ ] Support arbitrary named `oci_registry` providers plus reserved `off`.
-- [ ] Resolve the selected provider from workflow-plus-deploy env only.
-- [ ] Use Dagger secrets for registry token and signing material.
-- [ ] Add provider-off, dry-run, missing-value, invalid-provider, env-collision,
+- [x] Support arbitrary named `oci_registry` providers plus reserved `off`.
+- [x] Resolve the selected provider from workflow-plus-deploy env only.
+- [x] Use Dagger secrets for registry token and signing material.
+- [x] Add provider-off, dry-run, missing-value, invalid-provider, env-collision,
       and sentinel-secret redaction tests.
 
 ### Phase 3: OCI Package Planning And Build
 
-- [ ] Extend package planning with a typed OCI plan; do not hide OCI semantics
+- [x] Extend package planning with a typed OCI plan; do not hide OCI semantics
       in shell command strings.
-- [ ] Build from the already-built packaged workspace with
+- [x] Build from the already-built packaged workspace with
       `Directory.dockerBuild`, the scoped context, Dockerfile, platform, and
       trusted labels.
-- [ ] Prove OCI packaging does not rerun Rush install or lifecycle commands.
-- [ ] Keep directory and Rush deploy archive plans/output unchanged.
-- [ ] Add focused fixture coverage for filesystem-only, one OCI target, and
+- [x] Prove OCI packaging does not rerun Rush install or lifecycle commands.
+- [x] Keep directory and Rush deploy archive plans/output unchanged.
+- [x] Add focused fixture coverage for filesystem-only, one OCI target, and
       multiple OCI targets.
 
 ### Phase 4: Evidence, Publication, And Manifest Handoff
 
-- [ ] Pin and document the SBOM, scanner, and Sigstore tool images by digest.
-- [ ] Generate, validate, hash, and store target-scoped evidence files.
-- [ ] Enforce scan policy before publication.
-- [ ] Publish each selected OCI target once and normalize Dagger's result to a
+- [x] Pin and document the SBOM, scanner, and Sigstore tool images by digest.
+- [x] Generate, validate, hash, and store target-scoped evidence files.
+- [x] Enforce scan policy before publication.
+- [x] Publish each selected OCI target once and normalize Dagger's result to a
       canonical digest reference.
-- [ ] Generate, attach, sign, and verify digest-bound provenance before marking
+- [x] Generate, attach, sign, and verify digest-bound provenance before marking
       the artifact published.
-- [ ] Await all started target package operations and aggregate deterministic
+- [x] Await all started target package operations and aggregate deterministic
       failures before returning; Deploy must not start after any package error.
-- [ ] Test auth, scan, publication, signing, verification, partial multi-target,
+- [x] Test auth, scan, publication, signing, verification, partial multi-target,
       digest mismatch, evidence tampering, and redaction failures.
 
 ### Phase 5: Deploy Consumption And Results
 
-- [ ] Extend the package-manifest model/parser/formatter, deploy target executor,
+- [x] Extend the package-manifest model/parser/formatter, deploy target executor,
       dry-run summary, and deploy-result model for discriminated filesystem/OCI
       behavior.
-- [ ] Expose immutable `ARTIFACT_IMAGE_*` values and only the selected target's
+- [x] Expose immutable `ARTIFACT_IMAGE_*` values and only the selected target's
       evidence directory.
-- [ ] Reject planned, mutable, malformed, source-mismatched, or unverified OCI
+- [x] Reject planned, mutable, malformed, source-mismatched, or unverified OCI
       artifacts before starting a live deploy script.
-- [ ] Keep existing `ARTIFACT_PATH` and directory/archive result behavior.
-- [ ] Add provider-shaped fixture scripts for Cloud Run, Swarm, and Kubernetes
+- [x] Keep existing `ARTIFACT_PATH` and directory/archive result behavior.
+- [x] Add provider-shaped fixture scripts for Cloud Run, Swarm, and Kubernetes
       that only validate the digest handoff; keep provider deployment logic out
       of Rush Delivery.
 
 ### Phase 6: Dagger And GitHub Action API
 
-- [ ] Add optional `gitSha`, `sourceRepositoryUrl`, `dryRun`, `deployEnvFile`,
+- [x] Add optional `gitSha`, `sourceRepositoryUrl`, `dryRun`, `deployEnvFile`,
       and `applicationImageProvider` inputs where required by
       `packageDeployTargets`; reuse existing `deployEnvFile`/`dryRun` inputs on
       `buildAndPackageDeployTargets` and `workflow`.
-- [ ] Require a full `gitSha` only when a selected OCI target needs it. Keep old
+- [x] Require a full `gitSha` only when a selected OCI target needs it. Keep old
       calls valid for directory/archive-only selections. Treat the source URL
       as optional identity and never derive it from host Git state.
-- [ ] Thread only selected provider values into Package. Do not broaden build,
+- [x] Thread only selected provider values into Package. Do not broaden build,
       npm-release, or deploy-runtime secret exposure.
-- [ ] Add the Action input `application-image-provider`, defaulting to `off`,
+- [x] Add the Action input `application-image-provider`, defaulting to `off`,
       and argument-generation tests. Reuse `workflow-env` plus `deploy-env` for
       provider values; add no new generic env input.
-- [ ] Follow [`../.ai/rules/BashModules.md`](../.ai/rules/BashModules.md) when
-      modifying [`../github-action/prepare-workflow.sh`](../github-action/prepare-workflow.sh).
-- [ ] Align the Action Dagger default to `v0.20.7`.
-- [ ] Preserve standalone package/deploy handoff: the packaged directory carries
+- [x] Follow [`../../.ai/rules/BashModules.md`](../../.ai/rules/BashModules.md) when
+      modifying [`../../github-action/prepare-workflow.sh`](../../github-action/prepare-workflow.sh).
+- [x] Align the Action Dagger default to `v0.20.7`.
+- [x] Preserve standalone package/deploy handoff: the packaged directory carries
       the manifest/evidence while the image itself is addressed in the registry.
-- [ ] Return machine-readable OCI artifact summaries using canonical digest
+- [x] Return machine-readable OCI artifact summaries using canonical digest
       references without changing filesystem-only workflow output.
 
 ### Phase 7: Documentation And v0.8.0 Release Preparation
 
-- [ ] Before editing root docs, add `v0.7.1` to `publishedVersions` in
-      [`../website-docusaurus/scripts/sync-versioned-docs.mjs`](../website-docusaurus/scripts/sync-versioned-docs.mjs),
+- [x] Before editing root docs, add `v0.7.1` to `publishedVersions` in
+      [`../../website-docusaurus/scripts/sync-versioned-docs.mjs`](../../website-docusaurus/scripts/sync-versioned-docs.mjs),
       run `npm --prefix website-docusaurus run sync-versioned-docs`, and verify
       the generated `docs-versions` snapshot against the immutable `v0.7.1`
       tag.
-- [ ] Do not add a `v0.7.1` schema directory: it was a docs/tooling-only patch
+- [x] Do not add a `v0.7.1` schema directory: it was a docs/tooling-only patch
       and the exact public schema contract remains `v0.7.0`.
-- [ ] After finalizing root schema changes, create immutable `schemas/v0.8.0`
+- [x] After finalizing root schema changes, create immutable `schemas/v0.8.0`
       copies of every current root schema, including the two new schemas, with
       matching versioned `$id` URLs.
-- [ ] Update root docs and examples to exact `v0.8.0` Action/module and schema
+- [x] Update root docs and examples to exact `v0.8.0` Action/module and schema
       references. Update Docusaurus `currentDocsVersion` and both site homepages.
-- [ ] Update API, entrypoint, metadata, provider, workflow, quick-start, GitHub
+- [x] Update API, entrypoint, metadata, provider, workflow, quick-start, GitHub
       Action, development, and tutorial documentation. Update both docs trees if
       a page is added or renamed.
-- [ ] Document generic registry configuration, filesystem-only compatibility,
+- [x] Document generic registry configuration, filesystem-only compatibility,
       digest-only deployment, dry runs, provider `off`, credential boundaries,
       evidence policy, post-publication failure, retention, and rollback.
-- [ ] Do not modify existing versioned schema or documentation snapshots by
+- [x] Do not modify existing versioned schema or documentation snapshots by
       hand. Root `package.json` has no project version to bump; Rush Delivery's
       release version is represented by the Git tag and published references.
 
 ### Phase 8: Verification
 
-- [ ] Install root dependencies with `yarn install --frozen-lockfile` when a
+- [x] Install root dependencies with `yarn install --frozen-lockfile` when a
       clean install is needed.
-- [ ] Run `npm run typecheck`.
-- [ ] Run `npm test`, including schema fixtures and metadata-contract tests.
-- [ ] Run `npm run site:docusaurus:check` and
+- [x] Run `npm run typecheck`.
+- [x] Run `npm test`, including schema fixtures and metadata-contract tests.
+- [x] Run `npm run site:docusaurus:check` and
       `npm run site:docusaurus:build`.
-- [ ] Run `npm run site:check` and `npm run site:build`.
-- [ ] Run `git diff --check` and `trunk check -a -y`.
-- [ ] Confirm `dagger version` matches `dagger.json`, then run
+- [x] Run `npm run site:check` and `npm run site:build`.
+- [x] Run `git diff --check` and `trunk check -a -y`.
+- [x] Confirm `dagger version` matches `dagger.json`, then run
       `dagger call ping` and `dagger call self-check`.
-- [ ] Run an isolated disposable-registry acceptance test proving Dockerfile
+- [x] Run an isolated disposable-registry acceptance test proving Dockerfile
       build, pre-publish scan, one publication, canonical digest manifest,
       evidence verification, and digest-only deploy handoff.
-- [ ] Prove existing directory/archive fixtures and filesystem-only workflow
+- [x] Prove existing directory/archive fixtures and filesystem-only workflow
       result JSON remain unchanged.
 
 ## Required Test Matrix
 
-| Case | Expected result |
-| ---- | --------------- |
-| Existing directory target | Same unversioned manifest, artifact path, deploy behavior, and result shape. |
-| Existing Rush archive target | Same unversioned manifest, archive/deploy paths, behavior, and result shape. |
-| Mixed filesystem and OCI targets | Strict v2 manifest; each artifact keeps its discriminated contract. |
-| OCI, provider off, dry run | Planned relative image/platform summary; no credentials, build, evidence, publish, digest, or deploy side effect. |
-| OCI, named provider, dry run | Planned repository/image/platform summary; credential values are not resolved. |
-| OCI, provider off, live | Fail before OCI build, publication, or deploy side effects. |
-| OCI, named provider, live | One publish; verified evidence; canonical digest manifest; deploy receives digest only. |
-| Two OCI targets | Package independently; await both; deterministic complete result or aggregated failure; no deploy after failure. |
-| Registry authentication failure | Sanitized failure; no deploy; no secret in logs, manifests, evidence, or results. |
-| Scanner policy failure | No publication or deploy; identify target/policy without leaking protected data. |
-| Post-publication signing failure | No successful manifest or deploy; report possible orphaned registry artifact. |
-| Signature/attestation verification failure | Artifact is not marked published and deploy does not start. |
-| Planned manifest passed to live deploy | Reject before deploy script execution. |
-| Mutable tag substituted for digest | Reject. |
-| Source revision mismatch | Reject. |
-| Legacy unversioned manifest | Parse with existing directory/archive semantics. |
+| Case                                       | Expected result                                                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Existing directory target                  | Same unversioned manifest, artifact path, deploy behavior, and result shape.                                      |
+| Existing Rush archive target               | Same unversioned manifest, archive/deploy paths, behavior, and result shape.                                      |
+| Mixed filesystem and OCI targets           | Strict v2 manifest; each artifact keeps its discriminated contract.                                               |
+| OCI, provider off, dry run                 | Planned relative image/platform summary; no credentials, build, evidence, publish, digest, or deploy side effect. |
+| OCI, named provider, dry run               | Planned repository/image/platform summary; credential values are not resolved.                                    |
+| OCI, provider off, live                    | Fail before OCI build, publication, or deploy side effects.                                                       |
+| OCI, named provider, live                  | One publish; verified evidence; canonical digest manifest; deploy receives digest only.                           |
+| Two OCI targets                            | Package independently; await both; deterministic complete result or aggregated failure; no deploy after failure.  |
+| Registry authentication failure            | Sanitized failure; no deploy; no secret in logs, manifests, evidence, or results.                                 |
+| Scanner policy failure                     | No publication or deploy; identify target/policy without leaking protected data.                                  |
+| Post-publication signing failure           | No successful manifest or deploy; report possible orphaned registry artifact.                                     |
+| Signature/attestation verification failure | Artifact is not marked published and deploy does not start.                                                       |
+| Planned manifest passed to live deploy     | Reject before deploy script execution.                                                                            |
+| Mutable tag substituted for digest         | Reject.                                                                                                           |
+| Source revision mismatch                   | Reject.                                                                                                           |
+| Legacy unversioned manifest                | Parse with existing directory/archive semantics.                                                                  |
 
 ## Non-Goals For v0.8.0
 

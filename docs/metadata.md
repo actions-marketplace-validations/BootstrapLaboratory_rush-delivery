@@ -10,11 +10,11 @@ For editor integration in external projects, prefer exact versioned schema
 URLs. For example:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/deploy-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/deploy-target.schema.json
 ```
 
 The root `https://bootstraplaboratory.github.io/rush-delivery/schemas/` URLs
-track the current release. Exact paths such as `/schemas/v0.7.0/...` are the
+track the current release. Exact paths such as `/schemas/v0.8.0/...` are the
 stable contract for projects pinned to that Rush Delivery version.
 
 ## Package Release
@@ -32,7 +32,7 @@ source of truth for package selection, version changes, changelogs, and
 publishable package rules.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/npm-release.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/npm-release.schema.json
 
 kind: npm
 
@@ -239,9 +239,77 @@ Supported artifact types:
 
 - `directory`: an already-built repository directory.
 - `rush_deploy_archive`: a Rush deploy output packaged for a deploy target.
+- `oci_image`: a single-platform application image built, scanned, published,
+  signed, and handed to Deploy by immutable digest.
+
+An OCI artifact declares a repository-relative build `context`, a Dockerfile
+inside that context, a relative image name, one explicit `platform`, and a
+scanner policy:
+
+```yaml
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/package-target.schema.json
+name: control-plane-api
+
+artifact:
+  kind: oci_image
+  context: .
+  dockerfile: deploy/images/control-plane-api.Dockerfile
+  image: control-plane-api
+  platform: linux/amd64
+  scan:
+    fail_on: [high, critical]
+    ignore_file: .dagger/application-images/grype.yaml
+```
+
+OCI targets require a full source revision for packaging. Existing
+directory/archive-only projects do not require this artifact shape, provider
+metadata, or registry credentials and retain their legacy manifest output.
 
 Schema:
 [`../schemas/package-target.schema.json`](../schemas/package-target.schema.json)
+
+## Application Image Providers
+
+OCI registry and signing provider metadata lives at
+`.dagger/application-images/providers.yaml`. Provider names are selected by the
+`applicationImageProvider` API input; `off` is reserved and remains the default.
+
+```yaml
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/application-image-providers.schema.json
+providers:
+  release:
+    kind: oci_registry
+    registry: registry.example.com
+    repository_prefix: product/images
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+```
+
+Only environment variable names belong in metadata. Selected values come from
+the workflow-plus-deploy environment overlay and become Dagger secrets during
+Package; none reach the image build or deploy runtime. Multiline Cosign PEM
+values may use literal `\n` separators in flat env files.
+
+Schema:
+[`../schemas/application-image-providers.schema.json`](../schemas/application-image-providers.schema.json)
+
+## Package Manifest
+
+Directory/archive-only selections keep the existing unversioned manifest. Any
+selection containing an OCI artifact emits the strict
+`rush-delivery-package-manifest/v2` envelope. Published OCI artifacts require a
+canonical digest reference, full source revision, one platform, and verified
+SBOM, scan, provenance, and signature evidence. Deploy accepts both manifest
+contracts.
+
+Schema:
+[`../schemas/package-manifest.schema.json`](../schemas/package-manifest.schema.json)
+
+See [OCI application images](oci-application-images.md) for the complete
+package and deploy flow.
 
 ## Validation Targets
 

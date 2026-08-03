@@ -9,7 +9,7 @@ need to mount the repository into the module.
 For pull-request validation:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.7.1
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.0
 DEPLOY_ENV_FILE="${RUNNER_TEMP}/dagger-validate.env"
 SOURCE_REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
 
@@ -45,7 +45,7 @@ files.
 For release workflow runs:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.7.1
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.0
 RUNTIME_FILES_DIR="${RUNNER_TEMP}/rush-delivery-runtime-files"
 WORKFLOW_ENV_FILE="${RUNNER_TEMP}/dagger-workflow.env"
 DEPLOY_ENV_FILE="${RUNNER_TEMP}/dagger-deploy.env"
@@ -62,6 +62,11 @@ GITHUB_TOKEN=${GITHUB_TOKEN}
 EOF
 cat > "${DEPLOY_ENV_FILE}" <<EOF
 GCP_PROJECT_ID=${GCP_PROJECT_ID}
+OCI_USERNAME=${OCI_USERNAME}
+OCI_TOKEN=${OCI_TOKEN}
+OCI_SIGNING_KEY=${OCI_SIGNING_KEY}
+OCI_SIGNING_PASSWORD=${OCI_SIGNING_PASSWORD}
+OCI_SIGNING_PUBLIC_KEY=${OCI_SIGNING_PUBLIC_KEY}
 EOF
 cat > "${RELEASE_ENV_FILE}" <<EOF
 NPM_TOKEN=${NPM_TOKEN}
@@ -83,18 +88,24 @@ dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
   --toolchain-image-policy=lazy \
   --rush-cache-provider=github \
   --rush-cache-policy=lazy \
+  --application-image-provider=release \
   --source-mode=git \
   --source-repository-url="${SOURCE_REPOSITORY_URL}" \
   --source-ref="${GITHUB_REF}" \
   --source-auth-token-env=GITHUB_TOKEN \
-  --runtime-files="${RUNTIME_FILES_DIR}" \
-  --docker-socket=/var/run/docker.sock
+  --runtime-files="${RUNTIME_FILES_DIR}"
 ```
+
+The OCI provider values are needed only for live `oci_image` targets. Leave
+`--application-image-provider=off` and omit them for existing filesystem-only
+projects or provider-off dry runs. Multiline Cosign PEM values can use literal
+`\n` separators in the flat env file. Dagger builds and publishes these images
+without a host Docker socket.
 
 For package release/versioning:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.7.1
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.0
 RELEASE_ENV_FILE="${RUNNER_TEMP}/dagger-release.env"
 SOURCE_REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
 

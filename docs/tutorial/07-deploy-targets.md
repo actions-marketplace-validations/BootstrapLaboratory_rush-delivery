@@ -19,6 +19,13 @@ The deploy script is product-owned executable behavior. In the example:
 Rush Delivery prepares the runtime, mounts the package artifact, passes allowed
 environment, then executes the script.
 
+For an OCI package target, Rush Delivery mounts only that target's verified
+evidence and passes `ARTIFACT_IMAGE_REFERENCE`, `ARTIFACT_IMAGE_DIGEST`,
+`ARTIFACT_IMAGE_REPOSITORY`, `ARTIFACT_IMAGE_PLATFORMS_JSON`, and
+`ARTIFACT_SOURCE_REVISION`. `ARTIFACT_PATH` is absent. A Cloud Run, Swarm, or
+Kubernetes script should send the digest reference directly to its platform and
+rely on the platform identity for registry pulls.
+
 ## Runtime Image And Workspace
 
 The runtime image is the base container for deployment.
@@ -109,5 +116,7 @@ image inputs.
   variable name.
 - Use `dry_run_defaults` for harmless dry-run values.
 - Use runtime files for credentials and other deploy-only files.
+- For OCI targets, deploy `ARTIFACT_IMAGE_REFERENCE` unchanged and do not ask
+  for Package registry or signing credentials.
 
 Next: [Validation Targets](08-validation-targets.md).
