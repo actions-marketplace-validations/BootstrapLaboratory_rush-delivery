@@ -16,8 +16,7 @@ const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const FULL_GIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
 const OCI_IMAGE_NAME_PATTERN =
   /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
-const OCI_PLATFORM_PATTERN =
-  /^[a-z0-9]+\/[a-z0-9_]+(?:\/[a-z0-9._-]+)?$/;
+const OCI_PLATFORM_PATTERN = /^[a-z0-9]+\/[a-z0-9_]+(?:\/[a-z0-9._-]+)?$/;
 const OCI_REPOSITORY_PATTERN =
   /^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[1-9][0-9]{0,4})?\/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
 const VULNERABILITY_SEVERITIES = new Set<VulnerabilitySeverity>([
@@ -150,7 +149,10 @@ function parseEvidencePath(
     evidencePath
       .slice(prefix.length)
       .split("/")
-      .some((segment) => segment.length === 0 || segment === "." || segment === "..")
+      .some(
+        (segment) =>
+          segment.length === 0 || segment === "." || segment === "..",
+      )
   ) {
     throw new Error(`${name} must stay inside "${prefix}".`);
   }
@@ -166,11 +168,7 @@ function parseEvidenceDocument(
   expectedFormat: string,
 ): PackageEvidenceDocument {
   const value = parseObject(rawValue, name);
-  assertKnownKeys(
-    value,
-    ["digest", "format", "path", "subject_digest"],
-    name,
-  );
+  assertKnownKeys(value, ["digest", "format", "path", "subject_digest"], name);
   const format = parseRequiredString(value.format, `${name} format`);
 
   if (format !== expectedFormat) {
@@ -303,11 +301,7 @@ function parseImageEvidence(
       "spdx-json",
     ),
     scan: parseScanEvidence(value.scan, target),
-    signature: parseSignatureEvidence(
-      value.signature,
-      target,
-      imageReference,
-    ),
+    signature: parseSignatureEvidence(value.signature, target, imageReference),
   };
 }
 
@@ -315,10 +309,7 @@ function parseLegacyFilesystemArtifact(
   rawValue: unknown,
   target: string,
 ): FilesystemPackageManifestArtifact {
-  const value = parseObject(
-    rawValue,
-    `Package manifest artifact "${target}"`,
-  );
+  const value = parseObject(rawValue, `Package manifest artifact "${target}"`);
   const kind = parseRequiredString(
     value.kind,
     `Package manifest artifact "${target}" kind`,
@@ -349,10 +340,7 @@ function parseV2FilesystemArtifact(
   rawValue: unknown,
   target: string,
 ): FilesystemPackageManifestArtifact {
-  const value = parseObject(
-    rawValue,
-    `Package manifest artifact "${target}"`,
-  );
+  const value = parseObject(rawValue, `Package manifest artifact "${target}"`);
   assertKnownKeys(
     value,
     ["deploy_path", "kind", "path"],
@@ -384,14 +372,7 @@ function parseV2OciArtifact(
   if (status === "planned") {
     assertKnownKeys(
       value,
-      [
-        "image",
-        "kind",
-        "platforms",
-        "repository",
-        "source_revision",
-        "status",
-      ],
+      ["image", "kind", "platforms", "repository", "source_revision", "status"],
       name,
     );
 
@@ -401,7 +382,9 @@ function parseV2OciArtifact(
       platforms: parsePlatforms(value.platforms, `${name} platforms`),
       ...(value.repository === undefined
         ? {}
-        : { repository: parseRepository(value.repository, `${name} repository`) }),
+        : {
+            repository: parseRepository(value.repository, `${name} repository`),
+          }),
       source_revision: parseSourceRevision(
         value.source_revision,
         `${name} source_revision`,

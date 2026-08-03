@@ -13,6 +13,7 @@ import {
   formatPackageManifest,
 } from "./package-manifest.ts";
 import { assertPackageValidation } from "./package-validation.ts";
+import { collectOciPackageResults } from "./oci-package-results.ts";
 
 const PACKAGE_MANIFEST_PATH = ".dagger/runtime/package-manifest.json";
 
@@ -45,7 +46,9 @@ export async function executePackagePlans(
   options: ExecutePackagePlansOptions = {},
 ): Promise<ExecutePackagePlansResult> {
   const ociPlans = packagePlans.filter(
-    (entry): entry is NamedPackageActionPlan & {
+    (
+      entry,
+    ): entry is NamedPackageActionPlan & {
       plan: Extract<PackageActionPlan, { oci: unknown }>;
     } => "oci" in entry.plan,
   );
@@ -100,42 +103,27 @@ export async function executePackagePlans(
     }
   }
 
-  const settledOciResults = await Promise.allSettled(
-    ociPlans.map(async ({ plan, target }) => ({
-      result: await packageApplicationImage(packagedRepo, target, plan.oci, {
-        dryRun,
-        gitSha: options.gitSha ?? "",
-        provider,
-        sourceRepositoryUrl: options.sourceRepositoryUrl,
-      }),
+  const ociResults = await collectOciPackageResults(
+    ociPlans.map(({ plan, target }) => ({
+      run: () =>
+        packageApplicationImage(packagedRepo, target, plan.oci, {
+          dryRun,
+          gitSha: options.gitSha ?? "",
+          provider,
+          sourceRepositoryUrl: options.sourceRepositoryUrl,
+        }),
       target,
     })),
   );
-  const failures: string[] = [];
 
-  for (const [index, settled] of settledOciResults.entries()) {
-    const target = ociPlans[index].target;
-
-    if (settled.status === "rejected") {
-      failures.push(
-        `OCI package target "${target}" failed: ${settled.reason instanceof Error ? settled.reason.message : String(settled.reason)}`,
-      );
-      continue;
-    }
-
-    artifacts[target] = settled.value.result.artifact;
-    for (const evidenceFile of settled.value.result.evidenceFiles) {
+  for (const { result, target } of ociResults) {
+    artifacts[target] = result.artifact;
+    for (const evidenceFile of result.evidenceFiles) {
       packagedRepo = packagedRepo.withFile(
         evidenceFile.path,
         evidenceFile.file,
       );
     }
-  }
-
-  if (failures.length > 0) {
-    throw new Error(
-      ["OCI application image packaging failed:", ...failures].join("\n"),
-    );
   }
 
   const orderedArtifacts = Object.fromEntries(

@@ -88,13 +88,7 @@
     },
     "plannedOciArtifact": {
       "type": "object",
-      "required": [
-        "image",
-        "kind",
-        "platforms",
-        "source_revision",
-        "status"
-      ],
+      "required": ["image", "kind", "platforms", "source_revision", "status"],
       "additionalProperties": false,
       "properties": {
         "image": {
@@ -206,13 +200,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": {
-            "enum": [
-              "critical",
-              "high",
-              "medium",
-              "low",
-              "negligible"
-            ]
+            "enum": ["critical", "high", "medium", "low", "negligible"]
           }
         },
         "result": {

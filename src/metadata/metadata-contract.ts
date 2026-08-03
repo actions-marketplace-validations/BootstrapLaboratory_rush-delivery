@@ -576,12 +576,7 @@ async function validatePackageTarget(
 
   validateTargetIsRushProject(target, rushProjects, "Package target", issues);
   validatePackageArtifact(target, definition, rushProjects, issues);
-  await validateOciPackageArtifactFiles(
-    repository,
-    target,
-    definition,
-    issues,
-  );
+  await validateOciPackageArtifactFiles(repository, target, definition, issues);
   validateEnvPassthroughDefaults(
     `Package target "${target}" build env`,
     definition.build,

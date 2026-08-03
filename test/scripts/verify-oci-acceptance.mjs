@@ -22,7 +22,9 @@ if (manifest.schema_version !== "rush-delivery-package-manifest/v2") {
   throw new Error("Acceptance manifest does not use the v2 schema.");
 }
 if (Object.keys(manifest.artifacts ?? {}).length !== 1) {
-  throw new Error("Acceptance manifest must contain exactly one image artifact.");
+  throw new Error(
+    "Acceptance manifest must contain exactly one image artifact.",
+  );
 }
 if (artifact?.kind !== "oci_image" || artifact.status !== "published") {
   throw new Error("Acceptance image was not marked published.");
@@ -70,10 +72,16 @@ for (const sentinel of sentinels) {
 }
 
 const sbom = JSON.parse(
-  await readFile(path.join(outputDirectory, artifact.evidence.sbom.path), "utf8"),
+  await readFile(
+    path.join(outputDirectory, artifact.evidence.sbom.path),
+    "utf8",
+  ),
 );
 const scan = JSON.parse(
-  await readFile(path.join(outputDirectory, artifact.evidence.scan.path), "utf8"),
+  await readFile(
+    path.join(outputDirectory, artifact.evidence.scan.path),
+    "utf8",
+  ),
 );
 const provenance = JSON.parse(
   await readFile(

@@ -25,6 +25,7 @@ import {
   normalizeApplicationImageGitSha,
   normalizeApplicationImageSourceUrl,
 } from "./planned-artifact.ts";
+import { rejectedVulnerabilities, type GrypeReport } from "./scan-policy.ts";
 
 export const SYFT_IMAGE =
   "anchore/syft@sha256:1288ea4c8b38767b4e620c1e312c8cb26b6e887a99b4f07ab6cd19fc6f225026";
@@ -55,15 +56,6 @@ export type PackageApplicationImageOptions = {
   gitSha: string;
   provider: ResolvedApplicationImageProvider;
   sourceRepositoryUrl?: string;
-};
-
-type GrypeReport = {
-  matches?: Array<{
-    vulnerability?: {
-      id?: string;
-      severity?: string;
-    };
-  }>;
 };
 
 type SpdxReport = {
@@ -149,10 +141,6 @@ async function generateSbom(imageTarball: File): Promise<File> {
   return reportFile;
 }
 
-function normalizedSeverity(value: string | undefined): string {
-  return (value ?? "unknown").toLowerCase();
-}
-
 async function scanImage(
   repo: Directory,
   imageTarball: File,
@@ -188,24 +176,11 @@ async function scanImage(
   await container.sync();
   const reportFile = container.file(outputPath);
   const report = JSON.parse(await reportFile.contents()) as GrypeReport;
-  const rejected = (report.matches ?? []).filter((match) =>
-    policy.includes(
-      normalizedSeverity(
-        match.vulnerability?.severity,
-      ) as VulnerabilitySeverity,
-    ),
-  );
+  const rejected = rejectedVulnerabilities(report, policy);
 
-  if (rejected.length > 0) {
-    const ids = [
-      ...new Set(
-        rejected
-          .map((match) => match.vulnerability?.id)
-          .filter((id): id is string => id !== undefined),
-      ),
-    ].sort();
+  if (rejected.count > 0) {
     throw new Error(
-      `OCI image vulnerability policy rejected ${rejected.length} finding(s) at severities ${policy.join(", ")}${ids.length > 0 ? `: ${ids.join(", ")}` : "."}`,
+      `OCI image vulnerability policy rejected ${rejected.count} finding(s) at severities ${policy.join(", ")}${rejected.ids.length > 0 ? `: ${rejected.ids.join(", ")}` : "."}`,
     );
   }
 
@@ -349,12 +324,7 @@ async function signAndVerify(
       ...commonAuthArgs,
       imageReference,
     ])
-    .withExec([
-      "/ko-app/cosign",
-      "verify",
-      ...commonVerifyArgs,
-      imageReference,
-    ])
+    .withExec(["/ko-app/cosign", "verify", ...commonVerifyArgs, imageReference])
     .withExec([
       "/ko-app/cosign",
       "verify-attestation",
@@ -406,21 +376,11 @@ export async function packageApplicationImage(
     liveRepository,
     gitSha,
   );
-  const image = buildImageContainer(
-    repo,
-    plan,
-    gitSha,
-    sourceRepositoryUrl,
-  );
+  const image = buildImageContainer(repo, plan, gitSha, sourceRepositoryUrl);
   const imageTarball = image.asTarball();
   const [sbom, scan] = await Promise.all([
     generateSbom(imageTarball),
-    scanImage(
-      repo,
-      imageTarball,
-      plan.scan.fail_on,
-      plan.scan.ignore_file,
-    ),
+    scanImage(repo, imageTarball, plan.scan.fail_on, plan.scan.ignore_file),
   ]);
   const publishedReference = await image
     .withRegistryAuth(

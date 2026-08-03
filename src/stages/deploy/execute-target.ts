@@ -95,8 +95,7 @@ export async function executeTarget(
       artifactEnv.ARTIFACT_IMAGE_REPOSITORY = artifact.repository;
     }
     if (artifact.status === "published") {
-      artifactEnv.ARTIFACT_EVIDENCE_DIR =
-        `/workspace/.dagger/runtime/evidence/${target}`;
+      artifactEnv.ARTIFACT_EVIDENCE_DIR = `/workspace/.dagger/runtime/evidence/${target}`;
       artifactEnv.ARTIFACT_IMAGE_DIGEST = artifact.digest;
       artifactEnv.ARTIFACT_IMAGE_REFERENCE = artifact.reference;
     }

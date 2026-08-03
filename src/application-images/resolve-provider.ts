@@ -55,7 +55,9 @@ export function resolveApplicationImageProvider(
       JSON.stringify({
         auths: {
           [liveDefinition.registry]: {
-            auth: Buffer.from(`${username}:${token}`, "utf8").toString("base64"),
+            auth: Buffer.from(`${username}:${token}`, "utf8").toString(
+              "base64",
+            ),
           },
         },
       }),

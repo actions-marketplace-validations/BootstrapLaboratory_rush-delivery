@@ -14,7 +14,10 @@ import { executeDeploymentPlan } from "./execute-deployment-plan.ts";
 import { loadServicesMesh } from "./load-deploy-metadata.ts";
 import { parsePackageManifest } from "../package-stage/package-manifest.ts";
 import { parseDeployEnvFile } from "./runtime-env.ts";
-import { assertPackageManifestDeployPreflight } from "./package-manifest-preflight.ts";
+import {
+  assertPackageManifestDeployPreflight,
+  assertPackageManifestEvidenceIntegrity,
+} from "./package-manifest-preflight.ts";
 
 async function buildReleasePlan(
   repo: Directory,
@@ -91,6 +94,13 @@ export async function deployRelease(
     gitSha,
     dryRun,
   );
+  if (!dryRun) {
+    await assertPackageManifestEvidenceIntegrity(
+      deploymentPlan.selectedTargets,
+      packageManifest,
+      (path) => repo.file(path).contents(),
+    );
+  }
 
   console.log(
     `[deploy-release] selected targets: ${deploymentPlan.selectedTargets.join(", ")} | environment=${environment} | dryRun=${dryRun}`,

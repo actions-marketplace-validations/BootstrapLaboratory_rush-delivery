@@ -33,8 +33,9 @@ class DaggerMetadataContractRepository implements MetadataContractRepository {
   async isSymlink(path: string): Promise<boolean> {
     try {
       return (
-        (await this.repo.stat(path, { doNotFollowSymlinks: true }).fileType()) ===
-        FileType.Symlink
+        (await this.repo
+          .stat(path, { doNotFollowSymlinks: true })
+          .fileType()) === FileType.Symlink
       );
     } catch {
       return false;

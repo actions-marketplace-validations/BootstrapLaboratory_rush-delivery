@@ -77,13 +77,7 @@
                   "minItems": 1,
                   "uniqueItems": true,
                   "items": {
-                    "enum": [
-                      "critical",
-                      "high",
-                      "medium",
-                      "low",
-                      "negligible"
-                    ]
+                    "enum": ["critical", "high", "medium", "low", "negligible"]
                   }
                 },
                 "ignore_file": {

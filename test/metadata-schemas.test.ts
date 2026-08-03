@@ -129,3 +129,35 @@ test("OCI metadata and manifest fixtures satisfy their JSON schemas", async () =
     );
   }
 });
+
+test("v0.8.0 snapshots every current schema with only a versioned id", async () => {
+  const schemaNames = (await readdir(path.join(repoRoot, "schemas")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.8.0")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+
+  assert.deepEqual(snapshotNames, schemaNames);
+
+  for (const schemaName of schemaNames) {
+    const current = (await readJson(`schemas/${schemaName}`)) as Record<
+      string,
+      unknown
+    >;
+    const snapshot = (await readJson(`schemas/v0.8.0/${schemaName}`)) as Record<
+      string,
+      unknown
+    >;
+
+    assert.equal(
+      snapshot.$id,
+      `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/${schemaName}`,
+    );
+    assert.deepEqual(
+      { ...snapshot, $id: current.$id },
+      current,
+      `${schemaName} snapshot must differ from the root schema only by $id`,
+    );
+  }
+});

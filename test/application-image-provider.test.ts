@@ -92,13 +92,10 @@ providers:
     verification_key_env: OCI_SIGNING_PUBLIC_KEY
 `);
 
-  assert.deepEqual(
-    selectApplicationImageProvider("release", providers),
-    {
-      definition: providers.providers.release,
-      name: "release",
-    },
-  );
+  assert.deepEqual(selectApplicationImageProvider("release", providers), {
+    definition: providers.providers.release,
+    name: "release",
+  });
 });
 
 test("live provider credential selection reports missing env names without values", () => {

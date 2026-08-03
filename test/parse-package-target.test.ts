@@ -79,8 +79,7 @@ artifact:
       platform: "linux/amd64",
       scan: {
         fail_on: ["high", "critical"],
-        ignore_file:
-          ".dagger/application-images/vulnerability-ignore.yaml",
+        ignore_file: ".dagger/application-images/vulnerability-ignore.yaml",
       },
     },
     build: {

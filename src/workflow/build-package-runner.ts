@@ -111,7 +111,8 @@ async function runPackageStage(
       target,
     })),
   );
-  return (await executePackagePlans(repo, container, packagePlans, options)).repo;
+  return (await executePackagePlans(repo, container, packagePlans, options))
+    .repo;
 }
 
 export type BuildPackageWorkflowResult = {

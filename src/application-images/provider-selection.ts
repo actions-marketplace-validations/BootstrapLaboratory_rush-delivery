@@ -81,17 +81,9 @@ export function resolveApplicationImageCredentialValues(
     selected.definition.username_env,
     context,
   );
-  const token = requireHostEnv(
-    hostEnv,
-    selected.definition.token_env,
-    context,
-  );
+  const token = requireHostEnv(hostEnv, selected.definition.token_env, context);
   const signingKey = decodePemEnvironmentValue(
-    requireHostEnv(
-      hostEnv,
-      selected.definition.signing_key_env,
-      context,
-    ),
+    requireHostEnv(hostEnv, selected.definition.signing_key_env, context),
     "-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----",
     "-----END ENCRYPTED SIGSTORE PRIVATE KEY-----",
     selected.definition.signing_key_env,
@@ -102,11 +94,7 @@ export function resolveApplicationImageCredentialValues(
     context,
   );
   const verificationKey = decodePemEnvironmentValue(
-    requireHostEnv(
-      hostEnv,
-      selected.definition.verification_key_env,
-      context,
-    ),
+    requireHostEnv(hostEnv, selected.definition.verification_key_env, context),
     "-----BEGIN PUBLIC KEY-----",
     "-----END PUBLIC KEY-----",
     selected.definition.verification_key_env,

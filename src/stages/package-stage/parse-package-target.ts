@@ -13,8 +13,7 @@ import type {
 const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 const OCI_IMAGE_NAME_PATTERN =
   /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
-const OCI_PLATFORM_PATTERN =
-  /^[a-z0-9]+\/[a-z0-9_]+(?:\/[a-z0-9._-]+)?$/;
+const OCI_PLATFORM_PATTERN = /^[a-z0-9]+\/[a-z0-9_]+(?:\/[a-z0-9._-]+)?$/;
 const VULNERABILITY_SEVERITIES = new Set<VulnerabilitySeverity>([
   "critical",
   "high",
@@ -45,7 +44,12 @@ function parseRepositoryPath(
   if (
     value.startsWith("/") ||
     /^[A-Za-z]:\//.test(value) ||
-    value.split("/").some((segment) => segment.length === 0 || segment === "." || segment === "..")
+    value
+      .split("/")
+      .some(
+        (segment) =>
+          segment.length === 0 || segment === "." || segment === "..",
+      )
   ) {
     throw new Error(`${name} must be a normalized repository-relative path.`);
   }
@@ -268,14 +272,7 @@ function parsePackageArtifact(rawValue: unknown): PackageArtifactDefinition {
     case "oci_image": {
       assertKnownKeys(
         rawValue as Record<string, unknown>,
-        [
-          "context",
-          "dockerfile",
-          "image",
-          "kind",
-          "platform",
-          "scan",
-        ],
+        ["context", "dockerfile", "image", "kind", "platform", "scan"],
         "Package target artifact",
       );
       const context = parseRepositoryPath(
@@ -311,9 +308,7 @@ function parsePackageArtifact(rawValue: unknown): PackageArtifactDefinition {
           "platform" in rawValue ? rawValue.platform : undefined,
           "Package target OCI image platform",
         ),
-        scan: parseOciImageScan(
-          "scan" in rawValue ? rawValue.scan : undefined,
-        ),
+        scan: parseOciImageScan("scan" in rawValue ? rawValue.scan : undefined),
       };
     }
 

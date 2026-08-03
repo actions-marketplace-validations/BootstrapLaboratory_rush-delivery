@@ -56,11 +56,7 @@ test("rejects mutable publication results", () => {
 
   assert.throws(
     () =>
-      normalizePublishedImageReference(
-        repository,
-        tagReference,
-        tagReference,
-      ),
+      normalizePublishedImageReference(repository, tagReference, tagReference),
     /without a digest/,
   );
 });
