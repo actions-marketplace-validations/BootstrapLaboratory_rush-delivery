@@ -14,6 +14,7 @@ type SchemaCase = {
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "..");
 const fixtureRoot = path.resolve(testDirectory, "fixtures/rush-repo");
+const ociFixtureRoot = path.resolve(testDirectory, "fixtures/oci-contract");
 
 async function readJson(relativePath: string): Promise<unknown> {
   return JSON.parse(await readFile(path.join(repoRoot, relativePath), "utf8"));
@@ -89,5 +90,74 @@ test("fixture Dagger metadata files satisfy their JSON schemas", async () => {
         `${metadataPath} must satisfy ${schemaCase.schemaPath}\n${formatSchemaErrors(validate.errors)}`,
       );
     }
+  }
+});
+
+test("OCI metadata and manifest fixtures satisfy their JSON schemas", async () => {
+  const schemaCases = [
+    {
+      fixturePath: "package-target.yaml",
+      schemaPath: "schemas/package-target.schema.json",
+      yaml: true,
+    },
+    {
+      fixturePath: "application-image-providers.yaml",
+      schemaPath: "schemas/application-image-providers.schema.json",
+      yaml: true,
+    },
+    {
+      fixturePath: "package-manifest.json",
+      schemaPath: "schemas/package-manifest.schema.json",
+      yaml: false,
+    },
+  ];
+
+  for (const schemaCase of schemaCases) {
+    const ajv = new Ajv2020({ allErrors: true });
+    const validate = ajv.compile(
+      (await readJson(schemaCase.schemaPath)) as AnySchema,
+    );
+    const source = await readFile(
+      path.join(ociFixtureRoot, schemaCase.fixturePath),
+      "utf8",
+    );
+    const value = schemaCase.yaml ? parseYaml(source) : JSON.parse(source);
+
+    assert.ok(
+      validate(value),
+      `${schemaCase.fixturePath} must satisfy ${schemaCase.schemaPath}\n${formatSchemaErrors(validate.errors)}`,
+    );
+  }
+});
+
+test("v0.8.0 snapshots every current schema with only a versioned id", async () => {
+  const schemaNames = (await readdir(path.join(repoRoot, "schemas")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.8.0")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+
+  assert.deepEqual(snapshotNames, schemaNames);
+
+  for (const schemaName of schemaNames) {
+    const current = (await readJson(`schemas/${schemaName}`)) as Record<
+      string,
+      unknown
+    >;
+    const snapshot = (await readJson(`schemas/v0.8.0/${schemaName}`)) as Record<
+      string,
+      unknown
+    >;
+
+    assert.equal(
+      snapshot.$id,
+      `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/${schemaName}`,
+    );
+    assert.deepEqual(
+      { ...snapshot, $id: current.$id },
+      current,
+      `${schemaName} snapshot must differ from the root schema only by $id`,
+    );
   }
 });

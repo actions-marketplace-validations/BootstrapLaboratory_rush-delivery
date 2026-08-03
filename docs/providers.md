@@ -57,6 +57,23 @@ Policies:
   existing cache when available and run Rush install, but never publish a cache
   from the PR run.
 
+## Application Image Providers
+
+`applicationImageProvider=off` preserves filesystem-only workflows and supports
+credential-free OCI dry runs. A live selected OCI package target must name an
+`oci_registry` provider from `.dagger/application-images/providers.yaml`.
+
+The adapter is registry-neutral. Metadata supplies a registry authority,
+repository prefix, and the names of environment variables containing registry
+and key-backed Cosign credentials. Selected values come from `workflow-env`
+plus `deploy-env` and are converted to Dagger secrets before Package starts.
+Provider metadata and dry-run output never contain credential values.
+
+Application images are distinct from toolchain images and Rush cache images.
+They use package-target image names, are published once per target under a
+source navigation tag, and are recorded and deployed only as verified digest
+references. See [OCI application images](oci-application-images.md).
+
 ## Deploy Providers
 
 Deploy providers are target-level concerns. A target runtime decides what
@@ -81,12 +98,19 @@ A CI provider should provide:
   through `workflow` or `release-packages`.
 - A runtime files directory for deploy-only credential or config files when
   targets need file mounts.
-- Optional Docker socket for targets that build container images.
+- Optional Docker socket only for a project-owned legacy deploy target that
+  explicitly needs it. First-class OCI package artifacts build and publish
+  through Dagger and do not use a host Docker daemon or socket.
 - Permissions for any selected provider adapters.
 
 For GitHub PR validation, `packages: read` is enough when both provider
 policies are `pull-or-build`. Trusted release workflows that use `lazy` need
 `packages: write` so refreshed artifacts can be published.
+
+Application image registry permissions are provider-specific. A live OCI
+release needs push access for the selected registry identity. Pull access at
+deployment belongs to the target platform identity, not the Rush Delivery
+deploy script.
 
 The CI provider should not compute deploy plans, package artifacts, update
 deploy tags, apply package versions, publish npm packages directly, or encode

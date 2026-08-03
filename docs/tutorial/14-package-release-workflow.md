@@ -11,7 +11,7 @@ separation.
 Select package release explicitly:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.7.1
+- uses: BootstrapLaboratory/rush-delivery@v0.8.0
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -63,7 +63,7 @@ jobs:
       contents: write
     steps:
       - name: Run Rush Delivery package release
-        uses: BootstrapLaboratory/rush-delivery@v0.7.1
+        uses: BootstrapLaboratory/rush-delivery@v0.8.0
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -110,7 +110,7 @@ permissions:
   packages: read
 
 steps:
-  - uses: BootstrapLaboratory/rush-delivery@v0.7.1
+  - uses: BootstrapLaboratory/rush-delivery@v0.8.0
     with:
       entrypoint: validate
       toolchain-image-provider: github
@@ -126,7 +126,7 @@ cache from PRs. Package release credentials are not passed to PR validation.
 Use local-copy source mode to test metadata and release behavior before pushing:
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.7.1 call release-packages \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.8.0 call release-packages \
   --repo=. \
   --git-sha="$(git rev-parse HEAD)" \
   --dry-run=true \

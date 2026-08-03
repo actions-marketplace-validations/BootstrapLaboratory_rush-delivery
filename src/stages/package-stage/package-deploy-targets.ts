@@ -1,23 +1,33 @@
 import { Directory, File } from "@dagger.io/dagger";
 
 import { parseCiPlan } from "../../ci-plan/parse-ci-plan.ts";
-import { logSection, logSubsection } from "../../logging/sections.ts";
-import { installRush, prepareRushContainer } from "../../rush/container.ts";
-import { loadPackageTargetDefinition } from "./load-package-metadata.ts";
-import { buildPackageActionPlan } from "./package-action-plan.ts";
-import { assertPackageValidation } from "./package-validation.ts";
+import { logSection } from "../../logging/sections.ts";
+import {
+  installRush,
+  prepareRushContainer,
+  prepareRushWorkspaceContainer,
+} from "../../rush/container.ts";
+import { parseOptionalEnvFile } from "../../workflow/env.ts";
 import {
   createEmptyPackageManifest,
   formatPackageManifest,
 } from "./package-manifest.ts";
+import { loadPackageTargetDefinition } from "./load-package-metadata.ts";
+import { buildPackageActionPlan } from "./package-action-plan.ts";
+import { executePackagePlans } from "./execute-package-plans.ts";
+import { packagePlansRequireRushInstall } from "./package-install.ts";
 
-const WORKDIR = "/workspace";
 const PACKAGE_MANIFEST_PATH = ".dagger/runtime/package-manifest.json";
 
 export async function packageDeployTargets(
   repo: Directory,
   ciPlanFile: File,
   artifactPrefix: string = "deploy-target",
+  gitSha: string = "",
+  sourceRepositoryUrl: string = "",
+  dryRun: boolean = true,
+  deployEnvFile?: File,
+  applicationImageProvider: string = "off",
 ): Promise<Directory> {
   const ciPlan = parseCiPlan(await ciPlanFile.contents());
 
@@ -41,46 +51,17 @@ export async function packageDeployTargets(
       target,
     })),
   );
-  const artifacts = Object.fromEntries(
-    packagePlans.map(({ plan, target }) => [target, plan.artifact]),
-  );
-  const packageManifest = formatPackageManifest({ artifacts });
+  const needsRushInstall = packagePlansRequireRushInstall(packagePlans);
+  const container = needsRushInstall
+    ? installRush(await prepareRushContainer(repo))
+    : prepareRushWorkspaceContainer(repo);
+  const result = await executePackagePlans(repo, container, packagePlans, {
+    applicationImageProvider,
+    dryRun,
+    gitSha,
+    hostEnv: await parseOptionalEnvFile(deployEnvFile, "deploy env"),
+    sourceRepositoryUrl,
+  });
 
-  if (packagePlans.every(({ plan }) => plan.commands.length === 0)) {
-    for (const { plan, target } of packagePlans) {
-      logSubsection(`Package target: ${target}`);
-      console.log(`[package] ${target}: ${plan.artifact.kind}`);
-
-      for (const validation of plan.validations) {
-        await assertPackageValidation(repo, validation, target);
-      }
-    }
-
-    return repo.withNewFile(PACKAGE_MANIFEST_PATH, packageManifest);
-  }
-
-  let container = installRush(await prepareRushContainer(repo));
-
-  for (const { plan, target } of packagePlans) {
-    logSubsection(`Package target: ${target}`);
-    console.log(`[package] ${target}: ${plan.artifact.kind}`);
-
-    for (const validation of plan.validations) {
-      await assertPackageValidation(
-        container.directory(WORKDIR),
-        validation,
-        target,
-      );
-    }
-
-    for (const { command, args } of plan.commands) {
-      container = container.withExec([command, ...args], {
-        expand: false,
-      });
-    }
-  }
-
-  return container
-    .directory(WORKDIR)
-    .withNewFile(PACKAGE_MANIFEST_PATH, packageManifest);
+  return result.repo;
 }

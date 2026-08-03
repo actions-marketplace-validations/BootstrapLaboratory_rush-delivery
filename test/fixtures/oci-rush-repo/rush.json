@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/rush/v5/rush.schema.json",
+  "rushVersion": "5.160.0",
+  "pnpmVersion": "10.14.0",
+  "projects": [
+    {
+      "packageName": "control-plane-api",
+      "projectFolder": "apps/control-plane-api"
+    }
+  ]
+}

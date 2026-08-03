@@ -1,0 +1,18 @@
+{
+  "schema_version": "rush-delivery-package-manifest/v2",
+  "artifacts": {
+    "control-plane-api": {
+      "kind": "oci_image",
+      "status": "planned",
+      "image": "platform/control-plane-api",
+      "repository": "registry.example:5000/example/platform/platform/control-plane-api",
+      "platforms": ["linux/amd64"],
+      "source_revision": "0123456789abcdef0123456789abcdef01234567"
+    },
+    "webapp": {
+      "kind": "directory",
+      "path": "apps/webapp/dist",
+      "deploy_path": "apps/webapp/dist"
+    }
+  }
+}

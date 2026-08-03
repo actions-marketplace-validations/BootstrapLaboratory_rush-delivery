@@ -5,6 +5,10 @@ Provider artifacts are the reusable pieces that make Rush Delivery fast in CI:
 - toolchain images
 - Rush install cache
 
+Application images use a third, deliberately separate provider contract. They
+are product deploy artifacts rather than reusable framework acceleration
+artifacts, so they do not share these image names, policies, or retention.
+
 The example stores both in GitHub Container Registry through metadata in:
 
 - [`.dagger/toolchain-images/providers.yaml`](https://github.com/BootstrapLaboratory/typescript_monorepo_nestjs_relay_trunk/blob/main/.dagger/toolchain-images/providers.yaml)
@@ -89,6 +93,28 @@ with:
 `lazy` is the trusted workflow policy. Toolchain images are published when they
 are missing. Rush cache is restored when available, then the post-install cache
 is published after a successful install.
+
+## Application Image Provider
+
+If a later package target uses `artifact.kind: oci_image`, add
+`.dagger/application-images/providers.yaml`:
+
+```yaml
+providers:
+  release:
+    kind: oci_registry
+    registry: registry.example.com
+    repository_prefix: product/images
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+```
+
+Select it only for a trusted live workflow. Provider `off` is sufficient for
+filesystem-only projects and OCI dry runs. Registry/signing credentials are
+Package-only Dagger secrets; deployment receives the verified digest instead.
 
 ## Checklist
 

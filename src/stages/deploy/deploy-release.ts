@@ -14,6 +14,10 @@ import { executeDeploymentPlan } from "./execute-deployment-plan.ts";
 import { loadServicesMesh } from "./load-deploy-metadata.ts";
 import { parsePackageManifest } from "../package-stage/package-manifest.ts";
 import { parseDeployEnvFile } from "./runtime-env.ts";
+import {
+  assertPackageManifestDeployPreflight,
+  assertPackageManifestEvidenceIntegrity,
+} from "./package-manifest-preflight.ts";
 
 async function buildReleasePlan(
   repo: Directory,
@@ -81,6 +85,20 @@ export async function deployRelease(
   if (packageManifest === undefined) {
     throw new Error(
       "packageManifestFile is required when release targets are selected.",
+    );
+  }
+
+  assertPackageManifestDeployPreflight(
+    deploymentPlan.selectedTargets,
+    packageManifest,
+    gitSha,
+    dryRun,
+  );
+  if (!dryRun) {
+    await assertPackageManifestEvidenceIntegrity(
+      deploymentPlan.selectedTargets,
+      packageManifest,
+      (path) => repo.file(path).contents(),
     );
   }
 

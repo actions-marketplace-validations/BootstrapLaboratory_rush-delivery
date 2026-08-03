@@ -14,7 +14,7 @@ permissions:
   packages: read
 
 steps:
-  - uses: BootstrapLaboratory/rush-delivery@v0.7.1
+  - uses: BootstrapLaboratory/rush-delivery@v0.8.0
     with:
       entrypoint: validate
       toolchain-image-provider: github
@@ -61,9 +61,25 @@ The deploy env block passes product settings and provider secrets:
 
 ```yaml
 deploy-env: |
+  OCI_USERNAME=${{ secrets.OCI_USERNAME }}
+  OCI_TOKEN=${{ secrets.OCI_TOKEN }}
+  OCI_SIGNING_KEY=${{ secrets.OCI_SIGNING_KEY }}
+  OCI_SIGNING_PASSWORD=${{ secrets.OCI_SIGNING_PASSWORD }}
+  OCI_SIGNING_PUBLIC_KEY=${{ vars.OCI_SIGNING_PUBLIC_KEY }}
   GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
   CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
+
+When the selected package target is an OCI image, also select the provider:
+
+```yaml
+with:
+  application-image-provider: release
+```
+
+Existing directory/archive targets leave it `off`. Rush Delivery uses the OCI
+credentials only during Package and gives Deploy the verified digest, not the
+credentials.
 
 Rush Delivery reads the deploy env file once, then only passes variables that
 package and deploy target metadata allow through `pass_env` or `map_env`.
@@ -87,7 +103,7 @@ Package release/versioning can be composed into the main trusted workflow when
 the same job should deploy applications and release npm packages:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.7.1
+- uses: BootstrapLaboratory/rush-delivery@v0.8.0
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -115,7 +131,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.7.1
+      - uses: BootstrapLaboratory/rush-delivery@v0.8.0
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -136,7 +152,7 @@ images use GitHub Container Registry.
 Pin Rush Delivery to a released tag:
 
 ```yaml
-uses: BootstrapLaboratory/rush-delivery@v0.7.1
+uses: BootstrapLaboratory/rush-delivery@v0.8.0
 ```
 
 Advance the tag intentionally when you want new behavior. Do not use an
@@ -151,6 +167,8 @@ unversioned branch in production CI.
 - Package release workflow uses `release-env` for npm credentials.
 - Runtime files carry credential files.
 - Deploy env carries settings and secrets.
+- OCI releases select an application-image provider; filesystem-only releases
+  keep it `off`.
 - Manual force deploy workflows reuse the main workflow.
 
 Next: [Local Dry Runs](10-local-dry-runs.md).

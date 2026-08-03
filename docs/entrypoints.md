@@ -22,6 +22,7 @@ dagger -m "$RUSH_DELIVERY_MODULE" call workflow \
   --dry-run=false \
   --workflow-env-file="$WORKFLOW_ENV_FILE" \
   --deploy-env-file="$DEPLOY_ENV_FILE" \
+  --application-image-provider=release \
   --release-targets-json='["npm"]' \
   --release-env-file="$RELEASE_ENV_FILE" \
   --runtime-files="$RUNTIME_FILES_DIR" \
@@ -151,12 +152,19 @@ Use it only in split-stage workflows after build outputs already exist.
 dagger -m "$RUSH_DELIVERY_MODULE" call package-deploy-targets \
   --repo=. \
   --ci-plan-file="$CI_PLAN_FILE" \
-  --artifact-prefix=deploy-target
+  --artifact-prefix=deploy-target \
+  --git-sha="$GIT_SHA" \
+  --source-repository-url="$SOURCE_REPOSITORY_URL" \
+  --dry-run=false \
+  --deploy-env-file="$DEPLOY_ENV_FILE" \
+  --application-image-provider=release
 ```
 
-Returns a Dagger directory containing packaged artifacts and a package manifest.
-It accepts the same build-time `deploy-env-file` and `dry-run` inputs as
-`build-deploy-targets`.
+Returns a Dagger directory containing packaged artifacts, a package manifest,
+and OCI evidence when selected. It accepts the same build-time
+`deploy-env-file` and `dry-run` inputs as `build-deploy-targets`. OCI targets
+also use `git-sha`, the optional source URL, and the selected application-image
+provider. Directory/archive-only calls remain valid without those additions.
 
 ## `build-and-package-deploy-targets`
 
@@ -170,10 +178,16 @@ dagger -m "$RUSH_DELIVERY_MODULE" call build-and-package-deploy-targets \
   --repo=. \
   --ci-plan-file="$CI_PLAN_FILE" \
   --artifact-prefix=deploy-target \
-  --deploy-env-file="$DEPLOY_ENV_FILE"
+  --deploy-env-file="$DEPLOY_ENV_FILE" \
+  --git-sha="$GIT_SHA" \
+  --source-repository-url="$SOURCE_REPOSITORY_URL" \
+  --application-image-provider=release
 ```
 
 Returns a Dagger directory containing packaged artifacts and a package manifest.
+For OCI targets, Package performs registry publication and carries the verified
+manifest/evidence into the returned directory; Deploy later resolves the image
+from the registry by digest.
 
 ## `deploy-release`
 

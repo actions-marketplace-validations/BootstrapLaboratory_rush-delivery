@@ -1,4 +1,4 @@
-import { Directory, ExistsType } from "@dagger.io/dagger";
+import { Directory, ExistsType, FileType } from "@dagger.io/dagger";
 
 import {
   type MetadataContractRepository,
@@ -28,6 +28,18 @@ class DaggerMetadataContractRepository implements MetadataContractRepository {
           ? ExistsType.RegularType
           : ExistsType.DirectoryType,
     });
+  }
+
+  async isSymlink(path: string): Promise<boolean> {
+    try {
+      return (
+        (await this.repo
+          .stat(path, { doNotFollowSymlinks: true })
+          .fileType()) === FileType.Symlink
+      );
+    } catch {
+      return false;
+    }
   }
 
   async readTextFile(path: string): Promise<string> {

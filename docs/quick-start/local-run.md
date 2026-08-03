@@ -5,7 +5,7 @@ available to Dagger and avoids relying on a remote Git ref that does not contain
 your latest changes.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.7.1
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.0
 
 dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
   --repo=. \
@@ -16,8 +16,14 @@ dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
   --dry-run=true \
   --toolchain-image-provider=off \
   --rush-cache-provider=off \
+  --application-image-provider=off \
   --source-mode=local_copy
 ```
+
+If the forced selection includes an OCI target, this dry run reports the
+relative image and platform but does not build, scan, publish, sign, or resolve
+credentials. Select a named application-image provider only when you also want
+to validate its planned repository.
 
 For local PR-style validation only:
 

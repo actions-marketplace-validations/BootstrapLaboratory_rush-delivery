@@ -18,6 +18,8 @@ extension surface for validation, packaging, deployment, caches, and toolchains.
   behavior.
 - [Provider adapters](providers.md): source, registry, cache, and CI-provider
   boundaries.
+- [OCI application images](oci-application-images.md): build-once image
+  publication, verified evidence, and digest-only deploy handoff.
 - [Development](development.md): maintainer checks, website build notes, and
   generated documentation inputs.
 - [AI architecture](ai/architecture.md): high-level design map for future
@@ -32,7 +34,7 @@ contract. These docs explain intent and usage; schemas define file shape.
 Published schemas are available from the documentation site:
 
 - `https://bootstraplaboratory.github.io/rush-delivery/schemas/<schema>.schema.json`
-- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/<schema>.schema.json`
+- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/<schema>.schema.json`
 
 Use exact versioned schema URLs in project metadata editor hints so older
 projects keep the schema contract they were written against. The root

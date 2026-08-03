@@ -24,6 +24,7 @@ dagger -m "$RUSH_DELIVERY_MODULE" call workflow \
   --dry-run=true \
   --toolchain-image-provider=off \
   --rush-cache-provider=off \
+  --application-image-provider=off \
   --source-mode=local_copy
 ```
 
@@ -39,16 +40,22 @@ For GitHub Actions, prefer the repository action wrapper:
 
 ```yaml
 - name: Rush Delivery
-  uses: BootstrapLaboratory/rush-delivery@v0.7.1
+  uses: BootstrapLaboratory/rush-delivery@v0.8.0
   with:
     force-targets-json: ${{ inputs.force_targets_json || '[]' }}
     environment: prod
     dry-run: "false"
+    application-image-provider: release
     release-targets-json: '["npm"]'
     runtime-file-map: |
       ${{ steps.auth.outputs.credentials_file_path }}=>gcp-credentials.json
     deploy-env: |
       GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
+      OCI_USERNAME=${{ secrets.OCI_USERNAME }}
+      OCI_TOKEN=${{ secrets.OCI_TOKEN }}
+      OCI_SIGNING_KEY=${{ secrets.OCI_SIGNING_KEY }}
+      OCI_SIGNING_PASSWORD=${{ secrets.OCI_SIGNING_PASSWORD }}
+      OCI_SIGNING_PUBLIC_KEY=${{ vars.OCI_SIGNING_PUBLIC_KEY }}
     release-env: |
       NPM_TOKEN=${{ secrets.NPM_TOKEN }}
 ```
@@ -62,7 +69,7 @@ change files:
 
 ```yaml
 - name: Rush Delivery validation
-  uses: BootstrapLaboratory/rush-delivery@v0.7.1
+  uses: BootstrapLaboratory/rush-delivery@v0.8.0
   with:
     entrypoint: validate
     toolchain-image-provider: github
@@ -81,7 +88,7 @@ adapters off:
 
 ```yaml
 - name: Rush Delivery package release
-  uses: BootstrapLaboratory/rush-delivery@v0.7.1
+  uses: BootstrapLaboratory/rush-delivery@v0.8.0
   with:
     entrypoint: release-packages
     dry-run: "false"
@@ -153,13 +160,35 @@ dagger -m "$RUSH_DELIVERY_MODULE" call workflow \
   --toolchain-image-policy="$TOOLCHAIN_IMAGE_POLICY" \
   --rush-cache-provider="$RUSH_CACHE_PROVIDER" \
   --rush-cache-policy="$RUSH_CACHE_POLICY" \
+  --application-image-provider="$APPLICATION_IMAGE_PROVIDER" \
   --source-mode=git \
   --source-repository-url="$SOURCE_REPOSITORY_URL" \
   --source-ref="$SOURCE_REF" \
   --source-auth-token-env=GITHUB_TOKEN \
-  --runtime-files="$RUNNER_TEMP/rush-delivery-runtime-files" \
-  --docker-socket=/var/run/docker.sock
+  --runtime-files="$RUNNER_TEMP/rush-delivery-runtime-files"
 ```
+
+First-class OCI targets do not need a Docker socket. Add `--docker-socket` only
+when an existing project-owned deploy script still invokes Docker directly.
+
+## OCI Package And Deploy Boundary
+
+With `applicationImageProvider=release`, each selected `oci_image` target is
+built from the prepared workspace, scanned before publication, published once,
+signed and attested, and written to the package manifest only after
+verification. Deploy scripts receive the immutable digest reference and the
+target-scoped evidence directory; registry and signing credentials do not cross
+the Package boundary.
+
+Provider `off` remains the default and needs no metadata for filesystem-only
+projects. OCI dry runs are also valid with provider `off`: they report relative
+image/platform intent without resolving credentials or producing a fake digest.
+
+Publication is not transactional. A signing or verification failure after
+publish can leave an orphaned registry digest or navigation tag, but Rush
+Delivery stops before writing a successful manifest or starting Deploy. See
+[OCI application images](oci-application-images.md) for retention and rollback
+guidance.
 
 ## Split Stage Workflows
 

@@ -18,6 +18,20 @@ npm run typecheck
 npm test
 ```
 
+OCI application-image changes also need the live disposable-registry
+acceptance path. It creates temporary Cosign keys, publishes a short-lived
+scratch image, and verifies the digest manifest and evidence:
+
+```sh
+test/scripts/run-oci-acceptance.sh
+```
+
+The acceptance script requires Dagger and Docker only to create its temporary
+Cosign keypair; framework image build and publication still run through Dagger.
+The Package implementation pins Syft 1.50.0, Grype 0.116.1, and Cosign 3.1.2 by
+immutable image digest. Update each version and digest together, then rerun the
+unit, Dagger self-check, and live acceptance paths.
+
 ## Website Checks
 
 The public GitHub Pages site currently builds from
@@ -48,11 +62,11 @@ docs. When adding or renaming public docs pages, update both:
 Schemas under [`../schemas`](../schemas) are copied into the static site during
 website builds and are published under `/rush-delivery/schemas/`. Exact release
 schemas also live under versioned subdirectories such as
-`/rush-delivery/schemas/v0.7.0/`.
+`/rush-delivery/schemas/v0.8.0/`.
 
-When releasing a version that changes schema behavior, keep the versioned
-schema directory immutable and update the root schemas to the current release
-shape.
+When releasing a version that changes schema behavior, create a new versioned
+schema snapshot such as `schemas/v0.8.0`, keep earlier directories immutable,
+and update the root schemas to the current release shape.
 
 ## Versioned Docusaurus Docs
 

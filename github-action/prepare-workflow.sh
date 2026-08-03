@@ -200,6 +200,7 @@ toolchain_image_provider="${INPUT_TOOLCHAIN_IMAGE_PROVIDER:-off}"
 toolchain_image_policy="${INPUT_TOOLCHAIN_IMAGE_POLICY-}"
 rush_cache_provider="${INPUT_RUSH_CACHE_PROVIDER:-off}"
 rush_cache_policy="${INPUT_RUSH_CACHE_POLICY-}"
+application_image_provider="${INPUT_APPLICATION_IMAGE_PROVIDER:-off}"
 source_mode="${INPUT_SOURCE_MODE:-git}"
 source_repository_url="${INPUT_SOURCE_REPOSITORY_URL-}"
 source_ref="${INPUT_SOURCE_REF:-${GITHUB_REF-}}"
@@ -275,6 +276,7 @@ workflow)
 		"--toolchain-image-policy=${toolchain_image_policy}"
 		"--rush-cache-provider=${rush_cache_provider}"
 		"--rush-cache-policy=${rush_cache_policy}"
+		"--application-image-provider=${application_image_provider}"
 		"--runtime-files=${runtime_files}"
 	)
 	if [[ ${release_targets_json} != "[]" || -s ${release_env_file} ]]; then

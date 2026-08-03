@@ -1,0 +1,10 @@
+{
+  "affected_projects_by_deploy_target": {
+    "control-plane-api": ["control-plane-api"]
+  },
+  "deploy_targets": ["control-plane-api"],
+  "mode": "release",
+  "pr_base_sha": "",
+  "release_targets": [],
+  "validate_targets": []
+}

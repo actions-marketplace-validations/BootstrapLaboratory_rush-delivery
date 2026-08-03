@@ -123,4 +123,4 @@ Next: [NPM Package Release Baseline](12-npm-package-release-baseline.md).
 
 For editor validation, point metadata files at exact published schema versions
 such as
-`https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/deploy-target.schema.json`.
+`https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/deploy-target.schema.json`.
