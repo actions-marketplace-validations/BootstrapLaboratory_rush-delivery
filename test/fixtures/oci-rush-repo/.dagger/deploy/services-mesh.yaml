@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/deploy-services-mesh.schema.json
+services:
+  control-plane-api:
+    deploy_after: []

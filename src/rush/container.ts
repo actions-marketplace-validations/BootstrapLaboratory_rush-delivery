@@ -1,4 +1,4 @@
-import { Container, Directory } from "@dagger.io/dagger";
+import { Container, dag, Directory } from "@dagger.io/dagger";
 import type {
   ToolchainImageProvider,
   ToolchainImagePolicy,
@@ -38,6 +38,14 @@ export type RushToolchainImageOptions = {
 
 export function rushWorkflowToolchainSpec() {
   return rushToolchainImageSpec(RUSH_IMAGE, RUSH_INSTALL_COMMANDS);
+}
+
+export function prepareRushWorkspaceContainer(repo: Directory): Container {
+  return dag
+    .container()
+    .from(RUSH_IMAGE)
+    .withDirectory(RUSH_WORKDIR, repo)
+    .withWorkdir(RUSH_WORKDIR);
 }
 
 export async function prepareRushContainer(

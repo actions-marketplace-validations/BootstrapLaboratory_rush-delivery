@@ -13,3 +13,4 @@
 /website-docusaurus/versioned_docs/
 /website-docusaurus/versioned_sidebars/
 /website-docusaurus/versions.json
+/**/node_modules/**

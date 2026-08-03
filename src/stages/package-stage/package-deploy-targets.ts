@@ -2,7 +2,11 @@ import { Directory, File } from "@dagger.io/dagger";
 
 import { parseCiPlan } from "../../ci-plan/parse-ci-plan.ts";
 import { logSection } from "../../logging/sections.ts";
-import { installRush, prepareRushContainer } from "../../rush/container.ts";
+import {
+  installRush,
+  prepareRushContainer,
+  prepareRushWorkspaceContainer,
+} from "../../rush/container.ts";
 import { parseOptionalEnvFile } from "../../workflow/env.ts";
 import {
   createEmptyPackageManifest,
@@ -11,6 +15,7 @@ import {
 import { loadPackageTargetDefinition } from "./load-package-metadata.ts";
 import { buildPackageActionPlan } from "./package-action-plan.ts";
 import { executePackagePlans } from "./execute-package-plans.ts";
+import { packagePlansRequireRushInstall } from "./package-install.ts";
 
 const PACKAGE_MANIFEST_PATH = ".dagger/runtime/package-manifest.json";
 
@@ -46,13 +51,10 @@ export async function packageDeployTargets(
       target,
     })),
   );
-  const needsRushInstall = packagePlans.some(({ plan }) =>
-    plan.commands.some(({ command }) => command === "node"),
-  );
-  const baseContainer = await prepareRushContainer(repo);
+  const needsRushInstall = packagePlansRequireRushInstall(packagePlans);
   const container = needsRushInstall
-    ? installRush(baseContainer)
-    : baseContainer;
+    ? installRush(await prepareRushContainer(repo))
+    : prepareRushWorkspaceContainer(repo);
   const result = await executePackagePlans(repo, container, packagePlans, {
     applicationImageProvider,
     dryRun,

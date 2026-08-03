@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/deploy-target.schema.json
+name: control-plane-api
+deploy_script: deploy/cloud-run.sh
+runtime:
+  image: node:24-bookworm-slim
+  workspace:
+    files:
+      - deploy/cloud-run.sh

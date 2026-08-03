@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/rush-cache-providers.schema.json
+cache:
+  version: v1
+  paths:
+    - common/temp/node_modules
+providers:
+  github:
+    kind: github_container_registry
+    repository_env: GITHUB_REPOSITORY
+    token_env: GITHUB_TOKEN
+    username_env: GITHUB_ACTOR

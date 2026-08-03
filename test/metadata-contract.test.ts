@@ -114,6 +114,7 @@ class MemoryMetadataRepository implements MetadataContractRepository {
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "fixtures/rush-repo");
+const ociRepoRoot = path.resolve(testDirectory, "fixtures/oci-rush-repo");
 
 function validMetadataFiles(): Record<string, string> {
   return {
@@ -263,6 +264,16 @@ test("validates the fixture repository metadata contract", async () => {
   assert.deepEqual(result.validation_targets, ["server"]);
   assert.ok(result.rush_projects.includes("server"));
   assert.ok(result.rush_projects.includes("webapp"));
+});
+
+test("validates the OCI acceptance fixture metadata contract", async () => {
+  const result = await validateMetadataContractRepository(
+    new LocalMetadataRepository(ociRepoRoot),
+  );
+
+  assert.deepEqual(result.deploy_targets, ["control-plane-api"]);
+  assert.deepEqual(result.package_targets, ["control-plane-api"]);
+  assert.deepEqual(result.rush_projects, ["control-plane-api"]);
 });
 
 test("accepts a complete framework metadata contract", async () => {

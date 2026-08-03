@@ -31,6 +31,23 @@ function requireHostEnv(
   return value;
 }
 
+function decodePemEnvironmentValue(
+  value: string,
+  beginMarker: string,
+  endMarker: string,
+  envName: string,
+): string {
+  const decoded = value.replaceAll("\\n", "\n");
+
+  if (!decoded.includes(beginMarker) || !decoded.includes(endMarker)) {
+    throw new Error(
+      `Application image signing env ${envName} must contain the expected PEM key. Store multiline values with literal \\n separators in env files.`,
+    );
+  }
+
+  return decoded;
+}
+
 export function selectApplicationImageProvider(
   providerName: string,
   providers: ApplicationImageProvidersDefinition | undefined,
@@ -69,20 +86,30 @@ export function resolveApplicationImageCredentialValues(
     selected.definition.token_env,
     context,
   );
-  const signingKey = requireHostEnv(
-    hostEnv,
+  const signingKey = decodePemEnvironmentValue(
+    requireHostEnv(
+      hostEnv,
+      selected.definition.signing_key_env,
+      context,
+    ),
+    "-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----",
+    "-----END ENCRYPTED SIGSTORE PRIVATE KEY-----",
     selected.definition.signing_key_env,
-    context,
   );
   const signingPassword = requireHostEnv(
     hostEnv,
     selected.definition.signing_password_env,
     context,
   );
-  const verificationKey = requireHostEnv(
-    hostEnv,
+  const verificationKey = decodePemEnvironmentValue(
+    requireHostEnv(
+      hostEnv,
+      selected.definition.verification_key_env,
+      context,
+    ),
+    "-----BEGIN PUBLIC KEY-----",
+    "-----END PUBLIC KEY-----",
     selected.definition.verification_key_env,
-    context,
   );
 
   return {

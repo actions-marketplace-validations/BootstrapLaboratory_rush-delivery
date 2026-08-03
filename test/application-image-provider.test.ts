@@ -127,3 +127,36 @@ providers:
     /requires host env OCI_USERNAME/,
   );
 });
+
+test("provider credential selection decodes single-line PEM values", () => {
+  const providers = parseApplicationImageProviders(`
+providers:
+  release:
+    kind: oci_registry
+    registry: registry.example
+    repository_prefix: example/platform
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+`);
+  const credentials = resolveApplicationImageCredentialValues(
+    {
+      definition: providers.providers.release,
+      name: "release",
+    },
+    {
+      OCI_SIGNING_KEY:
+        "-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----\\nprivate\\n-----END ENCRYPTED SIGSTORE PRIVATE KEY-----",
+      OCI_SIGNING_PASSWORD: "password",
+      OCI_SIGNING_PUBLIC_KEY:
+        "-----BEGIN PUBLIC KEY-----\\npublic\\n-----END PUBLIC KEY-----",
+      OCI_TOKEN: "token",
+      OCI_USERNAME: "username",
+    },
+  );
+
+  assert.match(credentials.signingKey, /KEY-----\nprivate\n-----END/);
+  assert.match(credentials.verificationKey, /KEY-----\npublic\n-----END/);
+});

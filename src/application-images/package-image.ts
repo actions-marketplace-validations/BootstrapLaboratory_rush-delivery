@@ -307,6 +307,7 @@ async function signAndVerify(
     .withMountedSecret(
       "/home/nonroot/.docker/config.json",
       provider.dockerConfig,
+      { mode: 0o400, owner: "65532:65532" },
     )
     .withSecretVariable("COSIGN_PRIVATE_KEY", provider.signingKey)
     .withSecretVariable("COSIGN_PASSWORD", provider.signingPassword)
@@ -317,6 +318,7 @@ async function signAndVerify(
       "/ko-app/cosign",
       "sign",
       "--yes",
+      "--use-signing-config=false",
       "--tlog-upload=false",
       ...commonAuthArgs,
       imageReference,
@@ -325,6 +327,7 @@ async function signAndVerify(
       "/ko-app/cosign",
       "attest",
       "--yes",
+      "--use-signing-config=false",
       "--tlog-upload=false",
       "--predicate",
       "/evidence/sbom.spdx.json",
@@ -337,6 +340,7 @@ async function signAndVerify(
       "/ko-app/cosign",
       "attest",
       "--yes",
+      "--use-signing-config=false",
       "--tlog-upload=false",
       "--predicate",
       "/evidence/provenance.json",
