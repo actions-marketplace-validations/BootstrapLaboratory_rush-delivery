@@ -1,0 +1,138 @@
+{
+  "docsSidebar": [
+    {
+      "type": "doc",
+      "id": "introduction",
+      "label": "Introduction"
+    },
+    {
+      "type": "doc",
+      "id": "github-action",
+      "label": "GitHub Action"
+    },
+    {
+      "type": "doc",
+      "id": "api",
+      "label": "Public API"
+    },
+    {
+      "type": "doc",
+      "id": "entrypoints",
+      "label": "Entrypoints"
+    },
+    {
+      "type": "doc",
+      "id": "workflows",
+      "label": "Workflow Guide"
+    },
+    {
+      "type": "doc",
+      "id": "metadata",
+      "label": "Metadata"
+    },
+    {
+      "type": "doc",
+      "id": "providers",
+      "label": "Providers"
+    },
+    {
+      "type": "doc",
+      "id": "development",
+      "label": "Development"
+    }
+  ],
+  "quickStartSidebar": [
+    {
+      "type": "doc",
+      "id": "quick-start/github-actions",
+      "label": "GitHub Actions"
+    },
+    {
+      "type": "doc",
+      "id": "quick-start/ci-cli",
+      "label": "CI Using Command Line"
+    },
+    {
+      "type": "doc",
+      "id": "quick-start/local-run",
+      "label": "Local Runs"
+    }
+  ],
+  "tutorialSidebar": [
+    {
+      "type": "doc",
+      "id": "tutorial",
+      "label": "Tutorial"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/rush-monorepo-baseline",
+      "label": "Rush Monorepo Baseline"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/rush-commands",
+      "label": "Rush Commands"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/dagger-metadata-map",
+      "label": "Dagger Metadata Map"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/provider-artifacts",
+      "label": "Provider Artifacts"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/package-targets",
+      "label": "Package Targets"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/deploy-mesh",
+      "label": "Deploy Mesh"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/deploy-targets",
+      "label": "Deploy Targets"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/validation-targets",
+      "label": "Validation Targets"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/github-actions",
+      "label": "GitHub Actions"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/local-dry-runs",
+      "label": "Local Dry Runs"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/adapting-to-your-project",
+      "label": "Adapt To Your Project"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/npm-package-release-baseline",
+      "label": "NPM Package Release Baseline"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/release-metadata",
+      "label": "Release Metadata"
+    },
+    {
+      "type": "doc",
+      "id": "tutorial/package-release-workflow",
+      "label": "Package Release Workflow"
+    }
+  ]
+}
