@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { applicationImageProvidersPath } from "../application-images/metadata-paths.ts";
+import { parseApplicationImageProviders } from "../application-images/parse-providers.ts";
 import type { DeployRuntimeSpec } from "../model/deploy-target.ts";
 import type { EnvPassthroughSpec } from "../model/env.ts";
 import type {
@@ -42,6 +44,7 @@ type RepositoryPathType = "directory" | "file";
 export type MetadataContractRepository = {
   entries(path: string): Promise<string[]>;
   exists(path: string, expectedType: RepositoryPathType): Promise<boolean>;
+  isSymlink(path: string): Promise<boolean>;
   readTextFile(path: string): Promise<string>;
 };
 
@@ -54,9 +57,35 @@ export type MetadataContractValidationResult = {
 };
 
 export type MetadataContractValidationOptions = {
+  require_application_image_provider_metadata?: boolean;
   require_deploy_metadata?: boolean;
   require_rush_cache_metadata?: boolean;
 };
+
+async function validateApplicationImageProviderMetadata(
+  repository: MetadataContractRepository,
+  issues: string[],
+  required: boolean,
+): Promise<void> {
+  const exists = await repository.exists(applicationImageProvidersPath, "file");
+
+  if (!exists) {
+    if (required) {
+      issues.push(
+        `Application image provider metadata file "${applicationImageProvidersPath}" must exist.`,
+      );
+    }
+    return;
+  }
+
+  await readParsed(
+    repository,
+    applicationImageProvidersPath,
+    "Application image provider metadata file",
+    parseApplicationImageProviders,
+    issues,
+  );
+}
 
 function formatIssueList(issues: string[]): string {
   return [
@@ -113,6 +142,17 @@ async function directoryExists(
 ): Promise<void> {
   if (!(await repository.exists(directoryPath, "directory"))) {
     issues.push(`${description} "${directoryPath}" must exist.`);
+  }
+}
+
+async function fileMustNotBeSymlink(
+  repository: MetadataContractRepository,
+  filePath: string,
+  description: string,
+  issues: string[],
+): Promise<void> {
+  if (await repository.isSymlink(filePath)) {
+    issues.push(`${description} "${filePath}" must not be a symlink.`);
   }
 }
 
@@ -294,6 +334,29 @@ function validatePackageArtifact(
     return;
   }
 
+  if (definition.artifact.kind === "oci_image") {
+    if (definition.artifact.context !== ".") {
+      validateRepoRelativePath(
+        definition.artifact.context,
+        `Package target "${target}" OCI context`,
+        issues,
+      );
+    }
+    validateRepoRelativePath(
+      definition.artifact.dockerfile,
+      `Package target "${target}" OCI dockerfile`,
+      issues,
+    );
+    if (definition.artifact.scan.ignore_file !== undefined) {
+      validateRepoRelativePath(
+        definition.artifact.scan.ignore_file,
+        `Package target "${target}" OCI scan ignore_file`,
+        issues,
+      );
+    }
+    return;
+  }
+
   if (!rushProjects.has(definition.artifact.project)) {
     issues.push(
       `Package target "${target}" artifact project "${definition.artifact.project}" must be a Rush project.`,
@@ -305,6 +368,47 @@ function validatePackageArtifact(
     `Package target "${target}" artifact output`,
     issues,
   );
+}
+
+async function validateOciPackageArtifactFiles(
+  repository: MetadataContractRepository,
+  target: string,
+  definition: PackageTargetDefinition,
+  issues: string[],
+): Promise<void> {
+  if (definition.artifact.kind !== "oci_image") {
+    return;
+  }
+
+  await directoryExists(
+    repository,
+    definition.artifact.context,
+    `Package target "${target}" OCI context`,
+    issues,
+  );
+  const dockerfileExists = await fileExists(
+    repository,
+    definition.artifact.dockerfile,
+    `Package target "${target}" OCI dockerfile`,
+    issues,
+  );
+  if (dockerfileExists) {
+    await fileMustNotBeSymlink(
+      repository,
+      definition.artifact.dockerfile,
+      `Package target "${target}" OCI dockerfile`,
+      issues,
+    );
+  }
+
+  if (definition.artifact.scan.ignore_file !== undefined) {
+    await fileExists(
+      repository,
+      definition.artifact.scan.ignore_file,
+      `Package target "${target}" OCI scan ignore_file`,
+      issues,
+    );
+  }
 }
 
 function validateEnvPassthroughDefaults(
@@ -472,6 +576,12 @@ async function validatePackageTarget(
 
   validateTargetIsRushProject(target, rushProjects, "Package target", issues);
   validatePackageArtifact(target, definition, rushProjects, issues);
+  await validateOciPackageArtifactFiles(
+    repository,
+    target,
+    definition,
+    issues,
+  );
   validateEnvPassthroughDefaults(
     `Package target "${target}" build env`,
     definition.build,
@@ -534,9 +644,16 @@ export async function validateMetadataContractRepository(
   options: MetadataContractValidationOptions = {},
 ): Promise<MetadataContractValidationResult> {
   const requireDeployMetadata = options.require_deploy_metadata ?? true;
+  const requireApplicationImageProviderMetadata =
+    options.require_application_image_provider_metadata ?? false;
   const requireRushCacheMetadata = options.require_rush_cache_metadata ?? true;
   const issues: string[] = [];
   const rushProjects = await loadRushProjects(repository, issues);
+  await validateApplicationImageProviderMetadata(
+    repository,
+    issues,
+    requireApplicationImageProviderMetadata,
+  );
   await validateRushCacheMetadata(repository, issues, requireRushCacheMetadata);
   const releaseTargets = await validateReleaseMetadata(repository, issues);
 

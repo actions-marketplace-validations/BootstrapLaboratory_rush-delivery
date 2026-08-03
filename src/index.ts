@@ -115,10 +115,24 @@ export class RushDelivery {
     repo: Directory,
     ciPlanFile: File,
     artifactPrefix: string = "deploy-target",
+    gitSha: string = "",
+    sourceRepositoryUrl: string = "",
+    dryRun: boolean = true,
+    deployEnvFile?: File,
+    applicationImageProvider: string = "off",
   ): Promise<Directory> {
     await assertMetadataContract(repo);
 
-    return packageDeployTargets(repo, ciPlanFile, artifactPrefix);
+    return packageDeployTargets(
+      repo,
+      ciPlanFile,
+      artifactPrefix,
+      gitSha,
+      sourceRepositoryUrl,
+      dryRun,
+      deployEnvFile,
+      applicationImageProvider,
+    );
   }
 
   /**
@@ -131,6 +145,9 @@ export class RushDelivery {
     artifactPrefix: string = "deploy-target",
     deployEnvFile?: File,
     dryRun: boolean = false,
+    gitSha: string = "",
+    sourceRepositoryUrl: string = "",
+    applicationImageProvider: string = "off",
   ): Promise<Directory> {
     await assertMetadataContract(repo);
 
@@ -140,6 +157,9 @@ export class RushDelivery {
       artifactPrefix,
       deployEnvFile,
       dryRun,
+      gitSha,
+      sourceRepositoryUrl,
+      applicationImageProvider,
     );
   }
 
@@ -213,6 +233,7 @@ export class RushDelivery {
     toolchainImagePolicy: string = "lazy",
     rushCacheProvider: string = "off",
     rushCachePolicy: string = "lazy",
+    applicationImageProvider: string = "off",
     sourceMode: string = "local_copy",
     sourceRepositoryUrl: string = "",
     sourceRef: string = "",
@@ -244,6 +265,7 @@ export class RushDelivery {
       toolchainImagePolicy,
       rushCacheProvider,
       rushCachePolicy,
+      applicationImageProvider,
       sourceMode,
       sourceRepositoryUrl,
       sourceRef,

@@ -14,6 +14,7 @@ import { executeDeploymentPlan } from "./execute-deployment-plan.ts";
 import { loadServicesMesh } from "./load-deploy-metadata.ts";
 import { parsePackageManifest } from "../package-stage/package-manifest.ts";
 import { parseDeployEnvFile } from "./runtime-env.ts";
+import { assertPackageManifestDeployPreflight } from "./package-manifest-preflight.ts";
 
 async function buildReleasePlan(
   repo: Directory,
@@ -83,6 +84,13 @@ export async function deployRelease(
       "packageManifestFile is required when release targets are selected.",
     );
   }
+
+  assertPackageManifestDeployPreflight(
+    deploymentPlan.selectedTargets,
+    packageManifest,
+    gitSha,
+    dryRun,
+  );
 
   console.log(
     `[deploy-release] selected targets: ${deploymentPlan.selectedTargets.join(", ")} | environment=${environment} | dryRun=${dryRun}`,

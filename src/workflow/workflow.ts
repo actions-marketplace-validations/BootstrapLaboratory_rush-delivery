@@ -25,6 +25,7 @@ import { selectWorkflowReleaseTargets } from "./release-target-selection.ts";
 const PACKAGE_MANIFEST_PATH = ".dagger/runtime/package-manifest.json";
 
 export type WorkflowInput = {
+  applicationImageProvider?: string;
   artifactPrefix?: string;
   deployEnvFile?: File;
   deployTagPrefix?: string;
@@ -109,6 +110,7 @@ function parseJsonResult(source: string): unknown {
 
 export async function workflow(input: WorkflowInput): Promise<string> {
   const {
+    applicationImageProvider = "off",
     artifactPrefix = "deploy-target",
     deployEnvFile,
     deployTagPrefix = "deploy/prod",
@@ -222,10 +224,14 @@ export async function workflow(input: WorkflowInput): Promise<string> {
     artifactPrefix,
     {
       dryRun,
+      applicationImageProvider,
       buildHostEnv: deployHostEnv,
+      gitSha,
       hostEnv: sourceHostEnv,
       releaseTargets,
       skipDeployPlanning: !deployMetadataExists,
+      sourceRepositoryUrl:
+        sourcePlan.mode === "git" ? sourcePlan.repositoryUrl : "",
       ...providerOptions,
     },
   );

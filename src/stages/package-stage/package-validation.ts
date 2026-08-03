@@ -20,5 +20,18 @@ export async function assertPackageValidation(
       throw new Error(
         `Package target "${target}" expected directory "${validation.path}" to exist.`,
       );
+
+    case "file":
+      if (
+        await repo.exists(validation.path, {
+          expectedType: ExistsType.RegularType,
+        })
+      ) {
+        return;
+      }
+
+      throw new Error(
+        `Package target "${target}" expected file "${validation.path}" to exist.`,
+      );
   }
 }

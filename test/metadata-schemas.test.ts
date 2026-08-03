@@ -14,6 +14,7 @@ type SchemaCase = {
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "..");
 const fixtureRoot = path.resolve(testDirectory, "fixtures/rush-repo");
+const ociFixtureRoot = path.resolve(testDirectory, "fixtures/oci-contract");
 
 async function readJson(relativePath: string): Promise<unknown> {
   return JSON.parse(await readFile(path.join(repoRoot, relativePath), "utf8"));
@@ -89,5 +90,42 @@ test("fixture Dagger metadata files satisfy their JSON schemas", async () => {
         `${metadataPath} must satisfy ${schemaCase.schemaPath}\n${formatSchemaErrors(validate.errors)}`,
       );
     }
+  }
+});
+
+test("OCI metadata and manifest fixtures satisfy their JSON schemas", async () => {
+  const schemaCases = [
+    {
+      fixturePath: "package-target.yaml",
+      schemaPath: "schemas/package-target.schema.json",
+      yaml: true,
+    },
+    {
+      fixturePath: "application-image-providers.yaml",
+      schemaPath: "schemas/application-image-providers.schema.json",
+      yaml: true,
+    },
+    {
+      fixturePath: "package-manifest.json",
+      schemaPath: "schemas/package-manifest.schema.json",
+      yaml: false,
+    },
+  ];
+
+  for (const schemaCase of schemaCases) {
+    const ajv = new Ajv2020({ allErrors: true });
+    const validate = ajv.compile(
+      (await readJson(schemaCase.schemaPath)) as AnySchema,
+    );
+    const source = await readFile(
+      path.join(ociFixtureRoot, schemaCase.fixturePath),
+      "utf8",
+    );
+    const value = schemaCase.yaml ? parseYaml(source) : JSON.parse(source);
+
+    assert.ok(
+      validate(value),
+      `${schemaCase.fixturePath} must satisfy ${schemaCase.schemaPath}\n${formatSchemaErrors(validate.errors)}`,
+    );
   }
 });

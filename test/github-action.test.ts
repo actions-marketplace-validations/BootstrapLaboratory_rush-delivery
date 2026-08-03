@@ -71,6 +71,8 @@ test("action metadata defines a composite action over dagger-for-github", () => 
   assert.equal(metadata.inputs["release-env-file"].default, "");
   assert.equal(metadata.inputs["release-targets-json"].default, "[]");
   assert.equal(metadata.inputs["validate-targets-json"].default, "[]");
+  assert.equal(metadata.inputs["application-image-provider"].default, "off");
+  assert.equal(metadata.inputs["dagger-version"].default, "v0.20.7");
   assert.equal(metadata.runs.using, "composite");
   assert.ok(
     metadata.runs.steps.some(
@@ -98,6 +100,7 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
     GITHUB_SHA: "1234567890abcdef1234567890abcdef12345678",
     GITHUB_WORKSPACE: "/home/runner/work/repo/repo",
     INPUT_ARTIFACT_PREFIX: "artifact",
+    INPUT_APPLICATION_IMAGE_PROVIDER: "release",
     INPUT_DEPLOY_ENV:
       "GCP_PROJECT_ID=test-project\nCLOUD_RUN_REGION=us-central1",
     INPUT_DEPLOY_ENV_FILE: deployEnvFile,
@@ -137,6 +140,7 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
   );
   assert.match(outputs.args, /--dry-run=false/);
   assert.match(outputs.args, /--release-targets-json=/);
+  assert.match(outputs.args, /--application-image-provider=release/);
   assert.match(outputs.args, /--workflow-env-file=/);
   assert.match(outputs.args, /--source-mode=git/);
   assert.match(

@@ -1,13 +1,15 @@
 import { Container, Directory } from "@dagger.io/dagger";
 
 import type { CiPlan } from "../model/ci-plan.ts";
-import type { PackageManifestArtifact } from "../model/package-manifest.ts";
 import { buildRushBuildSteps } from "../stages/build-stage/rush-build-plan.ts";
 import { createCiPlan, formatCiPlan } from "../ci-plan/parse-ci-plan.ts";
 import { computeCiPlan } from "../stages/detect/compute-ci-plan.ts";
 import { loadPackageTargetDefinition } from "../stages/package-stage/load-package-metadata.ts";
 import { buildPackageActionPlan } from "../stages/package-stage/package-action-plan.ts";
-import { assertPackageValidation } from "../stages/package-stage/package-validation.ts";
+import {
+  executePackagePlans,
+  type ExecutePackagePlansOptions,
+} from "../stages/package-stage/execute-package-plans.ts";
 import {
   createEmptyPackageManifest,
   formatPackageManifest,
@@ -23,7 +25,7 @@ import {
   resolvePackageBuildEnvironment,
   withBuildEnvironment,
 } from "../stages/build-stage/build-env.ts";
-import { logSection, logSubsection } from "../logging/sections.ts";
+import { logSection } from "../logging/sections.ts";
 
 const CI_PLAN_PATH = ".dagger/runtime/ci-plan.json";
 const CI_PLAN_CONTAINER_PATH = `${RUSH_WORKDIR}/${CI_PLAN_PATH}`;
@@ -85,6 +87,7 @@ async function runPackageStage(
   container: Container,
   ciPlan: CiPlan,
   artifactPrefix: string,
+  options: ExecutePackagePlansOptions,
 ): Promise<Directory> {
   logSection("Package deploy artifacts");
 
@@ -108,33 +111,7 @@ async function runPackageStage(
       target,
     })),
   );
-  const artifacts: Record<string, PackageManifestArtifact> = Object.fromEntries(
-    packagePlans.map(({ plan, target }) => [target, plan.artifact]),
-  );
-  let nextContainer = container;
-
-  for (const { plan, target } of packagePlans) {
-    logSubsection(`Package target: ${target}`);
-    console.log(`[package] ${target}: ${plan.artifact.kind}`);
-
-    for (const validation of plan.validations) {
-      await assertPackageValidation(
-        nextContainer.directory(RUSH_WORKDIR),
-        validation,
-        target,
-      );
-    }
-
-    for (const { command, args } of plan.commands) {
-      nextContainer = nextContainer.withExec([command, ...args], {
-        expand: false,
-      });
-    }
-  }
-
-  return nextContainer
-    .directory(RUSH_WORKDIR)
-    .withNewFile(PACKAGE_MANIFEST_PATH, formatPackageManifest({ artifacts }));
+  return (await executePackagePlans(repo, container, packagePlans, options)).repo;
 }
 
 export type BuildPackageWorkflowResult = {
@@ -144,10 +121,13 @@ export type BuildPackageWorkflowResult = {
 };
 
 export type BuildPackageWorkflowOptions = RushWorkflowContainerOptions & {
+  applicationImageProvider?: string;
   buildHostEnv?: Record<string, string>;
   dryRun?: boolean;
+  gitSha?: string;
   releaseTargets?: string[];
   skipDeployPlanning?: boolean;
+  sourceRepositoryUrl?: string;
 };
 
 export async function runBuildPackageWorkflow(
@@ -206,6 +186,13 @@ export async function runBuildPackageWorkflow(
       detectedContainer,
       ciPlan,
       artifactPrefix,
+      {
+        applicationImageProvider: options.applicationImageProvider,
+        dryRun: options.dryRun,
+        gitSha: options.gitSha,
+        hostEnv: options.buildHostEnv ?? options.hostEnv,
+        sourceRepositoryUrl: options.sourceRepositoryUrl,
+      },
     );
 
     return {
@@ -243,6 +230,13 @@ export async function runBuildPackageWorkflow(
     builtContainer,
     ciPlan,
     artifactPrefix,
+    {
+      applicationImageProvider: options.applicationImageProvider,
+      dryRun: options.dryRun,
+      gitSha: options.gitSha,
+      hostEnv: options.buildHostEnv ?? options.hostEnv,
+      sourceRepositoryUrl: options.sourceRepositoryUrl,
+    },
   );
 
   return {

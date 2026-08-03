@@ -39,6 +39,59 @@
               "$ref": "#/$defs/nonEmptyString"
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "context",
+            "dockerfile",
+            "image",
+            "platform",
+            "scan"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "oci_image"
+            },
+            "context": {
+              "$ref": "#/$defs/repositoryPathOrRoot"
+            },
+            "dockerfile": {
+              "$ref": "#/$defs/repositoryPath"
+            },
+            "image": {
+              "$ref": "#/$defs/ociImageName"
+            },
+            "platform": {
+              "$ref": "#/$defs/ociPlatform"
+            },
+            "scan": {
+              "type": "object",
+              "required": ["fail_on"],
+              "additionalProperties": false,
+              "properties": {
+                "fail_on": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low",
+                      "negligible"
+                    ]
+                  }
+                },
+                "ignore_file": {
+                  "$ref": "#/$defs/repositoryPath"
+                }
+              }
+            }
+          }
         }
       ]
     },
@@ -94,6 +147,28 @@
     "nonEmptyString": {
       "type": "string",
       "minLength": 1
+    },
+    "ociImageName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$"
+    },
+    "ociPlatform": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+/[a-z0-9_]+(?:/[a-z0-9._-]+)?$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:/)(?!.*(?:^|/)\\.\\.?/)(?!.*//)[^\\\\]+$"
+    },
+    "repositoryPathOrRoot": {
+      "anyOf": [
+        {
+          "const": "."
+        },
+        {
+          "$ref": "#/$defs/repositoryPath"
+        }
+      ]
     }
   }
 }

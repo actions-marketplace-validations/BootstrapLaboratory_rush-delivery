@@ -10,6 +10,9 @@ export async function buildAndPackageDeployTargets(
   artifactPrefix: string = "deploy-target",
   deployEnvFile?: File,
   dryRun: boolean = false,
+  gitSha: string = "",
+  sourceRepositoryUrl: string = "",
+  applicationImageProvider: string = "off",
 ): Promise<Directory> {
   logSection("Build and package deploy targets");
 
@@ -20,5 +23,14 @@ export async function buildAndPackageDeployTargets(
     dryRun,
   );
 
-  return packageDeployTargets(builtRepo, ciPlanFile, artifactPrefix);
+  return packageDeployTargets(
+    builtRepo,
+    ciPlanFile,
+    artifactPrefix,
+    gitSha,
+    sourceRepositoryUrl,
+    dryRun,
+    deployEnvFile,
+    applicationImageProvider,
+  );
 }

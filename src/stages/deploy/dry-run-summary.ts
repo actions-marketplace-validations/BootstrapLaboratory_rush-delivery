@@ -4,7 +4,7 @@ import { buildRuntimeWorkspacePlan } from "./runtime-workspace.ts";
 
 export type DryRunSummaryInput = {
   artifact: PackageManifestArtifact;
-  artifactPath: string;
+  artifactPath?: string;
   definition: DeployTargetDefinition;
   deployTag: string;
   dockerSocketEnabled: boolean;
@@ -33,10 +33,30 @@ export function formatDryRunSummary(input: DryRunSummaryInput): string {
     `deploy_tag=${deployTag}`,
     `deploy_script=${definition.deploy_script}`,
     `package_artifact_kind=${artifact.kind}`,
-    `package_artifact_path=${artifact.path}`,
-    `artifact_path=${artifactPath}`,
-    `image=${definition.runtime.image}`,
   ];
+
+  if (artifact.kind === "oci_image") {
+    lines.push(`package_artifact_status=${artifact.status}`);
+    lines.push(`package_artifact_image=${artifact.image}`);
+    lines.push(
+      `package_artifact_platforms=${JSON.stringify(artifact.platforms)}`,
+    );
+    if (artifact.repository !== undefined) {
+      lines.push(`package_artifact_repository=${artifact.repository}`);
+    }
+    if (artifact.status === "published") {
+      lines.push(`package_artifact_reference=${artifact.reference}`);
+    } else {
+      lines.push(
+        "package_artifact_publication=no-image-or-digest-produced-dry-run",
+      );
+    }
+  } else {
+    lines.push(`package_artifact_path=${artifact.path}`);
+    lines.push(`artifact_path=${artifactPath}`);
+  }
+
+  lines.push(`image=${definition.runtime.image}`);
 
   if (definition.runtime.install.length > 0) {
     lines.push("install:");

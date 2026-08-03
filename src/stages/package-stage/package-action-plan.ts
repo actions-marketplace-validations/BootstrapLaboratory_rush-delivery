@@ -1,7 +1,10 @@
 import path from "node:path";
 
 import type { PackageManifestArtifact } from "../../model/package-manifest.ts";
-import type { PackageTargetDefinition } from "../../model/package-target.ts";
+import type {
+  OciImageScanSpec,
+  PackageTargetDefinition,
+} from "../../model/package-target.ts";
 
 export type PackageCommand = {
   args: string[];
@@ -9,15 +12,33 @@ export type PackageCommand = {
 };
 
 export type PackageValidation = {
-  kind: "directory";
+  kind: "directory" | "file";
   path: string;
 };
 
-export type PackageActionPlan = {
+type FilesystemPackageActionPlan = {
   artifact: PackageManifestArtifact;
   commands: PackageCommand[];
   validations: PackageValidation[];
 };
+
+export type OciImagePackagePlan = {
+  context: string;
+  dockerfile: string;
+  image: string;
+  platform: string;
+  scan: OciImageScanSpec;
+};
+
+type OciPackageActionPlan = {
+  commands: [];
+  oci: OciImagePackagePlan;
+  validations: PackageValidation[];
+};
+
+export type PackageActionPlan =
+  | FilesystemPackageActionPlan
+  | OciPackageActionPlan;
 
 export function buildPackageActionPlan(
   target: string,
@@ -81,6 +102,39 @@ export function buildPackageActionPlan(
         validations: [],
       };
     }
+
+    case "oci_image":
+      return {
+        commands: [],
+        oci: {
+          context: definition.artifact.context,
+          dockerfile: path.posix.relative(
+            definition.artifact.context,
+            definition.artifact.dockerfile,
+          ),
+          image: definition.artifact.image,
+          platform: definition.artifact.platform,
+          scan: definition.artifact.scan,
+        },
+        validations: [
+          {
+            kind: "directory",
+            path: definition.artifact.context,
+          },
+          {
+            kind: "file",
+            path: definition.artifact.dockerfile,
+          },
+          ...(definition.artifact.scan.ignore_file === undefined
+            ? []
+            : [
+                {
+                  kind: "file" as const,
+                  path: definition.artifact.scan.ignore_file,
+                },
+              ]),
+        ],
+      };
 
     default:
       throw new Error("Unsupported package target artifact kind.");

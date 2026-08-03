@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,14 @@ class LocalMetadataRepository implements MetadataContractRepository {
     try {
       const entry = await stat(path.join(this.root, relativePath));
       return expectedType === "file" ? entry.isFile() : entry.isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
+  async isSymlink(relativePath: string): Promise<boolean> {
+    try {
+      return (await lstat(path.join(this.root, relativePath))).isSymbolicLink();
     } catch {
       return false;
     }
@@ -78,12 +86,20 @@ class MemoryMetadataRepository implements MetadataContractRepository {
       return relativePath in this.files;
     }
 
+    if (relativePath === ".") {
+      return true;
+    }
+
     const prefix = relativePath.endsWith("/")
       ? relativePath
       : `${relativePath}/`;
     return Object.keys(this.files).some((filePath) =>
       filePath.startsWith(prefix),
     );
+  }
+
+  async isSymlink(_relativePath: string): Promise<boolean> {
+    return false;
   }
 
   async readTextFile(relativePath: string): Promise<string> {
@@ -258,6 +274,54 @@ test("accepts a complete framework metadata contract", async () => {
   assert.deepEqual(result.package_targets, ["server", "webapp"]);
   assert.deepEqual(result.release_targets, ["npm"]);
   assert.deepEqual(result.validation_targets, ["server"]);
+});
+
+test("validates OCI package files and optional application image provider metadata", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/package/targets/server.yaml"] = [
+    "name: server",
+    "artifact:",
+    "  kind: oci_image",
+    "  context: apps/server",
+    "  dockerfile: apps/server/Dockerfile",
+    "  image: platform/server",
+    "  platform: linux/amd64",
+    "  scan:",
+    "    fail_on: [high, critical]",
+    "    ignore_file: .dagger/application-images/grype.yaml",
+    "",
+  ].join("\n");
+  files["apps/server/Dockerfile"] = "FROM scratch\n";
+  files[".dagger/application-images/grype.yaml"] = "ignore: []\n";
+  files[".dagger/application-images/providers.yaml"] = [
+    "providers:",
+    "  release:",
+    "    kind: oci_registry",
+    "    registry: registry.example",
+    "    repository_prefix: example/platform",
+    "    username_env: OCI_USERNAME",
+    "    token_env: OCI_TOKEN",
+    "    signing_key_env: OCI_SIGNING_KEY",
+    "    signing_password_env: OCI_SIGNING_PASSWORD",
+    "    verification_key_env: OCI_SIGNING_PUBLIC_KEY",
+    "",
+  ].join("\n");
+
+  const result = await validateMetadataContractRepository(
+    new MemoryMetadataRepository(files),
+    { require_application_image_provider_metadata: true },
+  );
+
+  assert.ok(result.package_targets.includes("server"));
+});
+
+test("does not require application image provider metadata for existing projects", async () => {
+  const result = await validateMetadataContractRepository(
+    new MemoryMetadataRepository(validMetadataFiles()),
+    { require_application_image_provider_metadata: false },
+  );
+
+  assert.deepEqual(result.package_targets, ["server", "webapp"]);
 });
 
 test("accepts release-only metadata without deploy or cache metadata when scoped for package release", async () => {

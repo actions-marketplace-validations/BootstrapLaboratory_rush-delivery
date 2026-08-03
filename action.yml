@@ -22,7 +22,7 @@ inputs:
   dagger-version:
     description: Dagger CLI version.
     required: false
-    default: v0.20.6
+    default: v0.20.7
   dagger-flags:
     description: Additional Dagger CLI flags.
     required: false
@@ -143,6 +143,10 @@ inputs:
     description: "Rush cache policy: lazy or pull-or-build. Defaults to lazy for workflow and pull-or-build for validate."
     required: false
     default: ""
+  application-image-provider:
+    description: Named OCI application-image publishing provider, or off.
+    required: false
+    default: "off"
 
   source-mode:
     description: Source acquisition mode.
@@ -231,6 +235,7 @@ runs:
         INPUT_TOOLCHAIN_IMAGE_POLICY: ${{ inputs.toolchain-image-policy }}
         INPUT_RUSH_CACHE_PROVIDER: ${{ inputs.rush-cache-provider }}
         INPUT_RUSH_CACHE_POLICY: ${{ inputs.rush-cache-policy }}
+        INPUT_APPLICATION_IMAGE_PROVIDER: ${{ inputs.application-image-provider }}
         INPUT_SOURCE_MODE: ${{ inputs.source-mode }}
         INPUT_SOURCE_REPOSITORY_URL: ${{ inputs.source-repository-url }}
         INPUT_SOURCE_REF: ${{ inputs.source-ref }}

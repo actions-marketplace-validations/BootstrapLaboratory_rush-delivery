@@ -53,6 +53,99 @@ artifact:
   });
 });
 
+test("parses OCI image package artifact metadata", () => {
+  const definition = parsePackageTarget(`
+name: server
+
+artifact:
+  kind: oci_image
+  context: .
+  dockerfile: deploy/images/server.Dockerfile
+  image: services/server
+  platform: linux/amd64
+  scan:
+    fail_on:
+      - high
+      - critical
+    ignore_file: .dagger/application-images/vulnerability-ignore.yaml
+`);
+
+  assert.deepStrictEqual(definition, {
+    artifact: {
+      context: ".",
+      dockerfile: "deploy/images/server.Dockerfile",
+      image: "services/server",
+      kind: "oci_image",
+      platform: "linux/amd64",
+      scan: {
+        fail_on: ["high", "critical"],
+        ignore_file:
+          ".dagger/application-images/vulnerability-ignore.yaml",
+      },
+    },
+    build: {
+      dry_run_defaults: {},
+      map_env: {},
+      pass_env: [],
+    },
+    name: "server",
+  });
+});
+
+test("fails when OCI image Dockerfile is outside its context", () => {
+  assert.throws(
+    () =>
+      parsePackageTarget(`
+name: server
+artifact:
+  kind: oci_image
+  context: apps/server
+  dockerfile: deploy/images/server.Dockerfile
+  image: server
+  platform: linux/amd64
+  scan:
+    fail_on: [high]
+`),
+    /dockerfile must be inside its context/,
+  );
+});
+
+test("fails when OCI image name contains a tag", () => {
+  assert.throws(
+    () =>
+      parsePackageTarget(`
+name: server
+artifact:
+  kind: oci_image
+  context: .
+  dockerfile: Dockerfile
+  image: server:latest
+  platform: linux/amd64
+  scan:
+    fail_on: [high]
+`),
+    /without a tag or digest/,
+  );
+});
+
+test("fails when OCI image scan policy contains duplicate severities", () => {
+  assert.throws(
+    () =>
+      parsePackageTarget(`
+name: server
+artifact:
+  kind: oci_image
+  context: .
+  dockerfile: Dockerfile
+  image: server
+  platform: linux/amd64
+  scan:
+    fail_on: [high, high]
+`),
+    /fail_on entries must be unique/,
+  );
+});
+
 test("parses package build environment metadata", () => {
   const definition = parsePackageTarget(`
 name: webapp
