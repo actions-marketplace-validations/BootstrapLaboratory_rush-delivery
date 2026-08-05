@@ -1608,13 +1608,13 @@ exact merged candidate must then pass every deferred live gate before tagging.
 
 This task is complete only when all of the following are true:
 
-- [x] A filesystem-only `v0.7.x` or `v0.8.0` consumer that does not shadow
+- [ ] A filesystem-only `v0.7.x` or `v0.8.0` consumer that does not shadow
       framework-reserved runtime names can pin `v0.8.1` without adding
       application-image metadata, credentials, or `.dagger` changes; any
       reserved-name rename is explicit and actionable.
 - [x] A named global application provider cannot break a selected plan that has
       no OCI artifacts.
-- [x] A selected live OCI target either completes the existing verified v2
+- [ ] A selected live OCI target either completes the existing verified v2
       Package contract or fails before Deploy with accurate, sanitized side
       effects.
 - [x] Application-provider credentials cannot enter project Build, npm Release,
@@ -1624,11 +1624,11 @@ This task is complete only when all of the following are true:
       deliberate same-value reuse remain the documented caller capability
       boundary.
 - [x] Project metadata cannot shadow `ARTIFACT_*`, `GIT_SHA`, or `DRY_RUN`.
-- [x] Invalid, locked, or mismatched Cosign key material fails before any
+- [ ] Invalid, locked, or mismatched Cosign key material fails before any
       application-image build or destination-registry mutation.
-- [x] A failure in any selected filesystem package operation or OCI
+- [ ] A failure in any selected filesystem package operation or OCI
       build/SBOM/scan preparation publishes none of the selected OCI targets.
-- [x] Later publication/signing failures identify every known or skipped target
+- [ ] Later publication/signing failures identify every known or skipped target
       deterministically, never start Deploy, and provide safe cleanup guidance.
 - [x] Full, partial, filesystem, OCI, and mixed Deploy workspaces expose no
       unrelated framework evidence.
