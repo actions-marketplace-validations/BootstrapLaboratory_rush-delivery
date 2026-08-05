@@ -1998,7 +1998,7 @@ test("matrix JavaScript helpers parse before any Dagger acceptance is attempted"
   ]);
 });
 
-test("live matrix retains allowlisted registry publication failure stages", async () => {
+test("live matrix retains exact allowlisted publication failure stages", async () => {
   const temporaryRoot = await mkdtemp(
     path.join(tmpdir(), "rush-delivery-v081-registry-stages-"),
   );
@@ -2018,6 +2018,27 @@ test("live matrix retains allowlisted registry publication failure stages", asyn
     [
       'OCI package target "api" failed during registry publication.',
       "registry-publication",
+    ],
+    ['OCI package target "api" failed during Cosign sign.', "cosign-sign"],
+    [
+      'OCI package target "api" failed during Cosign attest-spdx.',
+      "cosign-attest-spdx",
+    ],
+    [
+      'OCI package target "api" failed during Cosign attest-provenance.',
+      "cosign-attest-provenance",
+    ],
+    [
+      'OCI package target "api" failed during Cosign verify-signature.',
+      "cosign-verify-signature",
+    ],
+    [
+      'OCI package target "api" failed during Cosign verify-spdx-attestation.',
+      "cosign-verify-spdx-attestation",
+    ],
+    [
+      'OCI package target "api" failed during Cosign verify-provenance-attestation.',
+      "cosign-verify-provenance-attestation",
     ],
   ] as const;
 

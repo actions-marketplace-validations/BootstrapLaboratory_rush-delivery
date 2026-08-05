@@ -333,6 +333,19 @@ test("OCI acceptance derives only allowlisted stages and conservative mutation s
     tempDirectory,
     "publication-transport.log",
   );
+  const cosignStages = [
+    "sign",
+    "attest-spdx",
+    "attest-provenance",
+    "verify-signature",
+    "verify-spdx-attestation",
+    "verify-provenance-attestation",
+  ] as const;
+  const cosignLogs = cosignStages.map((stage) => ({
+    expected: `cosign-${stage}`,
+    log: path.join(tempDirectory, `cosign-${stage}.log`),
+    stage,
+  }));
   const unknownLog = path.join(tempDirectory, "unknown.log");
   writeFileSync(
     preflightLog,
@@ -367,6 +380,12 @@ test("OCI acceptance derives only allowlisted stages and conservative mutation s
     publicationTransportLog,
     'OCI package target "api" failed during registry publication transport.\n',
   );
+  for (const { log, stage } of cosignLogs) {
+    writeFileSync(
+      log,
+      `OCI package target "api" failed during Cosign ${stage}.\n`,
+    );
+  }
   writeFileSync(unknownLog, "unmapped package failure\n");
 
   try {
@@ -450,6 +469,17 @@ test("OCI acceptance derives only allowlisted stages and conservative mutation s
       publicationTransportClass.stdout,
       "registry-transport-ambiguous\n",
     );
+    for (const { expected, log } of cosignLogs) {
+      const stage = runLibrary('oci_acceptance_classify_failure_stage "$1"', [
+        log,
+      ]);
+      const mutationState = runLibrary(
+        'stage="$(oci_acceptance_classify_failure_stage "$1")"; oci_acceptance_detect_mutation_state "$1" 1 "$stage"',
+        [log],
+      );
+      assert.equal(stage.stdout.trim(), expected);
+      assert.equal(mutationState.stdout, "started\n");
+    }
     assert.equal(unknownState.stdout, "unknown\n");
     assert.equal(timeoutState.stdout, "unknown\n");
     assert.equal(successfulState.stdout, "completed\n");

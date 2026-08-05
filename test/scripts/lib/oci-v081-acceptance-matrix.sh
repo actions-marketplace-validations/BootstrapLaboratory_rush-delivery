@@ -101,8 +101,18 @@ oci_v081_matrix_classify_failure_stage() {
 		printf 'registry-publication-transport\n'
 	elif grep -Eq 'failed during registry (publication|publish)\.' "${captured_log}"; then
 		printf 'registry-publication\n'
-	elif grep -Eq 'failed during Cosign (sign|attest-|verify-)' "${captured_log}"; then
-		printf 'cosign-publication\n'
+	elif grep -Fq 'failed during Cosign sign.' "${captured_log}"; then
+		printf 'cosign-sign\n'
+	elif grep -Fq 'failed during Cosign attest-spdx.' "${captured_log}"; then
+		printf 'cosign-attest-spdx\n'
+	elif grep -Fq 'failed during Cosign attest-provenance.' "${captured_log}"; then
+		printf 'cosign-attest-provenance\n'
+	elif grep -Fq 'failed during Cosign verify-signature.' "${captured_log}"; then
+		printf 'cosign-verify-signature\n'
+	elif grep -Fq 'failed during Cosign verify-spdx-attestation.' "${captured_log}"; then
+		printf 'cosign-verify-spdx-attestation\n'
+	elif grep -Fq 'failed during Cosign verify-provenance-attestation.' "${captured_log}"; then
+		printf 'cosign-verify-provenance-attestation\n'
 	elif grep -Fq 'OCI application image finalization failed:' "${captured_log}"; then
 		printf 'image-finalization\n'
 	else
@@ -132,7 +142,7 @@ oci_v081_matrix_classify_mutation_state() {
 	metadata-validation | credential-shape-preflight | cosign-preflight | image-preparation)
 		printf 'not-started\n'
 		;;
-	registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | cosign-publication | image-finalization)
+	registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | cosign-sign | cosign-attest-spdx | cosign-attest-provenance | cosign-verify-signature | cosign-verify-spdx-attestation | cosign-verify-provenance-attestation | image-finalization)
 		printf 'started\n'
 		;;
 	*)
@@ -163,7 +173,7 @@ oci_v081_matrix_write_scenario_diagnostic() {
 	*) return 2 ;;
 	esac
 	case "${observed_stage}" in
-	none | metadata-validation | credential-shape-preflight | cosign-preflight | image-preparation | registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | cosign-publication | image-finalization | package-contract | mutation-timeout | protected-output | fault-teardown | registry-cleanup | harness-execution) ;;
+	none | metadata-validation | credential-shape-preflight | cosign-preflight | image-preparation | registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | cosign-sign | cosign-attest-spdx | cosign-attest-provenance | cosign-verify-signature | cosign-verify-spdx-attestation | cosign-verify-provenance-attestation | image-finalization | package-contract | mutation-timeout | protected-output | fault-teardown | registry-cleanup | harness-execution) ;;
 	*) return 2 ;;
 	esac
 	case "${mutation_state}" in

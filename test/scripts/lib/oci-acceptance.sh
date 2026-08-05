@@ -136,8 +136,18 @@ oci_acceptance_classify_failure_stage() {
 		printf 'returned-reference-validation\n'
 	elif grep -Fq 'failed during provenance construction.' "${log_file}"; then
 		printf 'provenance-construction\n'
-	elif grep -Eq 'failed during Cosign (sign|attest-|verify-)' "${log_file}"; then
-		printf 'cosign-publication\n'
+	elif grep -Fq 'failed during Cosign sign.' "${log_file}"; then
+		printf 'cosign-sign\n'
+	elif grep -Fq 'failed during Cosign attest-spdx.' "${log_file}"; then
+		printf 'cosign-attest-spdx\n'
+	elif grep -Fq 'failed during Cosign attest-provenance.' "${log_file}"; then
+		printf 'cosign-attest-provenance\n'
+	elif grep -Fq 'failed during Cosign verify-signature.' "${log_file}"; then
+		printf 'cosign-verify-signature\n'
+	elif grep -Fq 'failed during Cosign verify-spdx-attestation.' "${log_file}"; then
+		printf 'cosign-verify-spdx-attestation\n'
+	elif grep -Fq 'failed during Cosign verify-provenance-attestation.' "${log_file}"; then
+		printf 'cosign-verify-provenance-attestation\n'
 	elif grep -Fq 'failed during evidence finalization.' "${log_file}"; then
 		printf 'evidence-finalization\n'
 	elif grep -Fq 'OCI application image finalization failed:' "${log_file}"; then
@@ -169,7 +179,7 @@ oci_acceptance_detect_mutation_state() {
 	metadata-validation | cosign-preflight | image-preparation)
 		printf 'not-started\n'
 		;;
-	registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | returned-reference-validation | provenance-construction | cosign-publication | evidence-finalization | image-finalization)
+	registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | returned-reference-validation | provenance-construction | cosign-sign | cosign-attest-spdx | cosign-attest-provenance | cosign-verify-signature | cosign-verify-spdx-attestation | cosign-verify-provenance-attestation | evidence-finalization | image-finalization)
 		printf 'started\n'
 		;;
 	*)
@@ -292,7 +302,7 @@ oci_acceptance_write_diagnostic() {
 	*) return 2 ;;
 	esac
 	case "${failure_stage}" in
-	none | internal | configuration | node-runtime | registry-readiness | key-generation | metadata-validation | cosign-preflight | image-preparation | image-finalization | registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | returned-reference-validation | provenance-construction | cosign-publication | evidence-finalization | package-contract | protected-output | bundle-verification | registry-immutable-read | deploy | registry-cleanup | temp-cleanup) ;;
+	none | internal | configuration | node-runtime | registry-readiness | key-generation | metadata-validation | cosign-preflight | image-preparation | image-finalization | registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | returned-reference-validation | provenance-construction | cosign-sign | cosign-attest-spdx | cosign-attest-provenance | cosign-verify-signature | cosign-verify-spdx-attestation | cosign-verify-provenance-attestation | evidence-finalization | package-contract | protected-output | bundle-verification | registry-immutable-read | deploy | registry-cleanup | temp-cleanup) ;;
 	*) return 2 ;;
 	esac
 	case "${mutation_state}" in

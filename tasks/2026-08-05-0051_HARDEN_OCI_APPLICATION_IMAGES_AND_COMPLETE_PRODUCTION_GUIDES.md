@@ -1559,6 +1559,17 @@ independent harness defects:
   completed, and the exact GHCR stage remains unresolved until a corrected
   exact-candidate rerun passes.
 
+A correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31000299709](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31000299709),
+tested branch commit `0fde2deca45ff17281ddd5fcff5b99e2b12e114d` and is also
+diagnostic history rather than release evidence. All five prepublication
+scenarios passed, while the positive and injected-finalization scenarios both
+stopped at the first target's allowlisted but over-broad `cosign-publication`
+stage. Every scenario cleanup and the independent recovery sweep succeeded.
+The next branch rehearsal must retain the exact fixed Cosign command stage
+without promoting raw tool output, then use that stage to correct and prove the
+real package flow.
+
 Complete this corrective gate before the next exact-candidate dispatch:
 
 - [x] Give every synthetic multi-target package/deploy target a matching Rush
@@ -1566,7 +1577,8 @@ Complete this corrective gate before the next exact-candidate dispatch:
       exercise both corrected multi-target fixtures through real provider-off
       Dagger Package planning before any live registry call.
 - [x] Capture mutating Package progress with pinned Dagger `logs` mode, retain
-      only allowlisted stage/mutation diagnostics, and regression-test that the
+      only exact allowlisted stage/mutation diagnostics (including every fixed
+      Cosign sign, attest, and verify stage), and regression-test that the
       progress mode exposes the controlled marker without exposing a secret
       sentinel.
 - [x] Treat every paginated GHCR package version, including untagged partial
