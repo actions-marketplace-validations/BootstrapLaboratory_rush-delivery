@@ -72,6 +72,11 @@ test("action metadata defines a composite action over dagger-for-github", () => 
   assert.equal(metadata.inputs["release-targets-json"].default, "[]");
   assert.equal(metadata.inputs["validate-targets-json"].default, "[]");
   assert.equal(metadata.inputs["application-image-provider"].default, "off");
+  assert.equal(metadata.inputs["source-import-policy"].default, "bounded");
+  assert.equal(
+    metadata.inputs["source-import-ignore-file"].default,
+    ".dagger/source-import.ignore",
+  );
   assert.equal(metadata.inputs["dagger-version"].default, "v0.20.7");
   assert.equal(metadata.runs.using, "composite");
   assert.ok(
@@ -81,6 +86,75 @@ test("action metadata defines a composite action over dagger-for-github", () => 
         "dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77",
     ),
   );
+});
+
+test("prepare workflow emits bounded local-copy Dagger Shell through the shared launcher", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "rush-delivery-action-"));
+  const repository = path.join(tempDir, "repo with spaces");
+  const outputPath = path.join(tempDir, "github-output");
+  await mkdir(path.join(repository, ".dagger"), { recursive: true });
+  await mkdir(path.join(repository, ".git"), { recursive: true });
+  writeFileSync(path.join(repository, "rush.json"), "{}\n");
+  writeFileSync(
+    path.join(repository, ".dagger/source-import.ignore"),
+    "**/generated\n!apps/api/generated\n",
+  );
+
+  const result = runPrepare({
+    GITHUB_ACTION_PATH: repoRoot,
+    GITHUB_OUTPUT: outputPath,
+    GITHUB_SHA: "1234567890abcdef1234567890abcdef12345678",
+    GITHUB_WORKSPACE: repository,
+    INPUT_DRY_RUN: "true",
+    INPUT_EXTRA_ARGS: "--host-workspace-dir=/trusted/workspace",
+    INPUT_REPO: repository,
+    INPUT_SOURCE_IMPORT_IGNORE_FILE: ".dagger/source-import.ignore",
+    INPUT_SOURCE_IMPORT_POLICY: "bounded",
+    INPUT_SOURCE_MODE: "local_copy",
+    RUNNER_TEMP: tempDir,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const outputs = parseGithubOutput(await readFile(outputPath, "utf8"));
+  assert.equal(outputs.args, "");
+  assert.match(outputs.shell, /^repo=\$\(host \| directory /u);
+  assert.match(outputs.shell, /--exclude='\*\*\/node_modules'/u);
+  assert.match(outputs.shell, /--exclude='\*\*\/generated'/u);
+  assert.match(outputs.shell, /--exclude='!apps\/api\/generated'/u);
+  assert.match(outputs.shell, /local-source --repo=\$repo \| workflow/u);
+  assert.match(outputs.shell, /--host-workspace-dir=\/trusted\/workspace$/u);
+  assert.doesNotMatch(outputs.shell, /--source-mode/u);
+  assert.doesNotMatch(outputs.shell, /--source-repository-url/u);
+
+  await rm(tempDir, { force: true, recursive: true });
+});
+
+test("Git source mode never reads local-copy ignore settings", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "rush-delivery-action-"));
+  const outputPath = path.join(tempDir, "github-output");
+  const result = runPrepare({
+    GITHUB_ACTION_PATH: repoRoot,
+    GITHUB_OUTPUT: outputPath,
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_REPOSITORY: "owner/repo",
+    GITHUB_SERVER_URL: "https://github.example",
+    GITHUB_SHA: "1234567890abcdef1234567890abcdef12345678",
+    INPUT_SOURCE_IMPORT_IGNORE_FILE: "../../must-not-be-read",
+    INPUT_SOURCE_IMPORT_POLICY: "invalid-but-ignored",
+    INPUT_SOURCE_MODE: "git",
+    RUNNER_TEMP: tempDir,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stderr.trim(),
+    "[source-import] bounded local-copy settings are ignored in Git source mode",
+  );
+  const outputs = parseGithubOutput(await readFile(outputPath, "utf8"));
+  assert.equal(outputs.shell, "");
+  assert.match(outputs.args, /--source-mode=git/u);
+
+  await rm(tempDir, { force: true, recursive: true });
 });
 
 test("prepare workflow writes deploy env, runtime files, and Dagger args", async () => {

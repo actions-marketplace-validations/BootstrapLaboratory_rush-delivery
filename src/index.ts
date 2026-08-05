@@ -28,6 +28,7 @@ import {
   validateMetadataContract as validateMetadataContractForRepo,
 } from "./metadata/dagger-metadata-contract.ts";
 import { formatMetadataContractValidationResult } from "./metadata/metadata-contract.ts";
+import { LocalSource } from "./local-source/local-source.ts";
 
 /**
  * Repeatable release workflows for Rush monorepos.
@@ -40,6 +41,14 @@ export class RushDelivery {
   @func({ cache: "session" })
   ping(): string {
     return "rush-delivery ready";
+  }
+
+  /**
+   * Returns source-adapter entrypoints over a caller-filtered local repository.
+   */
+  @func({ cache: "session" })
+  localSource(repo: Directory): LocalSource {
+    return new LocalSource(repo);
   }
 
   /**
