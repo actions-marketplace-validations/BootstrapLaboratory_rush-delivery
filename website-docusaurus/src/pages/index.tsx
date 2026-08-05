@@ -22,22 +22,16 @@ const examples = [
     languageLabel: "yaml",
     highlightLanguage: "yaml",
     code: [
-      "uses: BootstrapLaboratory/rush-delivery@v0.8.0",
+      "uses: BootstrapLaboratory/rush-delivery@v0.8.1",
       "with:",
       '  dry-run: "false"',
       "  toolchain-image-provider: github",
       "  rush-cache-provider: github",
-      "  application-image-provider: release",
       "  release-targets-json: '[\"npm\"]'",
       "  runtime-file-map: |",
       "    ${{ steps.auth.outputs.credentials_file_path }}=>gcp-credentials.json",
       "  deploy-env: |",
       "    GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}",
-      "    OCI_USERNAME=${{ secrets.OCI_USERNAME }}",
-      "    OCI_TOKEN=${{ secrets.OCI_TOKEN }}",
-      "    OCI_SIGNING_KEY=${{ secrets.OCI_SIGNING_KEY }}",
-      "    OCI_SIGNING_PASSWORD=${{ secrets.OCI_SIGNING_PASSWORD }}",
-      "    OCI_SIGNING_PUBLIC_KEY=${{ vars.OCI_SIGNING_PUBLIC_KEY }}",
       "  release-env: |",
       "    NPM_TOKEN=${{ secrets.NPM_TOKEN }}",
     ].join("\n"),
@@ -49,7 +43,7 @@ const examples = [
     languageLabel: "sh",
     highlightLanguage: "bash",
     code: [
-      "dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.8.0 call workflow \\",
+      "dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.8.1 call workflow \\",
       '  --git-sha="${GITHUB_SHA}" \\',
       '  --event-name="${GITHUB_EVENT_NAME}" \\',
       "  --release-targets-json='[\"npm\"]' \\",
@@ -68,7 +62,7 @@ const examples = [
     languageLabel: "yaml",
     highlightLanguage: "yaml",
     code: [
-      "uses: BootstrapLaboratory/rush-delivery@v0.8.0",
+      "uses: BootstrapLaboratory/rush-delivery@v0.8.1",
       "with:",
       "  entrypoint: validate",
       "  toolchain-image-provider: github",
@@ -85,7 +79,7 @@ const examples = [
     languageLabel: "yaml",
     highlightLanguage: "yaml",
     code: [
-      "# schemas: https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/",
+      "# schemas: https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/",
       "",
       "# .dagger/deploy/services-mesh.yaml",
       "services:",
@@ -114,7 +108,7 @@ const examples = [
       "    VITE_GRAPHQL_HTTP: WEBAPP_VITE_GRAPHQL_HTTP",
       "    VITE_GRAPHQL_WS: WEBAPP_VITE_GRAPHQL_WS",
       "",
-      "# OCI alternative: build once, deploy by digest",
+      "# Illustrative OCI alternative: build once, deploy by digest",
       "# artifact:",
       "#   kind: oci_image",
       "#   context: .",
@@ -324,6 +318,46 @@ export default function Home() {
               <p>{capability.description}</p>
             </article>
           ))}
+        </section>
+
+        <section
+          className={styles.capabilities}
+          aria-label="OCI application image resources"
+        >
+          <article>
+            <Heading as="h2">OCI tutorial</Heading>
+            <p>
+              <Link to="/docs/tutorial/oci-application-images">
+                Run the provider-off, publication, inspection, and digest deploy
+                path.
+              </Link>
+            </p>
+          </article>
+          <article>
+            <Heading as="h2">Production guide</Heading>
+            <p>
+              <Link to="/docs/oci-application-images">
+                Review trust boundaries, evidence, failure semantics, and
+                rollout.
+              </Link>
+            </p>
+          </article>
+          <article>
+            <Heading as="h2">Registry recipes</Heading>
+            <p>
+              <Link to="/docs/oci-registry-recipes">
+                Configure permissions, retention, and cleanup for your registry.
+              </Link>
+            </p>
+          </article>
+          <article>
+            <Heading as="h2">Troubleshooting</Heading>
+            <p>
+              <Link to="/docs/oci-application-image-troubleshooting">
+                Diagnose failures by phase without leaking credentials.
+              </Link>
+            </p>
+          </article>
         </section>
       </main>
     </Layout>
