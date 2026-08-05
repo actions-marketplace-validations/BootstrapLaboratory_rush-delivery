@@ -69,67 +69,67 @@ Deliver a `v0.8.1` release in which:
 
 ## Release And Compatibility Decision
 
-- [ ] Ship this work as patch release `v0.8.1` because it enforces already
+- [x] Ship this work as patch release `v0.8.1` because it enforces already
       documented invariants and fixes opt-in behavior without adding a public
       metadata shape, provider kind, entrypoint, or manifest version.
-- [ ] Keep the package-manifest contract at
+- [x] Keep the package-manifest contract at
       `rush-delivery-package-manifest/v2`.
-- [ ] Keep the `v0.8.0` OCI artifact/provider field shapes valid except for
+- [x] Keep the `v0.8.0` OCI artifact/provider field shapes valid except for
       newly rejected unsafe cross-file environment-name collisions, provider
       credential-name aliases, OCI target names that cannot be one evidence
       directory segment, and noncanonical v2 manifest paths/formats; document
       those narrow migrations explicitly.
-- [ ] Keep directory/archive-only manifests byte- and shape-compatible with the
+- [x] Keep directory/archive-only manifests byte- and shape-compatible with the
       current unversioned output.
-- [ ] Keep directory/archive deploy-result fields and behavior unchanged.
-- [ ] Keep `applicationImageProvider`/`application-image-provider` defaulting to
+- [x] Keep directory/archive deploy-result fields and behavior unchanged.
+- [x] Keep `applicationImageProvider`/`application-image-provider` defaulting to
       `off`.
-- [ ] Keep the GitHub Action's `/var/run/docker.sock` default for existing
+- [x] Keep the GitHub Action's `/var/run/docker.sock` default for existing
       project-owned deploy scripts; document it as a compatibility default and
       explicitly disable it in OCI-only examples.
-- [ ] Treat metadata that writes framework-owned environment names or projects
+- [x] Treat metadata that writes framework-owned environment names or projects
       application-provider credentials into project code as invalid. Document
       the required rename; accidental shadowing and credential projection are
       not compatibility guarantees.
-- [ ] Also reject repository locators that embed authentication/query/fragment
+- [x] Also reject repository locators that embed authentication/query/fragment
       data and file-mount destinations that can replace framework evidence.
       Document explicit auth inputs and safe retargeting as narrow security
       migrations; preserve every non-colliding legacy file-mount target spelling.
-- [ ] Create a complete immutable [`../schemas/v0.8.1`](../schemas/v0.8.1)
+- [x] Create a complete immutable [`../schemas/v0.8.1`](../schemas/v0.8.1)
       snapshot because deploy-schema validation and exact release alignment
       change, even though the OCI metadata shapes remain the same.
-- [ ] If implementation requires a new Dagger input, metadata field, provider
+- [x] If implementation requires a new Dagger input, metadata field, provider
       kind, signed-bundle contract, or manifest version, stop this patch and
       re-plan that addition for a minor release instead of silently expanding
       `v0.8.1`.
-- [ ] Treat clean-clone self-check repair and live-acceptance registry
+- [x] Treat clean-clone self-check repair and live-acceptance registry
       reliability as internal release-infrastructure prerequisites for this
       patch. They must not add a Dagger entrypoint/input, GitHub Action input,
       `.dagger` metadata field, schema shape, or application runtime behavior.
-- [ ] Keep registry coordinates in `v0.8.1` static as defined by the existing
+- [x] Keep registry coordinates in `v0.8.1` static as defined by the existing
       provider metadata. A configurable acceptance endpoint is private to the
       repository test harness and is not an environment-selected provider
       feature for consumers.
 
 ### Dagger Cache And Secret-Persistence Contract
 
-- [ ] Give every public Dagger function an explicit cache policy. Pure
+- [x] Give every public Dagger function an explicit cache policy. Pure
       session-stable inspection functions may use session caching; functions
       that observe mutable external state, execute project code, or can create
       side effects must use `cache: "never"`.
-- [ ] Do not overstate `cache: "never"`: it disables Dagger function-result
+- [x] Do not overstate `cache: "never"`: it disables Dagger function-result
       caching, not ordinary container layer caching. Add a fresh, random,
       non-secret execution input to Cosign preflight/publication, Grype scans,
       project Deploy scripts, and npm release so identical invocations rerun
       those security-sensitive or externally mutating commands. Keep
       deterministic image-build and other safe layer caching intact.
-- [ ] Never persist a secret or a derived authorization value into a Dagger
+- [x] Never persist a secret or a derived authorization value into a Dagger
       filesystem layer. In particular, Git release push auth must use a static
       askpass helper that reads the token from a Dagger secret environment at
       process time; it must not write a Basic header or token to `.git/config`.
       Keep Cosign preflight's key-derived files on an ephemeral mount rather
       than in a cached layer.
-- [ ] Document and test these semantics against Dagger's official
+- [x] Document and test these semantics against Dagger's official
       [function-caching](https://docs.dagger.io/extending/function-caching/) and
       [secret-handling](https://docs.dagger.io/extending/secrets/) guidance.
 
@@ -137,17 +137,17 @@ Deliver a `v0.8.1` release in which:
 
 ### Conditional Provider Activation
 
-- [ ] Determine selected package artifact kinds before doing any
+- [x] Determine selected package artifact kinds before doing any
       application-image provider work.
-- [ ] When zero selected plans are `oci_image`, do not parse the provider input,
+- [x] When zero selected plans are `oci_image`, do not parse the provider input,
       load `.dagger/application-images/providers.yaml`, select a provider,
       resolve credentials, create Dagger secrets, require an OCI Git SHA, or run
       signing preflight.
-- [ ] Treat a named or malformed application-image provider input as irrelevant
+- [x] Treat a named or malformed application-image provider input as irrelevant
       when the selected plan contains no OCI artifact. No-OCI behavior is
       determined by selected artifacts, not by a globally supplied unused
       option.
-- [ ] Preserve the OCI provider truth table:
+- [x] Preserve the OCI provider truth table:
 
 | Selected artifacts | Provider  | Dry run | Required behavior                                                                                                                                             |
 | ------------------ | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -159,15 +159,15 @@ Deliver a `v0.8.1` release in which:
 
 ### Credential Capability Boundary
 
-- [ ] Introduce one canonical application-provider credential-name model for
+- [x] Introduce one canonical application-provider credential-name model for
       `username_env`, `token_env`, `signing_key_env`,
       `signing_password_env`, and `verification_key_env`.
-- [ ] When application-image provider metadata is active, treat credential
+- [x] When application-image provider metadata is active, treat credential
       names from every declared provider as protected. Switching the selected
       provider must not make unsafe Build or Deploy metadata become safe.
-- [ ] Read values only for the selected live provider, and only when Package is
+- [x] Read values only for the selected live provider, and only when Package is
       ready to run its offline key preflight and OCI operations.
-- [ ] Convert the selected token, private key, password, public key, and generated
+- [x] Convert the selected token, private key, password, public key, and generated
       Docker authentication config to Dagger secrets immediately. The registry
       username remains the non-secret string required by Dagger's registry-auth
       API and may appear in Dagger's client progress/call graph; require it to be
@@ -175,18 +175,18 @@ Deliver a `v0.8.1` release in which:
       never projected into project code or returned in result models. Do not
       place sensitive plaintext values in a Dagger directory, ordinary container
       environment, command arguments, generated files, or returned models.
-- [ ] Require all five credential environment names to be globally unique
+- [x] Require all five credential environment names to be globally unique
       across all declared providers and reject aliases before reading values.
       In particular, no secret role may reuse a `username_env` name and reach
       Dagger's intentionally non-secret registry-username channel. Keep
       diagnostics deterministic and names-only, and document this narrow
       security migration.
-- [ ] Define env-file wording precisely: public entrypoints may parse a supplied
+- [x] Define env-file wording precisely: public entrypoints may parse a supplied
       aggregate env file for other capabilities. In dry/no-OCI paths the
       application-provider subsystem must not index, resolve, use, log, or turn
       provider-named entries into Dagger secrets. Recommend omitting provider
       values entirely from invocations that do not need live OCI Package.
-- [ ] Keep provider credentials out of project-controlled execution by rejecting
+- [x] Keep provider credentials out of project-controlled execution by rejecting
       protected names in all of these surfaces:
   - package `build.pass_env`;
   - package `build.map_env` source names and output names;
@@ -200,31 +200,31 @@ Deliver a `v0.8.1` release in which:
   - npm release `auth.token_env` when the composed workflow also activates an
     application-image provider.
 
-- [ ] Validate the boundary before Rush Build or another project-controlled
+- [x] Validate the boundary before Rush Build or another project-controlled
       container can consume the value. Errors name provider, target, metadata
       field, and environment variable, but never a value.
-- [ ] Maintain separate control-plane and project-projection views. Framework-
+- [x] Maintain separate control-plane and project-projection views. Framework-
       owned source auth, toolchain/cache adapters, deploy-tag updates, and
       release Git auth retain the raw map needed by their explicit inputs; only
       maps projected into project Build, npm publish/lifecycle, and Deploy
       processes are filtered after validation.
-- [ ] Keep raw provider input available only to framework-owned coordinator code
+- [x] Keep raw provider input available only to framework-owned coordinator code
       long enough to resolve the selected Package secrets. Do not place it in
       the built or packaged repository returned to another stage.
-- [ ] Treat the repository locator copied into OCI labels and provenance as a
+- [x] Treat the repository locator copied into OCI labels and provenance as a
       public coordinate, never an authentication channel. Accept only supported
       absolute Git/HTTP(S)/SSH URLs or narrowly validated `git@host:path`
       locators; reject password/userinfo (except the literal SSH user `git`),
       query strings, fragments, whitespace, control characters, and arbitrary
       SCP-like values with diagnostics that do not repeat the rejected input.
-- [ ] For standalone `deployRelease`, conditionally reload provider metadata
+- [x] For standalone `deployRelease`, conditionally reload provider metadata
       names (never credential values) when the selected manifest contains a
       named-provider planned OCI artifact or a published OCI artifact, reject
       selected Deploy projections against every declared provider, and retain
       the same runtime-bypass check used by composed workflow execution.
       Filesystem artifacts and provider-off planned OCI artifacts must continue
       to ignore provider metadata.
-- [ ] Define the guarantee precisely: selecting an application provider does not
+- [x] Define the guarantee precisely: selecting an application provider does not
       automatically project its credential names into project-controlled Build,
       npm, or Deploy code. Framework-owned Source, toolchain-image, Rush-cache,
       deploy-tag, or release-Git adapters may still read the same name only when
@@ -232,9 +232,9 @@ Deliver a `v0.8.1` release in which:
       also deliberately reuse the same underlying value under another name;
       documentation must recommend distinct least-privilege credentials and
       must not claim name/value identity detection across explicit capabilities.
-- [ ] Ensure provider-off and no-OCI flows do not load provider metadata merely
+- [x] Ensure provider-off and no-OCI flows do not load provider metadata merely
       to construct a protected-name set.
-- [ ] Make execution validation invocation-aware:
+- [x] Make execution validation invocation-aware:
   1. initial workflow validation checks the repository, mesh, and target
      metadata without parsing application-image providers;
   2. Detect and package-plan construction determine selected artifact kinds;
@@ -242,7 +242,7 @@ Deliver a `v0.8.1` release in which:
   3. only a selected OCI plan loads provider definitions and runs selected-plan
      provider/collision validation.
 
-- [ ] Keep the explicit repository-wide `validate`/metadata-contract entrypoint
+- [x] Keep the explicit repository-wide `validate`/metadata-contract entrypoint
       intentionally stricter: it validates every present provider file and all
       cross-file collisions even when no invocation-specific OCI plan is
       selected. Document this distinction so repository linting and execution
@@ -250,9 +250,9 @@ Deliver a `v0.8.1` release in which:
 
 ### Framework-Owned Deploy Environment
 
-- [ ] Reserve the entire `ARTIFACT_` output namespace plus `GIT_SHA` and
+- [x] Reserve the entire `ARTIFACT_` output namespace plus `GIT_SHA` and
       `DRY_RUN` for Rush Delivery.
-- [ ] Document the currently emitted framework values:
+- [x] Document the currently emitted framework values:
   - `ARTIFACT_PATH`;
   - `ARTIFACT_KIND`;
   - `ARTIFACT_IMAGE_NAME`;
@@ -265,71 +265,71 @@ Deliver a `v0.8.1` release in which:
   - `GIT_SHA`;
   - `DRY_RUN`.
 
-- [ ] Reject reserved names in deploy `runtime.env`, `pass_env`, `map_env`
+- [x] Reject reserved names in deploy `runtime.env`, `pass_env`, `map_env`
       output names, `dry_run_defaults`, `required_host_env`, and host-path
       `source_var`. Reject ownership collisions even if both values happen to be
       identical.
-- [ ] Reject `ARTIFACT_FUTURE_NAME` as well as the current variables so future
+- [x] Reject `ARTIFACT_FUTURE_NAME` as well as the current variables so future
       framework additions cannot silently break existing deploy metadata.
-- [ ] Add parser, root-schema, metadata-contract, and runtime checks. The
+- [x] Add parser, root-schema, metadata-contract, and runtime checks. The
       runtime check must protect direct internal/model callers and old metadata
       that did not pass through the current schema.
-- [ ] Construct project environment and framework environment separately, check
+- [x] Construct project environment and framework environment separately, check
       for collisions, and apply framework-owned values last. Object-spread order
       alone is not an enforcement mechanism.
-- [ ] Make each dry-run summary and returned result derive from the exact final
+- [x] Make each dry-run summary and returned result derive from the exact final
       environment computed for that invocation. Dry and live invocations are
       not byte-equal: `DRY_RUN`, defaults, planned/published fields, digest, and
       evidence necessarily differ.
-- [ ] Make flat env-file syntax diagnostics secret-safe. A malformed physical
+- [x] Make flat env-file syntax diagnostics secret-safe. A malformed physical
       line or invalid name reports its line number and redacted content, never
       the raw line, key text, or value; this includes an actual-newline PEM body.
 
 ### Signing Preflight And OCI Execution Barrier
 
-- [ ] Retain useful PEM marker and literal-`\n` decoding diagnostics, but stop
+- [x] Retain useful PEM marker and literal-`\n` decoding diagnostics, but stop
       calling marker checks cryptographic validation.
-- [ ] Before any application image is built, scanned, authenticated to its
+- [x] Before any application image is built, scanned, authenticated to its
       destination registry, or published, run one offline cryptographic
       preflight for the selected live provider with the existing digest-pinned
       Cosign image. Pulling that tool image may itself require ordinary registry
       network access; “offline” describes Cosign's key operation, not Dagger
       image availability.
-- [ ] Materialize the pinned Cosign tool image and a digest-pinned static shell
+- [x] Materialize the pinned Cosign tool image and a digest-pinned static shell
       helper in a distinct secret-free
       availability stage before attaching provider secrets or classifying key
       commands. A tool-image pull/DNS/TLS failure must be reported as sanitized
       tool availability, never as a private-key/password/public-key failure.
-- [ ] Have the preflight decrypt the private key with the supplied password,
+- [x] Have the preflight decrypt the private key with the supplied password,
       derive/parse its public identity, parse the configured verification key,
       and prove the key pair matches. Compare canonical key identity rather than
       raw whitespace.
-- [ ] Keep private material in Dagger secrets. Do not collect or print the
+- [x] Keep private material in Dagger secrets. Do not collect or print the
       private key, password, token, signature payload, or secret-bearing command.
-- [ ] Report only the provider and failed credential role for malformed private
+- [x] Report only the provider and failed credential role for malformed private
       keys, malformed public keys, wrong passwords, and mismatched pairs.
-- [ ] Run the preflight once per selected provider, not once per target. Dry runs
+- [x] Run the preflight once per selected provider, not once per target. Dry runs
       never resolve values or run the preflight.
-- [ ] Split live OCI execution into two internal phases without changing the
+- [x] Split live OCI execution into two internal phases without changing the
       public artifact or manifest model:
   1. prepare each selected image by building it, exporting the exact subject,
      validating its SPDX SBOM, and scanning it;
   2. publish the prepared subject, validate the returned digest, create
      provenance, sign, attest, verify, and construct evidence.
 
-- [ ] Run preparation in parallel, await all preparation operations, aggregate
+- [x] Run preparation in parallel, await all preparation operations, aggregate
       failures in stable selected-target order, and start no registry mutation
       unless every selected OCI target prepared successfully.
-- [ ] Preserve a mixed-selection barrier: all selected filesystem validations,
+- [x] Preserve a mixed-selection barrier: all selected filesystem validations,
       archive/directory package commands, and their materialization must also
       succeed before any OCI publication begins.
-- [ ] Keep provider secrets out of the preparation function entirely; provide
+- [x] Keep provider secrets out of the preparation function entirely; provide
       them only to publication/finalization.
-- [ ] Finalize prepared targets one at a time in stable selected-target order to
+- [x] Finalize prepared targets one at a time in stable selected-target order to
       bound partial external side effects. Stop starting later targets after a
       finalization failure.
-- [ ] Await every operation already started before returning an error.
-- [ ] On finalization failure, do not write a successful package manifest and do
+- [x] Await every operation already started before returning an error.
+- [x] On finalization failure, do not write a successful package manifest and do
       not start Deploy. Report, in deterministic order:
   - the failed target and stage;
   - any canonical digest reference known to have been published for that
@@ -338,110 +338,110 @@ Deliver a `v0.8.1` release in which:
   - every later target that was not started; and
   - a sanitized cleanup warning.
 
-- [ ] Never include a credential, Docker auth payload, private repository token,
+- [x] Never include a credential, Docker auth payload, private repository token,
       mutable navigation tag as a deploy reference, or Dagger secret value in
       aggregate errors.
-- [ ] Keep publication explicitly nontransactional. Do not promise or implement
+- [x] Keep publication explicitly nontransactional. Do not promise or implement
       automatic provider-specific deletion in this patch.
 
 ### Evidence And Split-Stage Trust
 
-- [ ] Keep Package-time Cosign verification and Deploy-time local bundle checks
+- [x] Keep Package-time Cosign verification and Deploy-time local bundle checks
       as different guarantees.
-- [ ] Preserve strict v2 parsing, lowercase digest-only references, exact
+- [x] Preserve strict v2 parsing, lowercase digest-only references, exact
       repository/reference agreement, full source-revision matching, and
       target-prefixed evidence paths.
-- [ ] Require every OCI package target name to be one safe evidence-directory
+- [x] Require every OCI package target name to be one safe evidence-directory
       segment in the package-target schema, metadata parser, and action planner,
       so an unsafe selected OCI target fails before Rush Build. Preserve legacy
       filesystem target names that do not use the OCI evidence subtree.
-- [ ] Keep package-manifest v2 schema and runtime parsing aligned on canonical
+- [x] Keep package-manifest v2 schema and runtime parsing aligned on canonical
       evidence paths, exact `slsa-provenance-v1`/`spdx-json` document formats,
       and normalized filesystem `deploy_path`/`path` values with no trailing
       separators or dot segments.
-- [ ] Validate every selected published OCI target's evidence before the first
+- [x] Validate every selected published OCI target's evidence before the first
       live deploy script in any wave starts.
-- [ ] Exclude `.dagger/runtime/evidence` from the generic deploy workspace for
+- [x] Exclude `.dagger/runtime/evidence` from the generic deploy workspace for
       both partial and `mode: full` workspaces, then mount only the current
       published OCI target's verified evidence directory at the framework-owned
       `ARTIFACT_EVIDENCE_DIR`.
-- [ ] Prevent an explicit partial workspace path or a broader parent directory
+- [x] Prevent an explicit partial workspace path or a broader parent directory
       from reintroducing another target's evidence. Filesystem targets receive
       no OCI evidence directory unless project source independently contains a
       non-runtime path with that content.
-- [ ] Prevent a normalized repository-backed `runtime.file_mounts` host path
+- [x] Prevent a normalized repository-backed `runtime.file_mounts` host path
       from reintroducing `.dagger/runtime/evidence` or any descendant. This
       runtime-bypass check must apply after absolute workspace paths have been
       converted to repository-relative paths.
-- [ ] Normalize the destination of both runtime file-mount forms and reject an
+- [x] Normalize the destination of both runtime file-mount forms and reject an
       exact framework evidence destination, any descendant, and any parent that
       could replace or mask `/workspace/.dagger/runtime/evidence`. Enforce this
       in schema-expressible canonical forms, the parser, and direct-call runtime
       checks while preserving non-colliding legacy spellings.
-- [ ] Keep `ARTIFACT_EVIDENCE_DIR` absent for filesystem artifacts and planned
+- [x] Keep `ARTIFACT_EVIDENCE_DIR` absent for filesystem artifacts and planned
       OCI artifacts.
-- [ ] Canonicalize every Package output from the post-Build repository view:
+- [x] Canonicalize every Package output from the post-Build repository view:
       preserve project-owned non-runtime `.dagger` files/directories (including
       filesystem artifacts), remove the complete pre-existing `.dagger/runtime`
       path whether it is a file, directory, or symlink, materialize concrete
       `.dagger` and `.dagger/runtime` directories, and only then write the new
       manifest, frozen credential-name capability, and evidence. Never mutate a
       symlink redirect target while doing so.
-- [ ] Run one common Deploy bundle-shape preflight before dry or live target
+- [x] Run one common Deploy bundle-shape preflight before dry or live target
       execution. Reject a supplied bundle when `.dagger`, `.dagger/runtime`, or
       `.dagger/runtime/evidence` is a symlink; do not silently repair or follow
       the alias.
-- [ ] Define `evidence.signature.verified: true` as a record that Package
+- [x] Define `evidence.signature.verified: true` as a record that Package
       successfully verified the subject signature and required attestations
       against the configured public key. Define `signature.reference` as the
       immutable image subject used for Cosign lookup, not as a portable locator
       for a signature object.
-- [ ] State that Deploy does not query the registry or rerun Cosign. It validates
+- [x] State that Deploy does not query the registry or rerun Cosign. It validates
       the manifest shape, source revision, digest reference, evidence paths, and
       local document hashes against the supplied manifest.
-- [ ] Treat an exported packaged directory, its manifest, and its evidence as one
+- [x] Treat an exported packaged directory, its manifest, and its evidence as one
       trusted release-control bundle. Local rehashing does not defend against an
       attacker who can replace both manifest and evidence.
-- [ ] Require split-stage operators to use access-controlled immutable artifact
+- [x] Require split-stage operators to use access-controlled immutable artifact
       storage, protected producer/consumer jobs, an externally recorded artifact
       identity or checksum, atomic restoration of the whole bundle, and an
       expected full Git SHA obtained from protected release metadata outside the
       unsigned bundle. Deploy compares the manifest revision to that independent
       expected SHA.
-- [ ] Keep signed portable bundles and Deploy-time registry Cosign verification
+- [x] Keep signed portable bundles and Deploy-time registry Cosign verification
       out of this patch; they require a separately designed public contract.
 
 ### Vulnerability And Cosign Semantics
 
-- [ ] Keep `scan.fail_on` as an exact set of rejected normalized severities, not
+- [x] Keep `scan.fail_on` as an exact set of rejected normalized severities, not
       a threshold. In particular, `[high]` rejects High findings but does not
       implicitly reject Critical findings; production policy normally lists
       both `high` and `critical`.
-- [ ] Describe `scan.ignore_file` accurately as a repository-owned Grype YAML
+- [x] Describe `scan.ignore_file` accurately as a repository-owned Grype YAML
       configuration passed through `--config`, not as a Rush Delivery-specific
       list format.
-- [ ] Provide a tested minimal Grype configuration. Record exception reason,
+- [x] Provide a tested minimal Grype configuration. Record exception reason,
       owner, review/expiry date, and removal follow-up in YAML comments or an
       adjacent governed record; pass only keys supported by the pinned Grype
       configuration format to `--config`.
-- [ ] Validate the minimum Grype report structure before evaluating policy:
+- [x] Validate the minimum Grype report structure before evaluating policy:
       `matches` must be an array (an explicit empty array is valid), and each
       evaluated match must contain a non-empty vulnerability ID and supported
       severity. Treat missing/malformed fields or unsupported severity as
       invalid scanner output and fail closed; do not silently treat a malformed
       report as “no findings” or pretend `unknown` is selectable in
       `scan.fail_on`.
-- [ ] Keep the Syft, Grype, Cosign, and preflight BusyBox helper container
+- [x] Keep the Syft, Grype, Cosign, and preflight BusyBox helper container
       images digest-pinned.
-- [ ] State separately that the Grype vulnerability database and cache are
+- [x] State separately that the Grype vulnerability database and cache are
       mutable network-supplied inputs. Document outbound-network, cache,
       availability, freshness, reproducibility, and fail-closed assumptions.
-- [ ] Preserve the current private-registry-friendly key-backed Cosign mode:
+- [x] Preserve the current private-registry-friendly key-backed Cosign mode:
       signing and attestations use `--tlog-upload=false`; verification uses
       `--insecure-ignore-tlog`.
-- [ ] State what this mode proves: the configured key verified the digest-bound
+- [x] State what this mode proves: the configured key verified the digest-bound
       subject signature and required attestations during Package.
-- [ ] State what it does not prove: Rekor inclusion, public transparency,
+- [x] State what it does not prove: Rekor inclusion, public transparency,
       keyless workload identity, trusted timestamping, public auditability, or a
       new cryptographic verification during Deploy.
 
@@ -457,37 +457,37 @@ baseline comparison, adversarial review, live proof where required, and all
 clean-checkout gates. This recorded sequencing deviation does not waive any
 behavioral or release gate below.
 
-- [ ] Confirm the working baseline is tag `v0.8.0` at
+- [x] Confirm the working baseline is tag `v0.8.0` at
       `d98d666e17845a5d7089571fe7c8b256484e6a25` and record any intentional
       baseline drift in this task before implementation.
-- [ ] Run the existing setup and quality baseline with the repository's actual
+- [x] Run the existing setup and quality baseline with the repository's actual
       commands: `yarn install --frozen-lockfile` when dependencies need setup,
       then `npm run typecheck` and `npm test`.
-- [ ] Confirm the installed Dagger CLI and
+- [x] Confirm the installed Dagger CLI and
       [`../dagger.json`](../dagger.json) both use `v0.20.7`; do not upgrade the
       engine for this task unless a separately documented requirement is found.
-- [ ] Read and follow
+- [x] Read and follow
       [`../.ai/rules/BashModules.md`](../.ai/rules/BashModules.md) before editing
       the canonical deploy script, OCI acceptance scripts, or the GitHub Action
       shell wrapper.
-- [ ] Add `v0.8.0` at the front of `publishedVersions` in
+- [x] Add `v0.8.0` at the front of `publishedVersions` in
       [`../website-docusaurus/scripts/sync-versioned-docs.mjs`](../website-docusaurus/scripts/sync-versioned-docs.mjs)
       before changing any current documentation.
-- [ ] Generate the `v0.8.0` versioned documentation and sidebars only through
+- [x] Generate the `v0.8.0` versioned documentation and sidebars only through
       `npm --prefix website-docusaurus run sync-versioned-docs`, which must read
       the immutable `v0.8.0` tag.
-- [ ] Compare the generated `v0.8.0` snapshot inputs with `git show v0.8.0:...`
+- [x] Compare the generated `v0.8.0` snapshot inputs with `git show v0.8.0:...`
       and fail if current working-tree docs leaked into the snapshot.
-- [ ] Never hand-edit the generated `v0.8.0` documentation, sidebars, or the
+- [x] Never hand-edit the generated `v0.8.0` documentation, sidebars, or the
       released [`../schemas/v0.8.0`](../schemas/v0.8.0) snapshot.
-- [ ] Add focused defect-reproduction tests before changing behavior: no-OCI
+- [x] Add focused defect-reproduction tests before changing behavior: no-OCI
       provider activation, credential projection, reserved env collisions, key
       mismatch timing, and multi-target side effects. Only tests reproducing an
       existing defect are expected to fail initially; compatibility goldens and
       already-correct behavior tests must pass.
-- [ ] Capture current filesystem-only manifest and deploy-result fixtures as
+- [x] Capture current filesystem-only manifest and deploy-result fixtures as
       compatibility goldens.
-- [ ] Add prototype-shaped-name regressions so absent `constructor`/`toString`
+- [x] Add prototype-shaped-name regressions so absent `constructor`/`toString`
       selections never resolve inherited object properties, while explicitly
       declared prototype-shaped legacy service/target names remain safe. Build
       normalized maps without allowing `__proto__` assignment to mutate their
@@ -500,42 +500,42 @@ These repairs make the existing release gates trustworthy. They are not new
 Rush Delivery consumer capabilities and must be complete before implementation
 results can be accepted.
 
-- [ ] Add a clean-clone regression that supplies tracked module source with the
+- [x] Add a clean-clone regression that supplies tracked module source with the
       ignored generated `sdk/` directory absent, with no prior
       `dagger develop`, no host `node_modules`, and no cached generated output.
       Demonstrate the current nested self-check failure before repairing it.
-- [ ] Repair [`../src/self-check/self-check.ts`](../src/self-check/self-check.ts)
+- [x] Repair [`../src/self-check/self-check.ts`](../src/self-check/self-check.ts)
       so `dagger call self-check` deterministically generates or provisions the
       matching TypeScript SDK inside its isolated execution before typecheck and
       tests need it. Do not read an untracked host SDK, require a caller to run
       `dagger develop`, commit generated SDK output, hand-edit generated files,
       or change the Dagger engine/public module contract.
-- [ ] Keep the generated SDK ephemeral to the self-check execution and prove
+- [x] Keep the generated SDK ephemeral to the self-check execution and prove
       the repair works for a repository checkout or archive containing tracked
       files only. A developer's pre-existing `sdk/` directory must
       neither be required nor able to mask the regression.
-- [ ] Refactor the live OCI acceptance harness so registry endpoint,
+- [x] Refactor the live OCI acceptance harness so registry endpoint,
       harness-owned provider coordinates, credentials, and unique namespace can
       be supplied through test-only script configuration. Do not expose that
       configuration through the Rush Delivery Dagger API, GitHub Action API,
       project metadata, schemas, tutorial provider contract, or returned
       models.
-- [ ] In the harness, inherit GitHub credentials only for the exact automatic
+- [x] In the harness, inherit GitHub credentials only for the exact automatic
       GHCR project mode. An explicit non-GHCR endpoint must require explicit
       acceptance credentials and must never silently reuse `GITHUB_ACTOR` or
       `GITHUB_TOKEN`; the public product contract remains unchanged.
-- [ ] Prototype the live registry topology before relying on it as a gate. Prefer
+- [x] Prototype the live registry topology before relying on it as a gate. Prefer
       a project-controlled trusted-TLS endpoint with a harness-owned disposable
       namespace. If an in-engine registry would require unsupported product
       custom-CA or insecure-registry behavior, use an explicitly configured
       standards-compatible external endpoint instead of weakening the product
       contract. Record the chosen endpoint's TLS, capability, retention,
       redaction, and cleanup guarantees and do not make `ttl.sh` the sole default.
-- [ ] Allocate a cryptographically unique per-run namespace, register cleanup
+- [x] Allocate a cryptographically unique per-run namespace, register cleanup
       before mutation begins, and preserve the no-host-Docker-socket contract.
       Generate test Cosign material inside the Dagger/test execution; the live
       gate must not require a host Docker or Podman CLI, socket, or daemon.
-- [ ] Define bounded retry policy by operation and failure class. Retry only
+- [x] Define bounded retry policy by operation and failure class. Retry only
       transient transport failures in harness provisioning, readiness,
       side-effect-free capability probes, and safe immutable reads, with fixed
       attempt/time limits and sanitized diagnostics. Never retry the complete
@@ -543,20 +543,20 @@ results can be accepted.
       after mutation may have started, report the outcome as unknown or partial
       and enter evidence inspection/cleanup rather than assuming it is safe to
       publish again.
-- [ ] Give harness setup/readiness/transport failures stable diagnostics that
+- [x] Give harness setup/readiness/transport failures stable diagnostics that
       are distinct from Rush Delivery authentication, security-policy,
       key-preflight, publication, signature, attestation, manifest, and evidence
       failures. Retry exhaustion must retain the original sanitized failure
       class and must not turn a product-contract failure into infrastructure
       flakiness.
-- [ ] Add deterministic harness tests for transient success within the retry
+- [x] Add deterministic harness tests for transient success within the retry
       bound, retry exhaustion, a non-retryable product failure, an ambiguous
       post-mutation transport failure, cleanup registration/execution, and
       secret-sentinel absence from all diagnostics.
 
 ### Phase 0 Exit Gate
 
-- [ ] Released docs are frozen from the tag, each defect reproduction fails for
+- [x] Released docs are frozen from the tag, each defect reproduction fails for
       its expected reason, compatibility/positive tests pass, clean-clone
       self-check is independent of host-generated SDK state, the live registry
       harness has bounded and classified failure behavior, and no current root
@@ -564,243 +564,243 @@ results can be accepted.
 
 ## Phase 1: Correct Provider Activation And Environment Ownership
 
-- [ ] Refactor
+- [x] Refactor
       [`../src/stages/package-stage/execute-package-plans.ts`](../src/stages/package-stage/execute-package-plans.ts)
       so the zero-OCI path returns through the existing filesystem packaging
       contract without creating provider state.
-- [ ] Refactor workflow/build-package planning so selected package definitions
+- [x] Refactor workflow/build-package planning so selected package definitions
       and the selected provider definition are known before Rush Build, without
       resolving live credential values early.
-- [ ] Reuse the loaded package plans instead of parsing the same target metadata
+- [x] Reuse the loaded package plans instead of parsing the same target metadata
       independently before Build and Package.
-- [ ] Apply the same conditional activation to `workflow`,
+- [x] Apply the same conditional activation to `workflow`,
       `packageDeployTargets`, and `buildAndPackageDeployTargets`; preserve the
       standalone filesystem-only behavior of every entrypoint.
-- [ ] Fail a live selected OCI plan with provider `off` before executing the Rush
+- [x] Fail a live selected OCI plan with provider `off` before executing the Rush
       lifecycle, application image build, or application-image external side
       effect. Source acquisition may already have occurred.
-- [ ] Add the two-pass execution validation described above: initial validation
+- [x] Add the two-pass execution validation described above: initial validation
       skips application-provider parsing, while post-Detect validation loads it
       only for a selected OCI plan and checks only executable selected-plan
       projections.
-- [ ] Preserve explicit repository-wide validation as the path that checks every
+- [x] Preserve explicit repository-wide validation as the path that checks every
       declared application provider and all target cross-file collisions.
-- [ ] Add a central protected-name/collision utility shared by metadata
+- [x] Add a central protected-name/collision utility shared by metadata
       validation, Build environment resolution, npm Release orchestration, and
       Deploy runtime resolution.
-- [ ] Add cross-file metadata validation that reports all protected credential
+- [x] Add cross-file metadata validation that reports all protected credential
       projections together in stable path/field order.
-- [ ] Add schema-representable reserved namespace restrictions to the root
+- [x] Add schema-representable reserved namespace restrictions to the root
       [`../schemas/deploy-target.schema.json`](../schemas/deploy-target.schema.json).
-- [ ] Add parser enforcement in
+- [x] Add parser enforcement in
       [`../src/stages/deploy/parse-deploy-target.ts`](../src/stages/deploy/parse-deploy-target.ts)
       and runtime enforcement in
       [`../src/stages/deploy/runtime-env.ts`](../src/stages/deploy/runtime-env.ts).
-- [ ] Fix
+- [x] Fix
       [`../src/stages/deploy/execute-target.ts`](../src/stages/deploy/execute-target.ts)
       so metadata environment cannot overwrite framework environment and the
       final map is the single source for dry-run and live execution.
-- [ ] Ensure errors remain actionable when more than one target or field is
+- [x] Ensure errors remain actionable when more than one target or field is
       invalid, and never resolve a protected value merely to report its name.
 
 ### Phase 1 Required Tests
 
-- [ ] Directory-only, archive-only, empty, and npm-only plans succeed with a
+- [x] Directory-only, archive-only, empty, and npm-only plans succeed with a
       named provider input and no application-provider file.
-- [ ] A filesystem-only plan also ignores an otherwise invalid unused provider
+- [x] A filesystem-only plan also ignores an otherwise invalid unused provider
       input.
-- [ ] A mixed repository selecting only filesystem targets does not activate the
+- [x] A mixed repository selecting only filesystem targets does not activate the
       provider; a selection containing an OCI target does.
-- [ ] OCI provider-off/named × dry/live behavior matches the truth table.
-- [ ] Named OCI dry run loads provider metadata but succeeds without any
+- [x] OCI provider-off/named × dry/live behavior matches the truth table.
+- [x] Named OCI dry run loads provider metadata but succeeds without any
       credential values and never resolves/indexes provider entries from a
       supplied aggregate env map.
-- [ ] Live OCI reads exactly the five selected provider values and no values for
+- [x] Live OCI reads exactly the five selected provider values and no values for
       unselected providers.
-- [ ] Source URL tests reject userinfo, query, fragment, malformed locators, and
+- [x] Source URL tests reject userinfo, query, fragment, malformed locators, and
       secret sentinels without echoing the rejected locator or sentinel.
-- [ ] Token, private key, password, public key, and generated Docker config are
+- [x] Token, private key, password, public key, and generated Docker config are
       Dagger secrets; username remains a framework-owned non-secret string and
       is absent from project environments/results. Dagger's own progress graph
       may show the username; never configure a secret value in that field.
-- [ ] Same-provider and cross-provider credential-name aliases fail before any
+- [x] Same-provider and cross-provider credential-name aliases fail before any
       value lookup; a direct-model bypass cannot reuse a secret role through
       `username_env`.
-- [ ] Every protected credential channel fails closed: Build `pass_env`, both
+- [x] Every protected credential channel fails closed: Build `pass_env`, both
       sides of Build `map_env`, Build defaults, Deploy `pass_env`, both sides of
       Deploy `map_env`, static Deploy env, Deploy defaults, required host env,
       host-path source vars, and composed npm auth.
-- [ ] Every reserved output channel rejects `ARTIFACT_PATH`, each current OCI
+- [x] Every reserved output channel rejects `ARTIFACT_PATH`, each current OCI
       `ARTIFACT_*` name, an unknown future `ARTIFACT_*` name, `GIT_SHA`, and
       `DRY_RUN`.
-- [ ] Parser, root schema, metadata-contract, and runtime-bypass tests agree.
-- [ ] Flat env-file parser tests prove malformed values and actual-newline PEM
+- [x] Parser, root schema, metadata-contract, and runtime-bypass tests agree.
+- [x] Flat env-file parser tests prove malformed values and actual-newline PEM
       bodies are redacted from diagnostics.
-- [ ] Execution no-OCI tests ignore an invalid present provider file, while the
+- [x] Execution no-OCI tests ignore an invalid present provider file, while the
       explicit repository validator reports that same invalid file.
-- [ ] Standalone filesystem and provider-off planned OCI Deploy ignore provider
+- [x] Standalone filesystem and provider-off planned OCI Deploy ignore provider
       metadata, while standalone named/published OCI Deploy validates provider
       credential names without resolving or using their values and fails before
       any deploy script if a selected runtime projects one.
-- [ ] Same-value collisions fail; harmless non-reserved environment still works.
-- [ ] Filesystem-only compatibility goldens remain byte- and shape-identical.
+- [x] Same-value collisions fail; harmless non-reserved environment still works.
+- [x] Filesystem-only compatibility goldens remain byte- and shape-identical.
 
 ### Phase 1 Exit Gate
 
-- [ ] No-OCI workflows are provider-independent, project metadata cannot
+- [x] No-OCI workflows are provider-independent, project metadata cannot
       receive protected application credentials, and framework Deploy variables
       have one unambiguous owner.
 
 ## Phase 2: Harden Package Preflight And Multi-Target Side Effects
 
-- [ ] Refactor application-image packaging into explicit prepare and finalize
+- [x] Refactor application-image packaging into explicit prepare and finalize
       operations with typed inputs/results.
-- [ ] Keep image, platform, Git SHA, source URL, context, Dockerfile, SBOM, scan,
+- [x] Keep image, platform, Git SHA, source URL, context, Dockerfile, SBOM, scan,
       and prepared subject in the prepare result without provider credentials.
-- [ ] Preserve the repository-relative Dockerfile coordinate in the action plan
+- [x] Preserve the repository-relative Dockerfile coordinate in the action plan
       and provenance, then convert it exactly once to a context-relative path
       for Dagger's narrowed build directory. Validate containment for parsed
       metadata and direct internal inputs; never double-relativize the path.
-- [ ] Create a pure/testable Cosign command plan so the intentional
+- [x] Create a pure/testable Cosign command plan so the intentional
       `--tlog-upload=false` and `--insecure-ignore-tlog` flags cannot drift from
       documentation unnoticed.
-- [ ] Add the one-time cryptographic provider preflight before invoking any
+- [x] Add the one-time cryptographic provider preflight before invoking any
       prepare operation.
-- [ ] Aggregate all prepare failures deterministically and verify the registry
+- [x] Aggregate all prepare failures deterministically and verify the registry
       publish method was never called when any prepare operation fails.
-- [ ] Finalize in selected-target order and retain sanitized state for every
+- [x] Finalize in selected-target order and retain sanitized state for every
       target that crossed the publication boundary.
-- [ ] Validate Dagger's returned publication reference before signing and before
+- [x] Validate Dagger's returned publication reference before signing and before
       recording it as a possible side effect.
-- [ ] Ensure the successful path still publishes once, signs the digest, attaches
+- [x] Ensure the successful path still publishes once, signs the digest, attaches
       SPDX and provenance attestations, verifies all required objects, and emits
       the existing v2 artifact shape.
-- [ ] Keep the local Grype scan report as evidence only; do not call it a registry
+- [x] Keep the local Grype scan report as evidence only; do not call it a registry
       attestation. Only SPDX SBOM and provenance are attached attestations.
-- [ ] Preserve the source revision and immutable digest as the only Deploy image
+- [x] Preserve the source revision and immutable digest as the only Deploy image
       identity; the `sha-<full-git-sha>` tag remains navigation only.
 
 ### Phase 2 Required Tests
 
-- [ ] Internal credential normalization/preflight accepts a valid raw multiline
+- [x] Internal credential normalization/preflight accepts a valid raw multiline
       key in a unit test and the public flat-env path accepts literal-`\n`.
       Tutorials and end-to-end acceptance use literal-`\n`; raw multiline PEM is
       not representable in the current one-line env-file contract.
-- [ ] Malformed private PEM, malformed public PEM, wrong password, and mismatched
+- [x] Malformed private PEM, malformed public PEM, wrong password, and mismatched
       public key fail before any application image build, destination-registry
       authentication, publication, or mutation. A Cosign tool-image pull is not
       part of that guarantee.
-- [ ] A simulated Cosign tool materialization failure is sanitized and remains
+- [x] A simulated Cosign tool materialization failure is sanitized and remains
       distinguishable from every credential-role failure.
-- [ ] Multiple selected targets run one provider preflight.
-- [ ] Dry runs never resolve/index provider credential entries, create provider
+- [x] Multiple selected targets run one provider preflight.
+- [x] Dry runs never resolve/index provider credential entries, create provider
       Dagger secrets, or preflight credentials. Tests that claim no bytes were
       read must omit the aggregate env file entirely.
-- [ ] One target failing Docker build, SPDX validation, or Grype policy prevents
+- [x] One target failing Docker build, SPDX validation, or Grype policy prevents
       every selected target from publishing.
-- [ ] Feed a real parsed/action-planned canonical target into Docker build-path
+- [x] Feed a real parsed/action-planned canonical target into Docker build-path
       selection and prove the narrowed context receives `Dockerfile` (or the
       correct nested context-relative path) while provenance retains the
       canonical repository-relative value.
-- [ ] A directory/archive validation or packaging-command failure in a mixed
+- [x] A directory/archive validation or packaging-command failure in a mixed
       selection also prevents every selected OCI target from publishing.
-- [ ] Parallel preparation awaits all started work and reports failures in
+- [x] Parallel preparation awaits all started work and reports failures in
       selected-target order rather than completion order.
-- [ ] A publish failure after all preparation passes reports earlier completed
+- [x] A publish failure after all preparation passes reports earlier completed
       targets and later not-started targets.
-- [ ] A post-publish sign/attest/verify failure reports the target's canonical
+- [x] A post-publish sign/attest/verify failure reports the target's canonical
       digest reference and cleanup warning without printing credentials.
-- [ ] No failed batch produces a successful package manifest or begins Deploy.
-- [ ] Exact-set scan tests prove High-only does not reject Critical, Critical-only
+- [x] No failed batch produces a successful package manifest or begins Deploy.
+- [x] Exact-set scan tests prove High-only does not reject Critical, Critical-only
       does not reject High, combined policy rejects both, supported severities
       normalize correctly, and a missing/unsupported report severity fails as
       invalid scanner output.
-- [ ] Scanner-integrity tests reject absent/non-array `matches`, missing IDs,
+- [x] Scanner-integrity tests reject absent/non-array `matches`, missing IDs,
       malformed vulnerability entries, and unsupported severities while
       accepting an explicit empty `matches` array.
-- [ ] The documented empty Grype configuration is accepted by the pinned Grype
+- [x] The documented empty Grype configuration is accepted by the pinned Grype
       image in live acceptance. Do not manufacture a database-dependent
       “narrowly ignored CVE” fixture against Grype's drifting network database.
       If a non-empty exception is ever checked in, require a separate governed
       test with a controlled database snapshot that proves its exact scope and
       expiry/removal record before claiming ignored-finding behavior.
-- [ ] Pure Cosign plan tests pin every sign, attest, verify, and
+- [x] Pure Cosign plan tests pin every sign, attest, verify, and
       verify-attestation flag.
 
 ### Phase 2 Exit Gate
 
-- [ ] Preventable key/filesystem-package/build/SBOM/scan failures precede all
+- [x] Preventable key/filesystem-package/build/SBOM/scan failures precede all
       application-image registry mutation, and every unavoidable partial side
       effect is bounded, deterministic, and sanitized.
 
 ## Phase 3: Enforce Evidence Isolation And Trustworthy Deploy Handoff
 
-- [ ] Refactor
+- [x] Refactor
       [`../src/stages/deploy/runtime-workspace.ts`](../src/stages/deploy/runtime-workspace.ts)
       to remove framework runtime evidence from the generic repository view
       before applying either full or partial workspace metadata.
-- [ ] Mount only the current target's evidence from the original trusted
+- [x] Mount only the current target's evidence from the original trusted
       packaged directory after the generic workspace has been applied.
-- [ ] Make explicit workspace requests for the framework evidence subtree fail
+- [x] Make explicit workspace requests for the framework evidence subtree fail
       with guidance to consume `ARTIFACT_EVIDENCE_DIR` instead.
-- [ ] Preserve access to ordinary `.dagger` project metadata where requested;
+- [x] Preserve access to ordinary `.dagger` project metadata where requested;
       removing the framework evidence subtree must not remove unrelated source
       files.
-- [ ] Keep evidence preflight ahead of the first deploy wave, not once per script
+- [x] Keep evidence preflight ahead of the first deploy wave, not once per script
       after earlier targets may already have deployed.
-- [ ] Make source mismatch, planned-live artifact, evidence path, evidence hash,
+- [x] Make source mismatch, planned-live artifact, evidence path, evidence hash,
       repository/reference, and verification-assertion errors distinguishable
       without overstating cryptographic verification.
-- [ ] Ensure the OCI deploy-result model always returns `artifactKind` and
+- [x] Ensure the OCI deploy-result model always returns `artifactKind` and
       `artifactImage`, returns `artifactReference` only for published artifacts,
       and never fabricates `artifactPath`.
-- [ ] Preserve the existing filesystem deploy-result shape.
+- [x] Preserve the existing filesystem deploy-result shape.
 
 ### Phase 3 Required Tests
 
-- [ ] Partial and full workspaces for OCI target A cannot read target B evidence.
-- [ ] A filesystem target in a mixed v2 manifest receives no OCI evidence.
-- [ ] An explicit parent directory such as `.dagger` cannot bypass evidence
+- [x] Partial and full workspaces for OCI target A cannot read target B evidence.
+- [x] A filesystem target in a mixed v2 manifest receives no OCI evidence.
+- [x] An explicit parent directory such as `.dagger` cannot bypass evidence
       filtering.
-- [ ] A repository-backed host-path file mount cannot bypass target evidence
+- [x] A repository-backed host-path file mount cannot bypass target evidence
       filtering by naming `.dagger/runtime/evidence` or a descendant, including
       relative/absolute paths with interior `.` segments, repeated separators,
       or backslashes that Dagger later canonicalizes.
-- [ ] Both runtime file-mount forms reject normalized destinations equal to,
+- [x] Both runtime file-mount forms reject normalized destinations equal to,
       below, or above the framework evidence mount, including parser/schema and
       direct-runtime bypass tests; unrelated legacy targets remain accepted.
-- [ ] Selected evidence is available exactly at `ARTIFACT_EVIDENCE_DIR` and its
+- [x] Selected evidence is available exactly at `ARTIFACT_EVIDENCE_DIR` and its
       three document hashes match the manifest.
-- [ ] Missing files, target mismatch, path traversal, modified evidence, and
+- [x] Missing files, target mismatch, path traversal, modified evidence, and
       malformed or invariant-breaking manifest changes (including
       digest/reference/source/path/evidence disagreement), planned live
       artifacts, mutable references, and source mismatch fail before any deploy
       script starts. Do not claim detection of a coordinated schema-valid
       manifest-plus-evidence replacement.
-- [ ] Schema/parser/planner tests reject unsafe OCI target path segments before
+- [x] Schema/parser/planner tests reject unsafe OCI target path segments before
       Build, reject wrong evidence formats and noncanonical evidence/filesystem
       paths, and retain nested filesystem-only target-name compatibility.
-- [ ] For both dry and live invocations, a real deploy script or summary sees the
+- [x] For both dry and live invocations, a real deploy script or summary sees the
       final environment computed for that invocation. Tests compare ownership,
       precedence, and invariant fields rather than asserting dry/live byte
       equality.
-- [ ] A split-stage acceptance exports the complete packaged directory, restores
+- [x] A split-stage acceptance exports the complete packaged directory, restores
       it in a separate call, supplies an independently trusted expected Git SHA,
       and proves the original digest reaches the Deploy script without rebuild
       or tag lookup.
-- [ ] A real Dagger Package entrypoint preserves a filesystem directory artifact
+- [x] A real Dagger Package entrypoint preserves a filesystem directory artifact
       and Build output under `.dagger/generated-output`, discards stale runtime
       file/directory/symlink variants, writes new runtime metadata below
       concrete directories, and leaves every former redirect target byte-for-byte
       unchanged.
-- [ ] Standalone Deploy rejects `.dagger`, `.dagger/runtime`, and
+- [x] Standalone Deploy rejects `.dagger`, `.dagger/runtime`, and
       `.dagger/runtime/evidence` aliases before both dry and live target
       execution; the regression must exercise the common preflight rather than
       relying only on live workspace assembly.
 
 ### Phase 3 Exit Gate
 
-- [ ] Deploy receives only its owned framework environment and target evidence,
+- [x] Deploy receives only its owned framework environment and target evidence,
       and tests/documentation can state exactly which checks are cryptographic,
       local-consistency, or operator trust.
 
@@ -810,16 +810,16 @@ Create [`../examples/oci-application-image-rush-repo`](../examples/oci-applicati
 as the source for tutorial commands and OCI acceptance tests. Do not teach from
 a private external repository or a test-only fixture.
 
-- [ ] Add a minimal valid Rush project whose normal Rush build deterministically
+- [x] Add a minimal valid Rush project whose normal Rush build deterministically
       creates the output consumed by its Dockerfile.
-- [ ] Use a final `scratch` image containing only the deterministic tutorial
+- [x] Use a final `scratch` image containing only the deterministic tutorial
       payload so mutable vulnerability data cannot make the happy-path example
       randomly fail.
-- [ ] State that the `scratch` subject proves OCI build/evidence/publication and
+- [x] State that the `scratch` subject proves OCI build/evidence/publication and
       digest handoff, but is not an HTTP service deployable to Cloud Run. Cloud
       Run, Kubernetes, and Swarm commands are adaptation excerpts, not claims
       that the scratch payload completed a real vendor rollout.
-- [ ] Include a complete copyable tree:
+- [x] Include a complete copyable tree:
 
 ```text
 examples/oci-application-image-rush-repo/
@@ -854,30 +854,30 @@ examples/oci-application-image-rush-repo/
     └── rush-cache/providers.yaml
 ```
 
-- [ ] Generate/check the minimal Rush scaffold with the pinned Rush/pnpm
+- [x] Generate/check the minimal Rush scaffold with the pinned Rush/pnpm
       versions rather than hand-inventing it. Include every file required for a
       clean `rush install`, `build`, `lint`, `test`, and `verify` run, and make
       `package.json` define deterministic scripts for all four lifecycle names.
-- [ ] Keep Rush-generated `common/scripts/install-run*.js` bootstrap bundles
+- [x] Keep Rush-generated `common/scripts/install-run*.js` bootstrap bundles
       byte-exact for the pinned Rush version. Exclude those generated bundles
       from repository formatters and pin their hashes in tests so a clean Rush
       install cannot be broken by an otherwise successful formatting pass.
-- [ ] Make all metadata names agree with Rush project name, services mesh,
+- [x] Make all metadata names agree with Rush project name, services mesh,
       package target, deploy target, CI plan, and image suffix.
-- [ ] Use `v0.8.1` immutable schema URLs in every metadata editor hint.
-- [ ] Include a real Grype config, not a pseudo-format or unexplained empty file.
-- [ ] Make the checked-in provider file a schema-valid, clearly labelled GHCR
+- [x] Use `v0.8.1` immutable schema URLs in every metadata editor hint.
+- [x] Include a real Grype config, not a pseudo-format or unexplained empty file.
+- [x] Make the checked-in provider file a schema-valid, clearly labelled GHCR
       tutorial template. Live automated acceptance may create a temporary copy
       with only registry/provider coordinates replaced by its unique trusted-TLS
       test namespace; all application/build/deploy files remain canonical.
-- [ ] Keep generated CI state out of `.dagger/runtime`: use the checked-in
+- [x] Keep generated CI state out of `.dagger/runtime`: use the checked-in
       tutorial plan at `ci/oci-plan.json` or generate a plan into a temporary
       external path, while `.gitignore` excludes all `.dagger/runtime` state.
-- [ ] Include names-only local env templates in docs, never credential values in
+- [x] Include names-only local env templates in docs, never credential values in
       the example.
-- [ ] Ignore generated build output, local env/key files, exported package
+- [x] Ignore generated build output, local env/key files, exported package
       bundles, and `.dagger/runtime` state.
-- [ ] Make `deploy/consume-image.sh` executable and provider-neutral. It must:
+- [x] Make `deploy/consume-image.sh` executable and provider-neutral. It must:
   - require `ARTIFACT_KIND=oci_image`;
   - require and validate every published OCI `ARTIFACT_*` value;
   - reject `ARTIFACT_PATH`;
@@ -887,20 +887,20 @@ examples/oci-application-image-rush-repo/
   - consume `ARTIFACT_IMAGE_REFERENCE` unchanged; and
   - print only sanitized target/reference information.
 
-- [ ] Keep Cloud Run, Kubernetes, and Swarm commands as separate production-guide
+- [x] Keep Cloud Run, Kubernetes, and Swarm commands as separate production-guide
       excerpts; do not put vendor switching in the canonical script or framework.
-- [ ] Remove the former `test/fixtures/oci-rush-repo` duplication so live
+- [x] Remove the former `test/fixtures/oci-rush-repo` duplication so live
       acceptance executes the public example rather than a drifting fixture.
-- [ ] Define snippet synchronization before writing docs: generate complete file
+- [x] Define snippet synchronization before writing docs: generate complete file
       blocks from the canonical example, or mark and byte-compare each duplicated
       fenced block against its source file. Parsing alone is not a drift check.
-- [ ] Validate example YAML against root and `v0.8.1` schemas, validate its
+- [x] Validate example YAML against root and `v0.8.1` schemas, validate its
       metadata contract, run its Rush build, run `bash -n` and repository shell
       lint, and execute its provider-off dry-run acceptance.
 
 ### Phase 4 Exit Gate
 
-- [ ] Every file used by the tutorial is checked in once, executable, validated,
+- [x] Every file used by the tutorial is checked in once, executable, validated,
       and also exercised by automated acceptance.
 
 ## Phase 5: Write The End-To-End Tutorial
@@ -929,31 +929,31 @@ checkpoint, and link to the next chapter.
 
 ### Tutorial 1: Build And Scan Target
 
-- [ ] Explain when to choose `oci_image`, `directory`, or
+- [x] Explain when to choose `oci_image`, `directory`, or
       `rush_deploy_archive`.
-- [ ] Start from the canonical minimal Rush project and show the complete build
+- [x] Start from the canonical minimal Rush project and show the complete build
       script, Dockerfile, package target, and Grype config together.
-- [ ] Explain that the normal workflow builds before Package, while standalone
+- [x] Explain that the normal workflow builds before Package, while standalone
       `packageDeployTargets` expects already-built input.
-- [ ] Explain repository-relative context/Dockerfile resolution, Dockerfile
+- [x] Explain repository-relative context/Dockerfile resolution, Dockerfile
       containment, image suffix, single required platform, trusted source labels,
       and full 40-character Git SHA.
-- [ ] Teach exact-set scan semantics and show why the production example lists
+- [x] Teach exact-set scan semantics and show why the production example lists
       both `high` and `critical`.
-- [ ] Explain the mutable Grype database and governed exception workflow.
-- [ ] State the supported `v0.8.1` surface and link limitations instead of
+- [x] Explain the mutable Grype database and governed exception workflow.
+- [x] State the supported `v0.8.1` surface and link limitations instead of
       implying support for unimplemented Docker build features.
 
 ### Tutorial 2: Provider-Off Dry Run
 
-- [ ] Start with `applicationImageProvider=off` and no secrets.
-- [ ] Run metadata validation before workflow execution.
-- [ ] Show copy-paste Dagger commands using an exact synthetic 40-character SHA.
-- [ ] Show the planned artifact/summary for provider `off`: image, platform, and
+- [x] Start with `applicationImageProvider=off` and no secrets.
+- [x] Run metadata validation before workflow execution.
+- [x] Show copy-paste Dagger commands using an exact synthetic 40-character SHA.
+- [x] Show the planned artifact/summary for provider `off`: image, platform, and
       source revision, with no repository, digest, or evidence.
-- [ ] Contrast filesystem-only, provider-off OCI, and named-provider OCI dry run
+- [x] Contrast filesystem-only, provider-off OCI, and named-provider OCI dry run
       in a small behavior matrix.
-- [ ] Prove the provider-off dry run performs no application-image build,
+- [x] Prove the provider-off dry run performs no application-image build,
       destination-registry request, Syft/Grype/Cosign execution, provider
       credential read, signing operation, or Deploy. State that source
       acquisition, module/base-image pulls, dependency install, and Rush Build
@@ -961,106 +961,106 @@ checkpoint, and link to the next chapter.
 
 ### Tutorial 3: Registry And Cosign Bootstrap
 
-- [ ] Use GHCR as the one primary linear tutorial registry. Require the reader to
+- [x] Use GHCR as the one primary linear tutorial registry. Require the reader to
       set a literal normalized owner/repository prefix in provider metadata at a
       checkpoint; metadata does not interpolate shell or GitHub variables.
       Clearly label the checked-in `example/...` prefix as a template that is
       not pushable until replaced.
-- [ ] Show the complete provider metadata before asking the reader to select it.
-- [ ] Provide a tested Cosign `3.1.2` password-protected key-generation sequence
+- [x] Show the complete provider metadata before asking the reader to select it.
+- [x] Provide a tested Cosign `3.1.2` password-protected key-generation sequence
       for both an installed binary and the digest-pinned container.
-- [ ] Label any Docker/Podman command used for the one-time pinned-container key
+- [x] Label any Docker/Podman command used for the one-time pinned-container key
       bootstrap as an operator workstation option, not as an OCI Package or host
       Docker-socket requirement; offer the installed-binary path first.
-- [ ] Prompt for passwords without putting them in shell history or process
+- [x] Prompt for passwords without putting them in shell history or process
       arguments.
-- [ ] Show the expected encrypted private/public PEM markers.
-- [ ] Provide tested, shell-safe conversion between multiline PEM and a single
+- [x] Show the expected encrypted private/public PEM markers.
+- [x] Provide tested, shell-safe conversion between multiline PEM and a single
       flat-env value containing literal `\n`, including a round-trip check.
-- [ ] Use literal-`\n` PEM values in every public env-file/Action command. Raw
+- [x] Use literal-`\n` PEM values in every public env-file/Action command. Raw
       multiline input is only an internal normalization test unless the public
       flat-env parser is separately redesigned.
-- [ ] Store local env material outside the repository with restrictive
+- [x] Store local env material outside the repository with restrictive
       permissions; include `.gitignore` and cleanup guidance.
-- [ ] Show exact `gh secret set`/`gh variable set` forms without echoing values.
-- [ ] Run a named-provider dry run that validates repository construction but
+- [x] Show exact `gh secret set`/`gh variable set` forms without echoing values.
+- [x] Run a named-provider dry run that validates repository construction but
       does not read or preflight keys.
-- [ ] Explain credential roles, minimum push/referrer permissions, dedicated
+- [x] Explain credential roles, minimum push/referrer permissions, dedicated
       credentials, rotation, loss/recovery, retention of old public keys, and
       why the manifest does not record a key fingerprint. For GHCR classic
       PATs, state that `write:packages` is not token-scoped to one namespace or
       package; require a dedicated least-access release identity, omit
       `delete:packages`, and cover expiry, rotation, SSO, and package/org access
       controls.
-- [ ] Explain that key preflight is cryptographically offline and precedes
+- [x] Explain that key preflight is cryptographically offline and precedes
       application-image publication, while Dagger may first pull the pinned
       Cosign image and registry authentication cannot always be proven without a
       destination-registry operation.
 
 ### Tutorial 4: Publish And Inspect
 
-- [ ] Use `build-and-package-deploy-targets ... export --path=...` as the primary
+- [x] Use `build-and-package-deploy-targets ... export --path=...` as the primary
       command from a clean checkout so generated build output is present in the
       returned Dagger directory.
-- [ ] Show `package-deploy-targets ... export --path=...` only after an explicit
+- [x] Show `package-deploy-targets ... export --path=...` only after an explicit
       prior Build whose complete built directory was exported/restored; never
       imply that the standalone Package entrypoint builds source.
-- [ ] Show the exact live command with CI plan, Git SHA, source URL, provider,
+- [x] Show the exact live command with CI plan, Git SHA, source URL, provider,
       env file, and export path.
-- [ ] Explain observable ordering: provider/key preflight; all target
+- [x] Explain observable ordering: provider/key preflight; all target
       build/SBOM/scan preparation; ordered publish/provenance/sign/attest/verify;
       evidence; manifest.
-- [ ] Inspect the export with tested `find` and `jq` commands.
-- [ ] Include complete schema-valid planned, published, and mixed-v2 manifests
+- [x] Inspect the export with tested `find` and `jq` commands.
+- [x] Include complete schema-valid planned, published, and mixed-v2 manifests
       using full-length synthetic digests and SHAs.
-- [ ] Explain every OCI artifact/evidence field, including document digests,
+- [x] Explain every OCI artifact/evidence field, including document digests,
       image digest, `signature.reference`, navigation tag, and which evidence is
       attached to the registry.
-- [ ] Show meaningful sanitized SPDX, Grype, and provenance excerpts without
+- [x] Show meaningful sanitized SPDX, Grype, and provenance excerpts without
       presenting truncated excerpts as complete schema examples.
-- [ ] Verify that the canonical reference contains `@sha256:` and that no
+- [x] Verify that the canonical reference contains `@sha256:` and that no
       credential sentinel appears in the bundle.
 
 ### Tutorial 5: Deploy The Digest
 
-- [ ] Show and execute the complete generic deploy script.
-- [ ] Explain publication identity separately from deployment-platform pull
+- [x] Show and execute the complete generic deploy script.
+- [x] Explain publication identity separately from deployment-platform pull
       identity.
-- [ ] Show the full framework runtime-variable table for planned and published
+- [x] Show the full framework runtime-variable table for planned and published
       OCI artifacts and the reserved namespace rule.
-- [ ] Show schema-valid dry and live deploy result JSON with `artifactKind`,
+- [x] Show schema-valid dry and live deploy result JSON with `artifactKind`,
       `artifactImage`, and optional `artifactReference`; never invent
       `artifactPath` for OCI.
-- [ ] Include clearly labelled Cloud Run, Kubernetes, and Swarm excerpts.
+- [x] Include clearly labelled Cloud Run, Kubernetes, and Swarm excerpts.
       Kubernetes and Swarm pass `ARTIFACT_IMAGE_REFERENCE` unchanged. Cloud Run
       passes a public GHCR reference unchanged, but maps private GHCR through an
       authenticated Artifact Registry remote repository while preserving
       `ARTIFACT_IMAGE_DIGEST`; distinguish the deployer and Cloud Run service
       agent's image-import access from the application's `--service-account`
       runtime identity.
-- [ ] Demonstrate source mismatch, planned-live manifest, mutable reference,
+- [x] Demonstrate source mismatch, planned-live manifest, mutable reference,
       missing evidence, and evidence-hash failures without exposing secrets.
 
 ### Tutorial 6: GitHub Actions
 
-- [ ] Begin with a filesystem-compatible baseline that omits the application
+- [x] Begin with a filesystem-compatible baseline that omits the application
       provider or explicitly leaves it `off`, and contains no OCI secrets.
-- [ ] Add OCI as a separate opt-in worked example only after package/provider
+- [x] Add OCI as a separate opt-in worked example only after package/provider
       metadata exists.
-- [ ] Include minimum job permissions, protected release environments,
+- [x] Include minimum job permissions, protected release environments,
       trusted-event conditions, fork/PR behavior, secret/variable mapping, and
       full SHA/source inputs. Make permissions match the selected registry
       identity: a dedicated PAT supplies its own package scope, while a
       `${{ github.token }}` publisher needs `packages: write` and verified
       package Actions access.
-- [ ] Keep live registry and signing credentials out of untrusted pull requests.
-- [ ] Set `docker-socket: ""` in OCI-only jobs and explain why the Action's
+- [x] Keep live registry and signing credentials out of untrusted pull requests.
+- [x] Set `docker-socket: ""` in OCI-only jobs and explain why the Action's
       non-empty default remains for legacy deploy compatibility.
-- [ ] Show the composite Action's supported composed `workflow` form. Show
+- [x] Show the composite Action's supported composed `workflow` form. Show
       package/split-stage publication as a separate raw Dagger CLI step inside a
       GitHub Actions job; do not imply that the composite Action exposes
       `package-deploy-targets` or `build-and-package-deploy-targets`.
-- [ ] Use Action and module references for `v0.8.1`. Pin every third-party
+- [x] Use Action and module references for `v0.8.1`. Pin every third-party
       action in production snippets to a reviewed full 40-character commit SHA
       with a human-readable release comment. Explain how strict consumers
       resolve and pin the reviewed Rush Delivery release commit while the guide
@@ -1068,33 +1068,33 @@ checkpoint, and link to the next chapter.
 
 ### Tutorial 7: Split Stages And Rollback
 
-- [ ] Give exact detect, build/package export, artifact upload, artifact restore,
+- [x] Give exact detect, build/package export, artifact upload, artifact restore,
       and `deploy-release` commands; do not say only “persist the manifest.”
-- [ ] Archive the complete packaged directory with a tested format that preserves
+- [x] Archive the complete packaged directory with a tested format that preserves
       file modes and symlinks, compute its checksum, and upload the archive. Do
       not rely on a raw-directory artifact upload preserving filesystem
       semantics.
-- [ ] Use immutable/access-controlled CI artifact storage and protected jobs.
+- [x] Use immutable/access-controlled CI artifact storage and protected jobs.
       Record the archive checksum/artifact identity and original full Git SHA in
       protected release metadata outside the unsigned bundle; verify checksum
       before extraction, reject archive path/link escapes, extract atomically,
       and compare the restored manifest to that SHA. Pin upload/download actions
       to reviewed full commit SHAs rather than mutable tags.
-- [ ] State that the default all-in-one Action result does not automatically
+- [x] State that the default all-in-one Action result does not automatically
       retain a reusable packaged directory for rollback.
-- [ ] Demonstrate rollback by restoring an earlier trusted archive, verifying it
+- [x] Demonstrate rollback by restoring an earlier trusted archive, verifying it
       against its externally recorded identity/checksum, supplying the
       independently recorded release SHA to Deploy, checking that the manifest's
       `source_revision` agrees, and consuming its digest without editing the
       manifest or resolving a tag.
-- [ ] Cover registry subject/referrer retention, package-bundle retention,
+- [x] Cover registry subject/referrer retention, package-bundle retention,
       deploy-tag effects, pull identity, retry safety, and cleanup of possible
       post-publication or sibling artifacts.
-- [ ] State the unsigned-manifest/coordinated-replacement limitation directly.
+- [x] State the unsigned-manifest/coordinated-replacement limitation directly.
 
 ### Phase 5 Exit Gate
 
-- [ ] A reader can follow one linear path from a minimal Rush repository through
+- [x] A reader can follow one linear path from a minimal Rush repository through
       credential-free planning, key creation, live publication, evidence
       inspection, digest-only deployment, CI, split-stage handoff, and rollback
       without relying on omitted knowledge.
@@ -1108,57 +1108,57 @@ into the authoritative production contract/runbook. Add
 
 ### Production Contract
 
-- [ ] Add a stage/capability diagram from source and Detect through Rush Build,
+- [x] Add a stage/capability diagram from source and Detect through Rush Build,
       Package preparation/finalization, trusted bundle, and digest-only Deploy.
-- [ ] Add complete field tables for OCI package targets and application-image
+- [x] Add complete field tables for OCI package targets and application-image
       providers, with required/optional status, constraints, and schema links.
-- [ ] Add entrypoint input/output guidance for `workflow`,
+- [x] Add entrypoint input/output guidance for `workflow`,
       `packageDeployTargets`, `buildAndPackageDeployTargets`, and
       `deployRelease`.
-- [ ] Add provider selection × artifact selection × dry/live behavior table.
-- [ ] Add a capability/environment table showing which values may reach Source,
+- [x] Add provider selection × artifact selection × dry/live behavior table.
+- [x] Add a capability/environment table showing which values may reach Source,
       toolchain-image and Rush-cache adapters, Build, OCI Package tools, npm
       Release, deploy-tag/Git adapters, and Deploy. Distinguish framework-owned
       explicit adapter use from automatic projection into project code.
-- [ ] Add legacy filesystem, planned OCI, published OCI, and mixed v2 manifest
+- [x] Add legacy filesystem, planned OCI, published OCI, and mixed v2 manifest
       examples, plus filesystem and OCI deploy-result examples.
-- [ ] Document every current/reserved `ARTIFACT_*` variable and make
+- [x] Document every current/reserved `ARTIFACT_*` variable and make
       `ARTIFACT_PATH` versus OCI image variables mutually clear.
-- [ ] Add a Package-versus-Deploy verification table distinguishing registry
+- [x] Add a Package-versus-Deploy verification table distinguishing registry
       cryptography, trusted manifest assertions, local hashes, source checks,
       platform pull authentication, and operator-owned artifact storage.
-- [ ] Document the offline Cosign mode, key preflight, key custody/rotation,
+- [x] Document the offline Cosign mode, key preflight, key custody/rotation,
       exact scan semantics, Grype database behavior, evidence content, tool
       versions/digests, and evidence retention.
-- [ ] Add a failure/side-effect matrix covering provider metadata, credential
+- [x] Add a failure/side-effect matrix covering provider metadata, credential
       lookup, key preflight, Docker build, SBOM validation, scan policy, publish,
       returned-reference validation, provenance, sign, attest, verify,
       multi-target finalization, manifest parsing, evidence verification, and
       deploy execution.
-- [ ] Explain the Dagger function-cache versus layer-cache boundary, the exact
+- [x] Explain the Dagger function-cache versus layer-cache boundary, the exact
       calls that receive fresh non-secret execution inputs, and why normal
       deterministic build caching still applies.
-- [ ] Explain that release Git credentials remain process-only through askpass,
+- [x] Explain that release Git credentials remain process-only through askpass,
       and that deploy-tag GitHub API bases must be credential-free absolute
       HTTPS URLs (including valid GitHub Enterprise API paths). Remote response
       bodies must never be included in credential-bearing request errors.
-- [ ] Add retry and rollback procedures that take expected bundle identity and
+- [x] Add retry and rollback procedures that take expected bundle identity and
       Git SHA from protected external release metadata, verify the archive before
       extraction, and only then compare/use the unsigned manifest and digest.
-- [ ] For each failure point state: whether registry mutation may have occurred,
+- [x] For each failure point state: whether registry mutation may have occurred,
       whether a manifest can exist, whether Deploy can start, what is safe to
       log, what can be retried, and what cleanup may be required.
-- [ ] Explain `runtime.workspace.mode: full` with the framework evidence subtree
+- [x] Explain `runtime.workspace.mode: full` with the framework evidence subtree
       exception and the target-specific remount.
-- [ ] Distinguish deploy-platform signing material mounted as runtime files from
+- [x] Distinguish deploy-platform signing material mounted as runtime files from
       OCI Package Cosign keys. Never recommend putting OCI signing keys in
       `runtime-file-map`.
-- [ ] Document current limitations: one platform; no Docker build args, build
+- [x] Document current limitations: one platform; no Docker build args, build
       secrets, SSH mount, or Dockerfile target; no keyless/OIDC/Rekor mode; no
       trusted timestamp; no custom-CA/insecure-registry configuration; no
       framework vendor deploy logic; no automatic cleanup; no signed portable
       manifest; and registry support required for Cosign artifacts/referrers.
-- [ ] Warn that target image suffixes must not collide within the same provider
+- [x] Warn that target image suffixes must not collide within the same provider
       namespace because navigation tags are deterministic per SHA.
 
 ### Registry Recipes
@@ -1168,7 +1168,7 @@ push/referrer permissions, CI mapping, repository preparation, target-platform
 pull identity, retention, and cleanup. Verify details against current official
 provider documentation during implementation and link those sources.
 
-- [ ] Add a provider-neutral standards-based OCI registry recipe used by the
+- [x] Add a provider-neutral standards-based OCI registry recipe used by the
       disposable-registry acceptance test. The live test harness must use the
       Phase 0 project-controlled or explicitly configured trusted-TLS endpoint,
       allow only a test-only compatible endpoint override, use a
@@ -1176,7 +1176,7 @@ provider documentation during implementation and link those sources.
       expiration/cleanup; a plain local HTTP `registry:2` is not compatible with
       this release's no-insecure-registry contract. Do not document the harness
       override as consumer provider configuration.
-- [ ] Add a GitHub Container Registry recipe with protected-job permissions and
+- [x] Add a GitHub Container Registry recipe with protected-job permissions and
       a clear choice between the job token and a dedicated least-privilege
       token. State that Cloud Run supports public GHCR directly, while private
       GHCR requires an authenticated Artifact Registry remote repository rather
@@ -1186,7 +1186,7 @@ provider documentation during implementation and link those sources.
       provider-enforced cleanup boundary. Contrast a PAT without
       `delete:packages`, while stating that classic PAT package scopes are not
       namespace/package scoped.
-- [ ] Add a Google Artifact Registry recipe covering supported username/token
+- [x] Add a Google Artifact Registry recipe covering supported username/token
       forms and short-lived identity guidance. Include an executable GitHub WIF
       exchange with `id-token: write`, exact repository/environment admission,
       a narrowly bound `roles/iam.workloadIdentityUser` publisher service
@@ -1195,182 +1195,182 @@ provider documentation during implementation and link those sources.
       requiring a tested custom role for strict no-delete publication, and
       explain deterministic SHA-tag retry/cleanup effects when immutable tags
       are enabled.
-- [ ] Add an Amazon ECR recipe covering the `AWS` username, short-lived login
+- [x] Add an Amazon ECR recipe covering the `AWS` username, short-lived login
       token, repository creation, token lifetime, and Cosign artifact retention.
       Include executable GitHub OIDC configuration with `id-token: write`, the
       standard STS audience, an exact protected-environment `sub`, and a
       full-SHA-pinned credential action. State that reference artifacts expire
       or archive within 24 hours after lifecycle deletion/archive of the subject,
       making subject retention the root of Cosign retention.
-- [ ] Add a Docker Hub recipe using an access token and organization/user
+- [x] Add a Docker Hub recipe using an access token and organization/user
       namespace. Distinguish PAT authentication with a personal Docker ID from
       OAT authentication with the organization name; document PAT
       Read/Write/Delete versus repository-scoped OAT Image Pull/Image Push,
       OAT product incompatibilities, and the fact that cleanup needs a separate
       owner/admin or Delete-PAT path rather than another OAT.
-- [ ] Label each recipe as continuously tested, manually exercised, or
+- [x] Label each recipe as continuously tested, manually exercised, or
       syntax-reviewed; do not imply CI coverage that does not exist.
-- [ ] State required registry capabilities: trusted TLS, image push, returned
+- [x] State required registry capabilities: trusted TLS, image push, returned
       digest, Cosign signature and attestation storage, digest/referrer
       retention, cleanup permissions, and deployment-platform pull access.
-- [ ] Do not teach `docker login` as a Rush Delivery prerequisite; explain that
+- [x] Do not teach `docker login` as a Rush Delivery prerequisite; explain that
       Dagger and Cosign receive selected authentication directly.
 
 ### Troubleshooting And Recovery
 
-- [ ] Organize troubleshooting by observed error, likely stage, safe first
+- [x] Organize troubleshooting by observed error, likely stage, safe first
       diagnostic, possible side effect, resolution, and retry/cleanup action.
-- [ ] Distinguish pre-mutation registry transport/readiness failures from
+- [x] Distinguish pre-mutation registry transport/readiness failures from
       authentication, policy, Package, signing, attestation, verification,
       manifest, and evidence failures. For an interrupted mutating operation,
       require inspection and cleanup before a manual retry; never imply that an
       automatic retry proved the first attempt had no side effect.
-- [ ] Cover no OCI selected with a named global input, provider `off` in live
+- [x] Cover no OCI selected with a named global input, provider `off` in live
       OCI, missing provider file, unknown provider, missing env name/value,
       actual-newline versus literal-`\n` corruption, malformed PEM, wrong
       password, mismatched public key, and protected-name collision.
-- [ ] Cover registry auth denial, repository permission/not-found, trusted-TLS or
+- [x] Cover registry auth denial, repository permission/not-found, trusted-TLS or
       custom-CA limitation, malformed returned reference, Cosign-referrer
       incompatibility, and deployment-platform pull denial.
-- [ ] Cover Grype database download/cache/freshness errors, policy rejection,
+- [x] Cover Grype database download/cache/freshness errors, policy rejection,
       governed ignore configuration, and changed findings between runs.
-- [ ] Cover publish success followed by provenance/sign/attest/verify failure,
+- [x] Cover publish success followed by provenance/sign/attest/verify failure,
       earlier sibling publication, later skipped targets, orphan discovery, and
       provider-specific manual cleanup links.
-- [ ] Cover planned manifest used live, source mismatch, repository/reference
+- [x] Cover planned manifest used live, source mismatch, repository/reference
       disagreement, missing/changed evidence, unsigned trusted-bundle limits,
       wrong restored bundle, and unavailable retained digest.
-- [ ] Cover Docker socket confusion: OCI operations need no host socket, while a
+- [x] Cover Docker socket confusion: OCI operations need no host socket, while a
       legacy project deploy script may still require one.
-- [ ] Never recommend printing an env file, private/public key pair, password,
+- [x] Never recommend printing an env file, private/public key pair, password,
       registry token, Docker config, Dagger secret, or unsanitized debug trace.
-- [ ] Provide a sanitized diagnostic bundle checklist containing versions,
+- [x] Provide a sanitized diagnostic bundle checklist containing versions,
       selected target names, provider name, registry authority/repository,
       canonical digest references, failure stage, manifest with secrets absent,
       evidence hashes, and redacted logs.
 
 ### Upgrade Guide
 
-- [ ] Add a `v0.8.0` to `v0.8.1` upgrade checklist to the production guide and
+- [x] Add a `v0.8.0` to `v0.8.1` upgrade checklist to the production guide and
       GitHub Release notes.
-- [ ] State that filesystem-only consumers need no `.dagger` or credential
+- [x] State that filesystem-only consumers need no `.dagger` or credential
       additions for OCI and that a globally supplied named provider no longer
       affects a no-OCI selection. Qualify that metadata which currently shadows
       the framework-reserved namespace must rename those variables.
-- [ ] State that OCI package/provider field shapes and manifest-v2 shapes are
+- [x] State that OCI package/provider field shapes and manifest-v2 shapes are
       unchanged, while unsafe cross-file provider credential projections and
       framework-reserved runtime names are newly rejected.
-- [ ] Tell OCI consumers to update Action/module/schema pins, search deploy
+- [x] Tell OCI consumers to update Action/module/schema pins, search deploy
       metadata for `ARTIFACT_*`, `GIT_SHA`, and `DRY_RUN`, dedicate provider env
       names, and run provider-off plus named-provider dry runs before live use.
-- [ ] Explain the full-workspace evidence isolation correction and how scripts
+- [x] Explain the full-workspace evidence isolation correction and how scripts
       must use `ARTIFACT_EVIDENCE_DIR`.
-- [ ] Give retained-bundle operators an actionable runtime-path migration:
+- [x] Give retained-bundle operators an actionable runtime-path migration:
       bundles may not symlink `.dagger`, `.dagger/runtime`, or
       `.dagger/runtime/evidence`; rebuild with the `v0.8.1` Package producer and
       export/register the complete new bundle instead of patching, partially
       copying, or merely repacking the old artifact. Warn that live OCI
       repackaging is a new controlled publication attempt.
-- [ ] State that the application provider default remains `off` and the legacy
+- [x] State that the application provider default remains `off` and the legacy
       Action Docker-socket default remains unchanged.
-- [ ] Describe corrected provider selection, credential isolation, key preflight,
+- [x] Describe corrected provider selection, credential isolation, key preflight,
       collision enforcement, fail-closed malformed/unknown scanner output, and
       multi-target reporting as security/reliability fixes without implying that
       released `v0.8.0` snapshots were edited.
 
 ### Phase 6 Exit Gate
 
-- [ ] The production guide separates framework guarantees from operator
+- [x] The production guide separates framework guarantees from operator
       responsibilities and makes no claim that lacks an implementation test or
       a clearly labelled external trust assumption.
 
 ## Phase 7: Repair Generic Docs, Navigation, And Example Safety
 
-- [ ] Remove unconditional `application-image-provider: release` and OCI secret
+- [x] Remove unconditional `application-image-provider: release` and OCI secret
       blocks from generic baseline examples in [`../README.md`](../README.md),
       [`../docs/api.md`](../docs/api.md),
       [`../docs/entrypoints.md`](../docs/entrypoints.md),
       [`../docs/workflows.md`](../docs/workflows.md),
       [`../docs/github-actions.md`](../docs/github-actions.md), both quick starts,
       tutorial chapter 09, and both website homepages.
-- [ ] Make every baseline either omit the application provider or explicitly use
+- [x] Make every baseline either omit the application provider or explicitly use
       `off`; introduce a named provider only in a self-contained OCI section that
       already supplied package/provider metadata.
-- [ ] Set `docker-socket: ""` in every OCI-only Action example while preserving
+- [x] Set `docker-socket: ""` in every OCI-only Action example while preserving
       the Action metadata default and its compatibility test.
-- [ ] Update [`../action.yml`](../action.yml) so the `docker-socket` description
+- [x] Update [`../action.yml`](../action.yml) so the `docker-socket` description
       identifies `/var/run/docker.sock` as a legacy deploy-script compatibility
       default and tells OCI-only users to set an empty value.
-- [ ] Update the general tutorial metadata tree and adaptation guide to include
+- [x] Update the general tutorial metadata tree and adaptation guide to include
       `.dagger/application-images` and the `oci_image` project shape.
-- [ ] Link the OCI tutorial, production guide, recipes, and troubleshooting from
+- [x] Link the OCI tutorial, production guide, recipes, and troubleshooting from
       the README, docs index, quick starts, metadata, providers, workflows, API,
       entrypoints, GitHub Action docs, and both homepages where contextually
       useful.
-- [ ] Add the tutorial group and new references to
+- [x] Add the tutorial group and new references to
       [`../website/docs-tree.yaml`](../website/docs-tree.yaml) and
       [`../website-docusaurus/docs-tree.yaml`](../website-docusaurus/docs-tree.yaml).
-- [ ] Fix repository-relative AI documentation links in
+- [x] Fix repository-relative AI documentation links in
       [`../docs/README.md`](../docs/README.md) so they point to
       [`../.ai/architecture.md`](../.ai/architecture.md) and
       [`../.ai/conventions.md`](../.ai/conventions.md).
-- [ ] Audit every internal Markdown link and both generated site navigations;
+- [x] Audit every internal Markdown link and both generated site navigations;
       remove or correct stale/broken paths.
-- [ ] Keep exact validation rules in schemas and use relative links from prose;
+- [x] Keep exact validation rules in schemas and use relative links from prose;
       do not copy large regex contracts into multiple guides.
-- [ ] Label snippets as runnable, sanitized output, provider-specific example, or
+- [x] Label snippets as runnable, sanitized output, provider-specific example, or
       illustrative pseudocode. Never present placeholders as executable values.
-- [ ] Correct generic runtime-file wording so deploy-platform credentials may be
+- [x] Correct generic runtime-file wording so deploy-platform credentials may be
       mounted there, but OCI registry tokens and Cosign material may not.
-- [ ] Update every current Action/module/schema version reference to `v0.8.1`
+- [x] Update every current Action/module/schema version reference to `v0.8.1`
       only after `v0.8.0` docs have been frozen.
 
 ### Phase 7 Exit Gate
 
-- [ ] Filesystem-first onboarding remains safe, OCI opt-in is self-contained,
+- [x] Filesystem-first onboarding remains safe, OCI opt-in is self-contained,
       navigation exposes one coherent learning path, and all repository links
       resolve.
 
 ## Phase 8: Version Schemas, Provenance, Sites, And Release Inputs
 
-- [ ] Update root deploy-target schema descriptions/restrictions for the
+- [x] Update root deploy-target schema descriptions/restrictions for the
       framework-reserved environment namespace and any other schema-expressible
       correction.
-- [ ] Update the root package-target and package-manifest schemas for the
+- [x] Update the root package-target and package-manifest schemas for the
       schema-expressible OCI target-name, exact evidence-format, and canonical
       path corrections proven by Phase 3 tests.
-- [ ] Keep dynamic cross-file provider credential restrictions in the metadata
+- [x] Keep dynamic cross-file provider credential restrictions in the metadata
       contract and document why JSON Schema alone cannot express them.
-- [ ] After root schemas are final, copy every root schema into a new complete
+- [x] After root schemas are final, copy every root schema into a new complete
       [`../schemas/v0.8.1`](../schemas/v0.8.1) directory and change only the
       snapshot `$id` values to immutable `v0.8.1` URLs.
-- [ ] Do not modify any file in [`../schemas/v0.8.0`](../schemas/v0.8.0) or an
+- [x] Do not modify any file in [`../schemas/v0.8.0`](../schemas/v0.8.0) or an
       older versioned schema directory.
-- [ ] Update metadata examples, fixtures, canonical example, root docs, both
+- [x] Update metadata examples, fixtures, canonical example, root docs, both
       sites, and editor hints to `schemas/v0.8.1/...`.
-- [ ] Update hard-coded OCI provenance `buildType` and builder identity from
+- [x] Update hard-coded OCI provenance `buildType` and builder identity from
       `v0.8.0` to `v0.8.1` while keeping provenance shape stable.
-- [ ] Update current Action and remote Dagger module examples from `v0.8.0` to
+- [x] Update current Action and remote Dagger module examples from `v0.8.0` to
       `v0.8.1`; preserve historical versioned docs as generated.
-- [ ] Add `v0.8.0` to `archivedDocsVersions` in
+- [x] Add `v0.8.0` to `archivedDocsVersions` in
       [`../website-docusaurus/docusaurus.config.ts`](../website-docusaurus/docusaurus.config.ts)
       when changing `currentDocsVersion` to `v0.8.1`, so the frozen version has
       the correct label, route, banner, and version dropdown entry.
-- [ ] Set the Docusaurus current docs version and both current website version
+- [x] Set the Docusaurus current docs version and both current website version
       displays to `v0.8.1`.
-- [ ] Regenerate both sites through their sync commands; do not hand-edit
+- [x] Regenerate both sites through their sync commands; do not hand-edit
       generated copies when a source/sync path exists.
-- [ ] Add schema snapshot tests requiring every root schema to have a matching
+- [x] Add schema snapshot tests requiring every root schema to have a matching
       `v0.8.1` file and immutable versioned `$id`.
-- [ ] Add version-consistency tests covering Action/module examples, homepages,
+- [x] Add version-consistency tests covering Action/module examples, homepages,
       current docs version, schema editor hints, provenance identity, and tool
       pins.
-- [ ] Keep the root package unversioned unless repository conventions change in
+- [x] Keep the root package unversioned unless repository conventions change in
       a separate decision.
 
 ### Phase 8 Exit Gate
 
-- [ ] Root code/docs/sites/schemas all identify `v0.8.1`, released `v0.8.0`
+- [x] Root code/docs/sites/schemas all identify `v0.8.1`, released `v0.8.0`
       snapshots remain immutable, and generated artifacts match their declared
       source.
 
@@ -1378,130 +1378,146 @@ provider documentation during implementation and link those sources.
 
 ### Documentation Contract Tests
 
-- [ ] Add a test that asserts generic README, quick-start, workflow, Action, API,
+- [x] Add a test that asserts generic README, quick-start, workflow, Action, API,
       tutorial, and homepage baseline snippets never select a named
       application-image provider or require OCI credentials.
-- [ ] Validate all canonical example YAML against both root and `v0.8.1`
+- [x] Validate all canonical example YAML against both root and `v0.8.1`
       schemas.
-- [ ] Validate every complete planned/published/mixed manifest example against
+- [x] Validate every complete planned/published/mixed manifest example against
       the public schema and runtime parser.
-- [ ] Parse every complete JSON/YAML example and run `bash -n` plus project shell
+- [x] Parse every complete JSON/YAML example and run `bash -n` plus project shell
       lint for every complete shell script.
-- [ ] Exercise runnable tutorial commands or their canonical script equivalents;
+- [x] Exercise runnable tutorial commands or their canonical script equivalents;
       explicitly exclude and label sanitized output/pseudocode blocks.
-- [ ] Generate canonical complete-file snippets or byte-compare each labelled
+- [x] Generate canonical complete-file snippets or byte-compare each labelled
       duplicate fenced block with its source file so documentation cannot stay
       syntactically valid while semantically drifting.
-- [ ] Assert the documented `ARTIFACT_*` list, deploy result fields, tool
+- [x] Assert the documented `ARTIFACT_*` list, deploy result fields, tool
       versions/digests, exact scan semantics, and Cosign flags match code.
-- [ ] Assert every public function has an intentional Dagger cache scope, every
+- [x] Assert every public function has an intentional Dagger cache scope, every
       mutable/security-sensitive execution path receives a fresh non-secret
       cache input, and release Git auth source contains no persisted Basic header
       or token-derived file write.
-- [ ] Add link validation for root docs, tutorial chapters, `.ai` links, schema
+- [x] Add link validation for root docs, tutorial chapters, `.ai` links, schema
       links, docs trees, and generated site routes.
-- [ ] Require every statement phrased as a credential, integrity, isolation, or
+- [x] Require every statement phrased as a credential, integrity, isolation, or
       side-effect guarantee to map to an automated test; otherwise rewrite it as
       an operator responsibility or limitation.
 
 ### Secret-Sentinel Acceptance
 
-- [ ] Use unique sentinel values for token, private key, password, public key,
+- [x] Use unique sentinel values for token, private key, password, public key,
       derived Basic-auth/Docker-config forms, plus a recognizable non-secret
       username, and capture combined stdout/stderr for success and every failure
       class. Run the secret-redaction gate with Dagger client progress silenced;
       separately lock the documented fact that unsilenced Dagger progress may
       show the non-secret username.
-- [ ] Prove secret sentinels do not appear in Rush Build env, Docker build context,
+- [x] Prove secret sentinels do not appear in Rush Build env, Docker build context,
       image config/history/filesystem, filesystem artifacts, packaged workspace,
       Deploy env/script, npm Release container, manifest, evidence, dry-run text,
       returned JSON, normal logs, aggregate errors, or cleanup diagnostics.
-- [ ] Prove dry runs do not resolve or index provider sentinel entries. A
+- [x] Prove dry runs do not resolve or index provider sentinel entries. A
       no-env-file dry run also proves that no credential-bearing file is read.
-- [ ] Prove only the selected live provider's five named values are read. Prove
+- [x] Prove only the selected live provider's five named values are read. Prove
       token/private key/password/public key and generated Docker config are
       Dagger secrets; the username remains a non-secret Dagger registry-auth
       input and is never projected into project execution or result models.
-- [ ] Ensure tests compare captured bytes without printing the sentinel values on
+- [x] Ensure tests compare captured bytes without printing the sentinel values on
       failure.
 
 ### End-To-End Acceptance Matrix
 
-- [ ] Filesystem-only `workflow`, `packageDeployTargets`,
+- [x] Filesystem-only `workflow`, `packageDeployTargets`,
       `buildAndPackageDeployTargets`, and `deployRelease` remain compatible with
       no application-provider file or credentials.
-- [ ] Provider-off OCI dry run succeeds without provider credentials,
+- [x] Provider-off OCI dry run succeeds without provider credentials,
       application-image build, destination-registry access, Syft/Grype/Cosign
       execution, or Docker socket. Do not assert that unrelated source, module,
       base-image, dependency, or Rush operations are globally network-free.
-- [ ] Named-provider OCI dry run validates the planned canonical repository and
+- [x] Named-provider OCI dry run validates the planned canonical repository and
       still avoids provider credential resolution/use and all application-image
       external operations.
-- [ ] Track and locally contract-test live single-target OCI acceptance against
+- [x] Track and locally contract-test live single-target OCI acceptance against
       a trusted-TLS disposable registry and unique per-run namespace without a
       host Docker or Podman CLI, socket, or daemon. The actual project-controlled
       endpoint run is an exact-merged-candidate Phase 10 gate because GitHub can
       dispatch a newly added workflow only after it exists on the default branch.
-- [ ] Acceptance-harness fault injection proves transient pre-mutation
+- [x] Acceptance-harness fault injection proves transient pre-mutation
       transport recovery is bounded, exhaustion is classified, product
       security/evidence failures are never retried as infrastructure failures,
       and ambiguous post-mutation failures stop for inspection/cleanup without
       replaying the complete release flow.
-- [ ] Track and locally contract-test the live multi-target scenarios that prove
+- [x] Track and locally contract-test the live multi-target scenarios that prove
       the scan-before-publish barrier and ordered finalization/error reporting;
       execute them against GHCR on the exact merged candidate in Phase 10.
-- [ ] Track and locally contract-test key-preflight scenarios proving malformed,
+- [x] Track and locally contract-test key-preflight scenarios proving malformed,
       locked, invalid, and mismatched keys are expected to publish nothing;
       verify zero GHCR inventory on the exact merged candidate in Phase 10.
-- [ ] Reserved-env attack acceptance proves a deploy script cannot replace
+- [x] Reserved-env attack acceptance proves a deploy script cannot replace
       framework artifact identity or control values.
-- [ ] Full/partial/mixed-workspace acceptance proves target evidence isolation.
-- [ ] Split-stage archive/checksum/restore/deploy acceptance preserves modes and
+- [x] Full/partial/mixed-workspace acceptance proves target evidence isolation.
+- [x] Split-stage archive/checksum/restore/deploy acceptance preserves modes and
       symlinks and proves the same digest plus independently recorded SHA cross
       the trusted bundle boundary without rebuild.
-- [ ] Rollback acceptance verifies a retained archive against protected external
+- [x] Rollback acceptance verifies a retained archive against protected external
       release metadata and deploys its digest without modifying its manifest.
-- [ ] OCI-only GitHub Action argument tests prove explicit empty Docker socket;
+- [x] OCI-only GitHub Action argument tests prove explicit empty Docker socket;
       legacy default tests prove existing Docker-dependent deploy scripts remain
       supported.
 
 ### Repository Quality Gates
 
-- [ ] Run `yarn install --frozen-lockfile` in a clean environment.
-- [ ] Run `npm ci --prefix website` and
+- [x] Run `yarn install --frozen-lockfile` in a clean environment.
+- [x] Run `npm ci --prefix website` and
       `npm ci --prefix website-docusaurus`; the site packages have independent
       frozen lockfiles and are not installed by the root Yarn command.
-- [ ] Run `npm run typecheck`.
-- [ ] Run `npm test`.
-- [ ] Run `npm run site:sync-docs`, `npm run site:sync-static`,
+- [x] Run `npm run typecheck`.
+- [x] Run `npm test`.
+- [x] Run `npm run site:sync-docs`, `npm run site:sync-static`,
       `npm run site:check`, and `npm run site:build`.
-- [ ] Run `npm run site:docusaurus:sync-docs`,
+- [x] Run `npm run site:docusaurus:sync-docs`,
       `npm run site:docusaurus:sync-static`,
       `npm run site:docusaurus:check`, and
       `npm run site:docusaurus:build`.
-- [ ] Run `git diff --check`.
-- [ ] Run `trunk check -a -y` and resolve every task-related finding.
-- [ ] Confirm `dagger version` is `v0.20.7`.
-- [ ] Run a Dagger module load plus `dagger call ping` and
+- [x] Run `git diff --check`.
+- [x] Run `trunk check -a -y` and resolve every task-related finding.
+- [x] Confirm `dagger version` is `v0.20.7`.
+- [x] Run a Dagger module load plus `dagger call ping` and
       `dagger call self-check` with the matching engine. Repeat self-check from
       tracked clean-clone input with `sdk/` absent and without first
       running `dagger develop`; the self-check itself must make its matching
       ephemeral SDK available.
-- [ ] Run the deterministic tests for
+- [x] Run the deterministic tests for
       [`../test/scripts/run-oci-acceptance.sh`](../test/scripts/run-oci-acceptance.sh),
       including its explicit test-only endpoint override, bounded failure
       classification, cleanup, and captured log-redaction checks. Run the actual
       project-controlled disposable trusted-TLS namespace in Phase 10.
-- [ ] Repeat the release-candidate verification from a clean checkout with no
+- [x] Repeat the release-candidate verification from a clean checkout with no
       developer-only env or cached generated docs masking failures.
 
 ### Phase 9 Exit Gate
 
-- [ ] All pre-merge unit, schema, contract, docs, site, security, compatibility,
+- [x] All pre-merge unit, schema, contract, docs, site, security, compatibility,
       Dagger, deterministic OCI, and live-workflow contract gates pass from a
       clean checkout, and the resulting guarantees match the written production
       guide exactly. Actual registry mutation remains the explicit pre-tag
       Phase 10 gate.
+
+Pre-merge evidence recorded on 2026-08-05 for code/docs candidate
+`2a1086c74628ecd26129e27644d48e6c5c46e757`:
+
+- tracked Git-archive self-check with no generated SDK or installed dependencies:
+  Dagger `v0.20.7`, frozen Yarn install, typecheck, and 405 tests passed;
+- both documentation implementations passed sync, static-asset sync, typecheck,
+  production check, and production build; the clean site installs also passed;
+- Trunk checked 873 files with no remaining finding, `git diff --check` passed,
+  and every current third-party production Action reference is contract-tested
+  as a reviewed full commit SHA;
+- Dagger Cosign-preflight and evidence-symlink engine regressions passed, and the
+  real local deterministic OCI/legacy compatibility matrix passed.
+
+No live registry result is claimed here. The tracked project-owned GHCR matrix
+remains the exact merged-candidate gate below.
 
 ## Phase 10: Commit, Publish, Tag, And Verify `v0.8.1`
 
@@ -1511,13 +1527,13 @@ candidate are the steps that make the newly tracked live workflow available on
 the default branch; they may begin after the pre-merge Phase 9 gate passes. The
 exact merged candidate must then pass every deferred live gate before tagging.
 
-- [ ] Review the complete diff for accidental generated-file edits, secret/key
+- [x] Review the complete diff for accidental generated-file edits, secret/key
       material, unrelated scope, and changes to immutable release snapshots.
-- [ ] Confirm no private key, password, token, Docker config, real registry
+- [x] Confirm no private key, password, token, Docker config, real registry
       credential, or local exported bundle is tracked.
-- [ ] Commit in reviewable semantic slices: behavior/tests, canonical example,
+- [x] Commit in reviewable semantic slices: behavior/tests, canonical example,
       tutorial/production docs, and version/release preparation as appropriate.
-- [ ] Include compatibility/security notes in commit bodies without claiming
+- [x] Include compatibility/security notes in commit bodies without claiming
       transactionality, Rekor, or Deploy-time Cosign verification.
 - [ ] Push the implementation branch and use the repository's normal review and
       merge flow.
@@ -1557,70 +1573,70 @@ exact merged candidate must then pass every deferred live gate before tagging.
 
 ## Explicit Non-Goals
 
-- [ ] Do not add multi-platform indexes.
-- [ ] Do not add Docker build arguments, Docker build secrets, SSH mounts, or
+- [x] Do not add multi-platform indexes.
+- [x] Do not add Docker build arguments, Docker build secrets, SSH mounts, or
       arbitrary Dockerfile target selection.
-- [ ] Do not add keyless/OIDC signing, configurable Rekor use, transparency-log
+- [x] Do not add keyless/OIDC signing, configurable Rekor use, transparency-log
       publication, or trusted timestamping.
-- [ ] Do not add Deploy-time registry login or Cosign verification.
-- [ ] Do not add a signed package-bundle format or package-manifest v3.
-- [ ] Do not reinterpret `scan.fail_on` as a threshold.
-- [ ] Do not add vendor-specific deployment branches to framework source.
-- [ ] Do not add automatic registry deletion or claim transactional rollback.
-- [ ] Do not add custom-CA or insecure-registry configuration in this patch.
-- [ ] Do not change the GitHub Action Docker-socket compatibility default.
-- [ ] Do not change the Dagger engine, generated SDK contract, or tracked SDK
+- [x] Do not add Deploy-time registry login or Cosign verification.
+- [x] Do not add a signed package-bundle format or package-manifest v3.
+- [x] Do not reinterpret `scan.fail_on` as a threshold.
+- [x] Do not add vendor-specific deployment branches to framework source.
+- [x] Do not add automatic registry deletion or claim transactional rollback.
+- [x] Do not add custom-CA or insecure-registry configuration in this patch.
+- [x] Do not change the GitHub Action Docker-socket compatibility default.
+- [x] Do not change the Dagger engine, generated SDK contract, or tracked SDK
       policy unless a separately justified requirement is discovered and the
       full engine upgrade flow is followed. The internal self-check repair may
       generate or provision the existing matching SDK ephemerally; it must not
       hand-edit or commit generated output.
-- [ ] Do not add environment-selected provider coordinates, project-owned Rush
+- [x] Do not add environment-selected provider coordinates, project-owned Rush
       toolchain metadata, or a repository-configurable source-exclusion API in
       this patch; each is deferred to
       [`2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md`](2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md)
       as a separate minor-release public-contract decision.
-- [ ] Do not edit completed task archives or any released documentation/schema
+- [x] Do not edit completed task archives or any released documentation/schema
       snapshot by hand.
 
 ## Final Completion Criteria
 
 This task is complete only when all of the following are true:
 
-- [ ] A filesystem-only `v0.7.x` or `v0.8.0` consumer that does not shadow
+- [x] A filesystem-only `v0.7.x` or `v0.8.0` consumer that does not shadow
       framework-reserved runtime names can pin `v0.8.1` without adding
       application-image metadata, credentials, or `.dagger` changes; any
       reserved-name rename is explicit and actionable.
-- [ ] A named global application provider cannot break a selected plan that has
+- [x] A named global application provider cannot break a selected plan that has
       no OCI artifacts.
-- [ ] A selected live OCI target either completes the existing verified v2
+- [x] A selected live OCI target either completes the existing verified v2
       Package contract or fails before Deploy with accurate, sanitized side
       effects.
-- [ ] Application-provider credentials cannot enter project Build, npm Release,
+- [x] Application-provider credentials cannot enter project Build, npm Release,
       Deploy, Docker image content, package bundle, evidence, results, or logs
       merely by selecting the application provider or through a protected
       metadata aliasing path. Separately configured framework adapters and
       deliberate same-value reuse remain the documented caller capability
       boundary.
-- [ ] Project metadata cannot shadow `ARTIFACT_*`, `GIT_SHA`, or `DRY_RUN`.
-- [ ] Invalid, locked, or mismatched Cosign key material fails before any
+- [x] Project metadata cannot shadow `ARTIFACT_*`, `GIT_SHA`, or `DRY_RUN`.
+- [x] Invalid, locked, or mismatched Cosign key material fails before any
       application-image build or destination-registry mutation.
-- [ ] A failure in any selected filesystem package operation or OCI
+- [x] A failure in any selected filesystem package operation or OCI
       build/SBOM/scan preparation publishes none of the selected OCI targets.
-- [ ] Later publication/signing failures identify every known or skipped target
+- [x] Later publication/signing failures identify every known or skipped target
       deterministically, never start Deploy, and provide safe cleanup guidance.
-- [ ] Full, partial, filesystem, OCI, and mixed Deploy workspaces expose no
+- [x] Full, partial, filesystem, OCI, and mixed Deploy workspaces expose no
       unrelated framework evidence.
-- [ ] Docs describe exact-set scan behavior, mutable vulnerability data,
+- [x] Docs describe exact-set scan behavior, mutable vulnerability data,
       key-backed offline Cosign, Package-versus-Deploy verification, trusted
       split-stage bundles, nontransactional publication, and all `v0.8.1`
       limitations without overclaiming.
-- [ ] Baseline docs remain provider-off, while the OCI tutorial is complete,
+- [x] Baseline docs remain provider-off, while the OCI tutorial is complete,
       linear, executable, and backed by the same canonical example as acceptance
       tests.
-- [ ] Registry setup, key bootstrap, CI, inspection, deployment, split-stage
+- [x] Registry setup, key bootstrap, CI, inspection, deployment, split-stage
       handoff, rollback, retention, cleanup, and troubleshooting are operationally
       actionable.
-- [ ] Every security/integrity guarantee has an automated test and every runnable
+- [x] Every security/integrity guarantee has an automated test and every runnable
       documentation artifact is parsed, linted, or executed.
 - [ ] `dagger call self-check` passes from tracked clean-clone input without a
       pre-existing generated SDK or a manual `dagger develop`, and live OCI
@@ -1628,4 +1644,4 @@ This task is complete only when all of the following are true:
       bounded, side-effect-safe retry and failure-classification tests.
 - [ ] Root docs, both sites, schemas, provenance, Action/module examples, tag,
       GitHub Release, and live Pages agree on `v0.8.1`.
-- [ ] All `v0.8.0` and older published artifacts remain immutable.
+- [x] All `v0.8.0` and older published artifacts remain immutable.
