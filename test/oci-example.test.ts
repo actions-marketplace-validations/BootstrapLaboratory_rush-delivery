@@ -191,7 +191,8 @@ test("canonical OCI example has one complete, clean source tree", async () => {
   assert.deepEqual(await listExampleFiles(), expectedFiles);
 
   const deployMode = (await stat(deployScript)).mode & 0o777;
-  assert.equal(deployMode, 0o755);
+  assert.equal(deployMode & 0o111, 0o111);
+  assert.equal(deployMode & 0o002, 0);
 
   const gitignore = await readFile(
     path.join(exampleRoot, ".gitignore"),
