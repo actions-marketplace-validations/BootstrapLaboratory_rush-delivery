@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUSH_DELIVERY_LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly RUSH_DELIVERY_LOCAL_DIR
 readonly RUSH_DELIVERY_DEFAULT_IGNORE_FILE=".dagger/source-import.ignore"
 readonly -a RUSH_DELIVERY_DEFAULT_EXCLUDES=(
 	"**/node_modules"
@@ -109,6 +107,7 @@ rush_delivery_validate_pattern() {
 		\\ | "'" | '"' | '$' | '`' | ';' | '&' | '|' | '<' | '>' | '(' | ')' | '{' | '}')
 			rush_delivery_local_die "source import pattern on line ${line_number} contains an unsupported escape or expression character"
 			;;
+		*) ;;
 		esac
 	done
 
@@ -189,6 +188,7 @@ rush_delivery_reject_adapter_arguments() {
 		--repo | --repo=* | --source-mode | --source-mode=* | --source-repository-url | --source-repository-url=* | --source-ref | --source-ref=* | --source-auth-token-env | --source-auth-token-env=* | --source-auth-username | --source-auth-username=*)
 			rush_delivery_local_die "${argument%%=*} is owned by the local source adapter"
 			;;
+		*) ;;
 		esac
 	done
 }
@@ -302,10 +302,11 @@ fi
 
 rush_delivery_validate_ignore_file_path "${rush_delivery_ignore_file}"
 rush_delivery_resolved_ignore_file=""
-if rush_delivery_resolved_ignore_file="$(rush_delivery_resolve_ignore_file "${rush_delivery_repo}" "${rush_delivery_ignore_file}")"; then
-	:
-else
-	rush_delivery_ignore_status="$?"
+rush_delivery_ignore_status=0
+# Missing default files are optional; every other resolver status is classified below.
+# shellcheck disable=SC2310
+rush_delivery_resolved_ignore_file="$(rush_delivery_resolve_ignore_file "${rush_delivery_repo}" "${rush_delivery_ignore_file}")" || rush_delivery_ignore_status="$?"
+if [[ ${rush_delivery_ignore_status} -ne 0 ]]; then
 	if [[ ${rush_delivery_ignore_status} -ne 2 ]]; then
 		exit "${rush_delivery_ignore_status}"
 	fi

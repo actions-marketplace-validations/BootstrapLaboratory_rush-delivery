@@ -131,7 +131,8 @@ function collectCoordinateProtectedEnvironmentNames(
   options: BuildPackageWorkflowOptions,
 ): string[] {
   const rushCacheProvider = options.rushCacheProviders.providers.github;
-  const toolchainImageProvider = options.toolchainImageProviders?.providers.github;
+  const toolchainImageProvider =
+    options.toolchainImageProviders?.providers.github;
 
   return [
     ...(options.protectedEnvironmentNames ?? []),
@@ -143,7 +144,10 @@ function collectCoordinateProtectedEnvironmentNames(
       : [rushCacheProvider.username_env, rushCacheProvider.token_env]),
     ...(toolchainImageProvider === undefined
       ? []
-      : [toolchainImageProvider.username_env, toolchainImageProvider.token_env]),
+      : [
+          toolchainImageProvider.username_env,
+          toolchainImageProvider.token_env,
+        ]),
   ];
 }
 

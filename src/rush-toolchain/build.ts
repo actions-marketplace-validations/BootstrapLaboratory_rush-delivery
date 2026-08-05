@@ -105,7 +105,9 @@ function materializeDownload(download: RushToolchainDownload): File {
     .file("/tmp/rush-delivery/output");
 }
 
-async function preflightConfiguredBase(container: Container): Promise<Container> {
+async function preflightConfiguredBase(
+  container: Container,
+): Promise<Container> {
   return container
     .withExec(
       [

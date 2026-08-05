@@ -110,12 +110,17 @@ export function assertApplicationImageCoordinateNameSeparation(
 ): void {
   const coordinates = collectApplicationImageCoordinateNames(providers);
   const protectedNames = new Set([
-    ...collectApplicationImageCredentialNames(providers).map(({ name }) => name),
+    ...collectApplicationImageCredentialNames(providers).map(
+      ({ name }) => name,
+    ),
     ...additionalProtectedNames,
     "GIT_SHA",
     "DRY_RUN",
   ]);
-  const coordinateOwners = new Map<string, PublicApplicationImageCoordinateName>();
+  const coordinateOwners = new Map<
+    string,
+    PublicApplicationImageCoordinateName
+  >();
   const issues: string[] = [];
 
   for (const coordinate of coordinates) {

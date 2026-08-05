@@ -11,6 +11,8 @@ import {
   normalizeToolchainImageSpec,
   rushToolchainImageSpec,
   TOOLCHAIN_IMAGE_SPEC_VERSION,
+  toolchainImageName,
+  toolchainImageTag,
 } from "../src/toolchain-images/spec.ts";
 import {
   RUSH_TOOLCHAIN_CONNECT_TIMEOUT_SECONDS,
@@ -19,6 +21,7 @@ import {
   RUSH_TOOLCHAIN_TRANSFER_IMAGE,
   RUSH_TOOLCHAIN_TRANSFER_TIMEOUT_SECONDS,
 } from "../src/rush-toolchain/constants.ts";
+import { buildGithubToolchainImageReference } from "../src/toolchain-images/github-reference.ts";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const fixturePath = path.join(testDirectory, "fixtures/rush-toolchain.yaml");
@@ -70,7 +73,10 @@ test("rejects mutable bases, unsafe downloads, and generic execution fields", as
             : replacement.startsWith("archive_path:")
               ? fixture.replace(/^    archive_path:.*$/mu, `    ${replacement}`)
               : replacement.startsWith("destination:")
-                ? fixture.replace(/^    destination:.*$/mu, `    ${replacement}`)
+                ? fixture.replace(
+                    /^    destination:.*$/mu,
+                    `    ${replacement}`,
+                  )
                 : replacement.startsWith("mode:")
                   ? fixture.replace(/^    mode:.*$/mu, `    ${replacement}`)
                   : fixture.replace(/^    mode:.*$/mu, "$&\n" + replacement);
@@ -107,7 +113,11 @@ test("configured v2 specs hash every ordered project input while absence stays v
   const defaultSpec = rushToolchainImageSpec("node:24-bookworm-slim", [
     "apt-get update",
   ]);
-  const configured = rushToolchainImageSpec("ignored", ["apt-get update"], definition);
+  const configured = rushToolchainImageSpec(
+    "ignored",
+    ["apt-get update"],
+    definition,
+  );
 
   assert.equal(defaultSpec.version, TOOLCHAIN_IMAGE_SPEC_VERSION);
   assert.deepEqual(normalizeToolchainImageSpec(defaultSpec), {
@@ -134,7 +144,10 @@ test("configured v2 specs hash every ordered project input while absence stays v
   });
 
   for (const changed of [
-    { ...configured, baseImage: configured.baseImage.replace("node", "library/node") },
+    {
+      ...configured,
+      baseImage: configured.baseImage.replace("node", "library/node"),
+    },
     { ...configured, platform: undefined },
     {
       ...configured,
@@ -144,7 +157,10 @@ test("configured v2 specs hash every ordered project input while absence stays v
       })),
     },
   ]) {
-    assert.notEqual(hashToolchainImageSpec(configured), hashToolchainImageSpec(changed));
+    assert.notEqual(
+      hashToolchainImageSpec(configured),
+      hashToolchainImageSpec(changed),
+    );
   }
 
   const first = configured.downloads![0];
@@ -152,6 +168,25 @@ test("configured v2 specs hash every ordered project input while absence stays v
   assert.notEqual(
     hashToolchainImageSpec({ ...configured, downloads: [first, second] }),
     hashToolchainImageSpec({ ...configured, downloads: [second, first] }),
+  );
+});
+
+test("unconfigured Rush toolchain keeps the exact v0.8.1 hash and cache reference", () => {
+  const spec = rushToolchainImageSpec("node:24-bookworm-slim", [
+    "apt-get update",
+    "apt-get install -y ca-certificates git",
+  ]);
+
+  assert.equal(hashToolchainImageSpec(spec), "e48e6b882e3f3d14");
+  assert.equal(toolchainImageName(spec), "rush-workflow");
+  assert.equal(toolchainImageTag(spec), "sha256-e48e6b882e3f3d14");
+  assert.equal(
+    buildGithubToolchainImageReference({
+      imageName: toolchainImageName(spec),
+      repository: "BootstrapLaboratory/rush-delivery",
+      tag: toolchainImageTag(spec),
+    }).reference,
+    "ghcr.io/bootstraplaboratory/rush-delivery/rush-delivery-toolchains/rush-workflow:sha256-e48e6b882e3f3d14",
   );
 });
 

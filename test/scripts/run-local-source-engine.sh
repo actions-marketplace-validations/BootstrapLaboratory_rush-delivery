@@ -25,6 +25,7 @@ git -C "${LOCAL_SOURCE_TEST_REPO}" init --quiet --initial-branch=main
 git -C "${LOCAL_SOURCE_TEST_REPO}" -c user.name='Rush Delivery Test' -c user.email='test@example.invalid' add --force .
 git -C "${LOCAL_SOURCE_TEST_REPO}" -c user.name='Rush Delivery Test' -c user.email='test@example.invalid' commit --quiet -m 'test: initialize bounded source fixture'
 git -C "${LOCAL_SOURCE_TEST_REPO}" tag deploy/prod/bootstrap
+local_source_git_sha="$(git -C "${LOCAL_SOURCE_TEST_REPO}" rev-parse HEAD)"
 
 generated_shell="$({
 	"${LOCAL_SOURCE_REPO_ROOT}/github-action/rush-delivery-local" \
@@ -33,7 +34,7 @@ generated_shell="$({
 		--repo="${LOCAL_SOURCE_TEST_REPO}" \
 		-- \
 		release-packages \
-		--git-sha="$(git -C "${LOCAL_SOURCE_TEST_REPO}" rev-parse HEAD)" \
+		--git-sha="${local_source_git_sha}" \
 		--dry-run=true
 })"
 directory_shell="${generated_shell%%$'\n'*}"

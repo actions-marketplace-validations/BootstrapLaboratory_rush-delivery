@@ -90,13 +90,10 @@ providers:
         repositoryPrefix: "example/platform",
       },
     );
-    assert.deepEqual(
-      reads,
-      [
-        ...(registryField.includes("_env") ? ["OCI_REGISTRY"] : []),
-        ...(repositoryField.includes("_env") ? ["OCI_REPOSITORY"] : []),
-      ],
-    );
+    assert.deepEqual(reads, [
+      ...(registryField.includes("_env") ? ["OCI_REGISTRY"] : []),
+      ...(repositoryField.includes("_env") ? ["OCI_REPOSITORY"] : []),
+    ]);
   }
 });
 
@@ -111,7 +108,10 @@ test("rejects missing and conflicting coordinate XOR fields", () => {
           "repository_prefix: example/platform",
           replacement,
         )
-      : providersYaml.replace("registry: registry.example.test:5000", replacement);
+      : providersYaml.replace(
+          "registry: registry.example.test:5000",
+          replacement,
+        );
 
     assert.throws(
       () => parseApplicationImageProviders(source),
@@ -123,7 +123,10 @@ test("rejects missing and conflicting coordinate XOR fields", () => {
 test("redacts invalid dynamic coordinate values", () => {
   const providers = parseApplicationImageProviders(
     providersYaml
-      .replace("registry: registry.example.test:5000", "registry_env: OCI_REGISTRY")
+      .replace(
+        "registry: registry.example.test:5000",
+        "registry_env: OCI_REGISTRY",
+      )
       .replace(
         "repository_prefix: example/platform",
         "repository_prefix_env: OCI_REPOSITORY",

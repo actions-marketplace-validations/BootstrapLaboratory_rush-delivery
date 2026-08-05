@@ -75,7 +75,10 @@ function parseArchivePath(rawValue: unknown, name: string): string {
   return value;
 }
 
-function parseDownload(rawValue: unknown, index: number): RushToolchainDownload {
+function parseDownload(
+  rawValue: unknown,
+  index: number,
+): RushToolchainDownload {
   const name = `Rush toolchain download ${index}`;
   if (
     typeof rawValue !== "object" ||
@@ -130,7 +133,12 @@ function parseDownload(rawValue: unknown, index: number): RushToolchainDownload 
 
   return {
     ...(hasArchivePath
-      ? { archive_path: parseArchivePath(rawValue.archive_path, `${name} archive_path`) }
+      ? {
+          archive_path: parseArchivePath(
+            rawValue.archive_path,
+            `${name} archive_path`,
+          ),
+        }
       : {}),
     destination,
     format,

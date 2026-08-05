@@ -293,6 +293,7 @@ diagnostic_failure_stage=configuration
 
 private_key="$(awk '{printf "%s\\n", $0}' "${key_directory}/cosign.key")"
 public_key="$(awk '{printf "%s\\n", $0}' "${key_directory}/cosign.pub")"
+protected_values_file="${OCI_ACCEPTANCE_TEMP}/protected-values.env"
 deploy_env="${OCI_ACCEPTANCE_TEMP}/deploy.env"
 {
 	printf 'RD_OCI_GHCR_USERNAME=%s\n' "${username}"
@@ -300,8 +301,13 @@ deploy_env="${OCI_ACCEPTANCE_TEMP}/deploy.env"
 	printf 'RD_OCI_COSIGN_PRIVATE_KEY=%s\n' "${private_key}"
 	printf 'RD_OCI_COSIGN_PASSWORD=%s\n' "${signing_password}"
 	printf 'RD_OCI_COSIGN_PUBLIC_KEY=%s\n' "${public_key}"
+} >"${protected_values_file}"
+{
+	cat "${protected_values_file}"
+	printf 'RD_OCI_REGISTRY=%s\n' "${registry}"
+	printf 'RD_OCI_REPOSITORY_PREFIX=%s\n' "${repository_prefix}"
 } >"${deploy_env}"
-chmod 600 "${deploy_env}"
+chmod 600 "${protected_values_file}" "${deploy_env}"
 
 docker_config="${OCI_ACCEPTANCE_TEMP}/docker-config.json"
 OCI_ACCEPTANCE_DOCKER_CONFIG_REGISTRY="${registry}" \
@@ -385,7 +391,7 @@ diagnostic_mutation_state="$(
 )"
 
 assert_protected_capture \
-	"${acceptance_log}" "${deploy_env}" "${docker_config}"
+	"${acceptance_log}" "${protected_values_file}" "${docker_config}"
 
 if ((acceptance_status != 0)); then
 	failure_class="$(
@@ -416,7 +422,7 @@ oci_acceptance_run_with_timeout \
 	node "${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
 	"${output_directory}" \
 	"${OCI_ACCEPTANCE_GIT_SHA}" \
-	"${deploy_env}" \
+	"${protected_values_file}" \
 	"${registry}/${repository_prefix}/control-plane-api" \
 	"" \
 	"" \
@@ -424,7 +430,7 @@ oci_acceptance_run_with_timeout \
 bundle_verification_status=$?
 set -e
 assert_protected_capture \
-	"${bundle_verification_log}" "${deploy_env}" "${docker_config}"
+	"${bundle_verification_log}" "${protected_values_file}" "${docker_config}"
 if ((bundle_verification_status != 0)); then
 	printf 'OCI acceptance [verification-contract]: local package and evidence verification failed\n' >&2
 	exit "${bundle_verification_status}"
@@ -456,7 +462,7 @@ published_evidence_status=$?
 set -e
 if ((published_evidence_status != 0)); then
 	assert_protected_capture \
-		"${cosign_verification_log}" "${deploy_env}" "${docker_config}"
+		"${cosign_verification_log}" "${protected_values_file}" "${docker_config}"
 	if grep -Eqi \
 		'connection (refused|reset)|context deadline|dial tcp|i/o timeout|network is unreachable|no such host|TLS handshake timeout|unexpected EOF' \
 		"${cosign_verification_log}"; then
@@ -472,7 +478,7 @@ if ((published_evidence_status != 0)); then
 fi
 
 assert_protected_capture \
-	"${cosign_verification_log}" "${deploy_env}" "${docker_config}"
+	"${cosign_verification_log}" "${protected_values_file}" "${docker_config}"
 
 image_tarball="${OCI_ACCEPTANCE_TEMP}/published-image.tar"
 image_export_log="${OCI_ACCEPTANCE_TEMP}/image-export.log"
@@ -496,7 +502,7 @@ set -e
 unset OCI_ACCEPTANCE_REGISTRY_TOKEN
 if ((image_export_status != 0)); then
 	assert_protected_capture \
-		"${image_export_log}" "${deploy_env}" "${docker_config}"
+		"${image_export_log}" "${protected_values_file}" "${docker_config}"
 	diagnostic_failure_class="registry-immutable-read"
 	diagnostic_failure_stage="registry-immutable-read"
 	printf 'OCI acceptance infrastructure [registry-immutable-read]: published digest could not be exported after bounded retries\n' >&2
@@ -504,7 +510,15 @@ if ((image_export_status != 0)); then
 fi
 
 assert_protected_capture \
-	"${image_export_log}" "${deploy_env}" "${docker_config}"
+	"${image_export_log}" "${protected_values_file}" "${docker_config}"
+
+routing_values_file="${OCI_ACCEPTANCE_TEMP}/public-routing-values.env"
+printf 'RD_OCI_REPOSITORY_PREFIX=%s\n' "${repository_prefix}" >"${routing_values_file}"
+chmod 600 "${routing_values_file}"
+node "${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
+	--assert-image-protected-absent \
+	"${image_tarball}" \
+	"${routing_values_file}"
 
 deploy_result="${OCI_ACCEPTANCE_TEMP}/deploy-result.json"
 deploy_log="${OCI_ACCEPTANCE_TEMP}/deploy.log"
@@ -529,7 +543,7 @@ set -e
 
 for protected_log in "${deploy_result}" "${deploy_log}"; do
 	assert_protected_capture \
-		"${protected_log}" "${deploy_env}" "${docker_config}"
+		"${protected_log}" "${protected_values_file}" "${docker_config}"
 done
 
 if ((deploy_status != 0)); then
@@ -559,7 +573,7 @@ oci_acceptance_run_with_timeout \
 	node "${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
 	"${output_directory}" \
 	"${OCI_ACCEPTANCE_GIT_SHA}" \
-	"${deploy_env}" \
+	"${protected_values_file}" \
 	"${registry}/${repository_prefix}/control-plane-api" \
 	"${image_tarball}" \
 	"${deploy_result}" \
@@ -567,7 +581,7 @@ oci_acceptance_run_with_timeout \
 complete_verification_status=$?
 set -e
 assert_protected_capture \
-	"${complete_verification_log}" "${deploy_env}" "${docker_config}"
+	"${complete_verification_log}" "${protected_values_file}" "${docker_config}"
 if ((complete_verification_status != 0)); then
 	printf 'OCI acceptance [verification-contract]: package, image archive, or digest-only Deploy verification failed\n' >&2
 	exit "${complete_verification_status}"

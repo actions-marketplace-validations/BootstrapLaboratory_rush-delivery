@@ -759,8 +759,10 @@ export async function validateMetadataContractRepository(
     issues,
     requireRushCacheMetadata,
   );
-  const toolchainImageProviders =
-    await validateToolchainImageProviderMetadata(repository, issues);
+  const toolchainImageProviders = await validateToolchainImageProviderMetadata(
+    repository,
+    issues,
+  );
   await validateRushToolchainMetadata(repository, issues);
   const releaseMetadata = await validateReleaseMetadata(
     repository,

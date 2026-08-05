@@ -41,11 +41,7 @@ export type RushToolchainImageOptions = {
 export function rushWorkflowToolchainSpec(
   definition?: RushToolchainDefinition,
 ) {
-  return rushToolchainImageSpec(
-    RUSH_IMAGE,
-    RUSH_INSTALL_COMMANDS,
-    definition,
-  );
+  return rushToolchainImageSpec(RUSH_IMAGE, RUSH_INSTALL_COMMANDS, definition);
 }
 
 export function prepareRushWorkspaceContainer(repo: Directory): Container {

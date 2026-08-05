@@ -763,12 +763,12 @@ if (!provenance.runDetails?.metadata?.invocationId?.endsWith(artifact.digest)) {
 }
 if (
   provenance.buildDefinition?.buildType !==
-    "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.8.1" ||
+    "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.0" ||
   provenance.runDetails?.builder?.id !==
-    "https://github.com/BootstrapLaboratory/rush-delivery@v0.8.1"
+    "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
 ) {
   throw new Error(
-    "Acceptance provenance does not identify the v0.8.1 builder contract.",
+    "Acceptance provenance does not identify the v0.9.0 builder contract.",
   );
 }
 

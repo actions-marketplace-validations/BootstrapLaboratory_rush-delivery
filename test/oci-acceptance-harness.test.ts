@@ -1128,7 +1128,7 @@ test("canonical OCI project scripts reject every provider credential name", () =
   );
 });
 
-test("OCI acceptance changes only registry coordinates in the canonical provider", async () => {
+test("OCI acceptance selects dynamic coordinate names in the canonical provider", async () => {
   const tempDirectory = mkdtempSync(
     path.join(tmpdir(), "rush-delivery-acceptance-provider-"),
   );
@@ -1142,10 +1142,10 @@ test("OCI acceptance changes only registry coordinates in the canonical provider
       [providerPath],
     );
     const expected = canonicalSource
-      .replace("    registry: ghcr.io\n", "    registry: registry.example\n")
+      .replace("    registry: ghcr.io\n", "    registry_env: RD_OCI_REGISTRY\n")
       .replace(
         "    repository_prefix: example/rush-delivery-tutorial\n",
-        "    repository_prefix: acceptance/run\n",
+        "    repository_prefix_env: RD_OCI_REPOSITORY_PREFIX\n",
       );
 
     assert.equal(rewritten.status, 0, rewritten.stderr);
@@ -1420,6 +1420,16 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
     /if \[\[ \$\{github_project_mode\} == true \]\]; then\s+cleanup_github_token="\$\{GITHUB_TOKEN-\}"\s+fi\s+unset GITHUB_TOKEN/,
   );
   assert.match(source, /unset OCI_ACCEPTANCE_USERNAME OCI_ACCEPTANCE_TOKEN/);
+  assert.match(source, /RD_OCI_REGISTRY=%s\\n/);
+  assert.match(source, /RD_OCI_REPOSITORY_PREFIX=%s\\n/);
+  assert.match(
+    source,
+    /--assert-image-protected-absent[\s\S]{0,160}routing_values_file/,
+  );
+  assert.match(
+    source,
+    /assert_protected_capture \\\n\s*"\$\{acceptance_log\}" "\$\{protected_values_file\}"/,
+  );
   assert.match(
     source,
     /with-mounted-secret \/home\/nonroot\/\.docker\/config\.json.+secret file:/,
@@ -1483,9 +1493,16 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
   assert.ok(
     workflow.indexOf(
       "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
-    ) < workflow.indexOf("Run project-controlled GHCR acceptance"),
+    ) <
+      workflow.indexOf(
+        "Run project-controlled dynamic-coordinate GHCR acceptance",
+      ),
   );
   assert.match(workflow, /npm run test:dagger-security-engine/);
+  assert.match(
+    workflow,
+    /Prove provider-backed mixed-language Rush toolchain caching[\s\S]+GITHUB_TOKEN: \$\{\{ github\.token \}\}[\s\S]+run-rush-toolchain-provider-engine\.sh/,
+  );
   assert.match(workflow, /yarn install --frozen-lockfile/);
   assert.match(
     source,
@@ -1538,12 +1555,12 @@ test("OCI acceptance verifier enforces the bundle, image, and Deploy contracts w
   const provenance = `${JSON.stringify({
     buildDefinition: {
       buildType:
-        "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.8.1",
+        "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.0",
       resolvedDependencies: [{ digest: { gitCommit: gitSha } }],
     },
     runDetails: {
       builder: {
-        id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.8.1",
+        id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.0",
       },
       metadata: { invocationId: `control-plane-api:${gitSha}:${imageDigest}` },
     },

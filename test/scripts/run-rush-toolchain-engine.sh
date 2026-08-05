@@ -9,6 +9,8 @@ export RUSH_TOOLCHAIN_PACKAGE_FIXTURE="${RUSH_TOOLCHAIN_REPO_ROOT}/test/fixtures
 export RUSH_TOOLCHAIN_PLAN_FIXTURE="${RUSH_TOOLCHAIN_REPO_ROOT}/test/fixtures/rush-toolchain-ci-plan.json"
 
 result="$({
+	# This is Dagger Shell source; expansion must happen inside Dagger, not Bash.
+	# shellcheck disable=SC2016
 	DAGGER_NO_NAG=1 dagger --silent shell -m "${RUSH_TOOLCHAIN_REPO_ROOT}" -c '
 repo=$(host | directory $RUSH_TOOLCHAIN_EXAMPLE_ROOT --exclude="common/temp")
 toolchain=$(host | file $RUSH_TOOLCHAIN_METADATA_FIXTURE)

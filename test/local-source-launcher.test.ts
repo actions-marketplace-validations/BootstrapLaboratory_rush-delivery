@@ -16,10 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "..");
-const launcherPath = path.join(
-  repoRoot,
-  "github-action/rush-delivery-local",
-);
+const launcherPath = path.join(repoRoot, "github-action/rush-delivery-local");
 
 function createRepository(prefix = "rush-delivery-local-"): string {
   const repository = mkdtempSync(path.join(tmpdir(), prefix));
@@ -42,10 +39,7 @@ function runLauncher(args: string[], env: Record<string, string> = {}) {
 
 test("bounded launcher emits ordered caller-side filters and preserves inclusions", () => {
   const repository = createRepository("rush-delivery-local-'quote-");
-  const ignorePath = path.join(
-    repository,
-    ".dagger/source-import.ignore",
-  );
+  const ignorePath = path.join(repository, ".dagger/source-import.ignore");
   writeFileSync(
     ignorePath,
     [
@@ -83,7 +77,10 @@ test("bounded launcher emits ordered caller-side filters and preserves inclusion
   let previousIndex = -1;
   for (const pattern of ordered) {
     const index = result.stdout.indexOf(`--exclude='${pattern}'`);
-    assert.ok(index > previousIndex, `${pattern} must retain ordered precedence`);
+    assert.ok(
+      index > previousIndex,
+      `${pattern} must retain ordered precedence`,
+    );
     previousIndex = index;
   }
   assert.match(result.stdout, /local-source --repo=\$repo \| workflow/u);
@@ -160,7 +157,7 @@ test("legacy launcher preserves the top-level call path without reading ignores"
   mkdirSync(binDirectory);
   writeFileSync(
     path.join(binDirectory, "dagger"),
-    "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" >\"$RUSH_DELIVERY_TEST_CAPTURE\"\n",
+    '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" >"$RUSH_DELIVERY_TEST_CAPTURE"\n',
   );
   chmodSync(path.join(binDirectory, "dagger"), 0o755);
   writeFileSync(
@@ -200,7 +197,13 @@ test("legacy launcher preserves the top-level call path without reading ignores"
 test("launcher rejects adapter-owned arguments and contradictory legacy flags", () => {
   const repository = createRepository();
   for (const args of [
-    ["--emit-shell", `--repo=${repository}`, "--", "workflow", "--repo=elsewhere"],
+    [
+      "--emit-shell",
+      `--repo=${repository}`,
+      "--",
+      "workflow",
+      "--repo=elsewhere",
+    ],
     [
       "--emit-shell",
       `--repo=${repository}`,
