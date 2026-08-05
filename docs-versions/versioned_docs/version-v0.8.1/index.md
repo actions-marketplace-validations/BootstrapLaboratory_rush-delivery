@@ -1,0 +1,10 @@
+---
+id: "index"
+title: "Docs"
+sidebar_label: "Docs"
+description: "Documentation for Rush Delivery v0.8.1."
+---
+
+You are viewing archived documentation for Rush Delivery v0.8.1.
+
+Choose a page from the sidebar, or start with the [Quick Start](quick-start/github-actions).

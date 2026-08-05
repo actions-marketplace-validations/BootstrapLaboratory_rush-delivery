@@ -347,7 +347,7 @@ test("canonical OCI example metadata parses and agrees on one target", async () 
   assert.deepEqual(result.rush_projects, ["control-plane-api"]);
 });
 
-test("canonical OCI metadata validates against root and v0.8.1 schemas", async () => {
+test("canonical OCI metadata validates against root and v0.9.0 schemas", async () => {
   const schemaCases = [
     {
       metadataPath: ".dagger/application-images/providers.yaml",
@@ -374,7 +374,7 @@ test("canonical OCI metadata validates against root and v0.8.1 schemas", async (
   for (const { metadataPath, schemaName } of schemaCases) {
     const metadata = await readYaml(metadataPath);
     const source = await readFile(path.join(exampleRoot, metadataPath), "utf8");
-    const schemaUrl = `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/${schemaName}`;
+    const schemaUrl = `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/${schemaName}`;
     assert.match(
       source,
       new RegExp(
@@ -382,7 +382,7 @@ test("canonical OCI metadata validates against root and v0.8.1 schemas", async (
       ),
     );
 
-    for (const schemaDirectory of ["schemas", "schemas/v0.8.1"]) {
+    for (const schemaDirectory of ["schemas", "schemas/v0.9.0"]) {
       const schema = JSON.parse(
         await readFile(
           path.join(repositoryRoot, schemaDirectory, schemaName),

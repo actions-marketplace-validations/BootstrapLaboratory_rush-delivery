@@ -189,10 +189,15 @@ test("application provider schema matches coordinate XOR combinations", async ()
 });
 
 test("Rush toolchain fixture satisfies its strict root schema", async () => {
-  const schema = (await readJson("schemas/rush-toolchain.schema.json")) as AnySchema;
+  const schema = (await readJson(
+    "schemas/rush-toolchain.schema.json",
+  )) as AnySchema;
   const validate = new Ajv2020({ allErrors: true }).compile(schema);
   const fixture = parseYaml(
-    await readFile(path.join(testDirectory, "fixtures/rush-toolchain.yaml"), "utf8"),
+    await readFile(
+      path.join(testDirectory, "fixtures/rush-toolchain.yaml"),
+      "utf8",
+    ),
   );
 
   assert.equal(validate(fixture), true, formatSchemaErrors(validate.errors));
@@ -333,6 +338,37 @@ test("released v0.8.1 schema snapshots remain byte-immutable", async () => {
       createHash("sha256").update(contents).digest("hex"),
       expectedDigests[schemaName],
       `${schemaName} must remain byte-identical to the released v0.8.1 snapshot`,
+    );
+  }
+});
+
+test("current root schemas match the complete v0.9.0 snapshot", async () => {
+  const rootNames = (
+    await readdir(path.join(repoRoot, "schemas"), {
+      withFileTypes: true,
+    })
+  )
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".schema.json"))
+    .map((entry) => entry.name)
+    .sort();
+  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.9.0")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+
+  assert.deepEqual(snapshotNames, rootNames);
+  for (const schemaName of rootNames) {
+    const rootSchema = await readFile(
+      path.join(repoRoot, "schemas", schemaName),
+      "utf8",
+    );
+    const snapshotSchema = await readFile(
+      path.join(repoRoot, "schemas/v0.9.0", schemaName),
+      "utf8",
+    );
+    assert.equal(
+      snapshotSchema.replace("/schemas/v0.9.0/", "/schemas/"),
+      rootSchema,
+      `${schemaName} must differ only by the immutable v0.9.0 $id`,
     );
   }
 });

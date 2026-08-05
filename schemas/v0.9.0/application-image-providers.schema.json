@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json",
+  "title": "Rush Delivery application image providers",
+  "description": "Credential environment names must be globally unique across every field and provider; this dynamic invariant is enforced by Rush Delivery metadata validation.",
+  "type": "object",
+  "required": ["providers"],
+  "additionalProperties": false,
+  "properties": {
+    "providers": {
+      "type": "object",
+      "propertyNames": {
+        "allOf": [
+          {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          {
+            "not": {
+              "const": "off"
+            }
+          }
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/ociRegistryProvider"
+      }
+    }
+  },
+  "$defs": {
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "ociRegistryProvider": {
+      "type": "object",
+      "description": "All five credential environment names are distinct roles and must also be unique across other declared providers.",
+      "required": [
+        "kind",
+        "signing_key_env",
+        "signing_password_env",
+        "token_env",
+        "username_env",
+        "verification_key_env"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": ["registry"]
+            },
+            {
+              "required": ["registry_env"]
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": ["repository_prefix"]
+            },
+            {
+              "required": ["repository_prefix_env"]
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "kind": {
+          "const": "oci_registry"
+        },
+        "registry": {
+          "type": "string",
+          "pattern": "^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[1-9][0-9]{0,4})?$"
+        },
+        "registry_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "repository_prefix": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "repository_prefix_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "signing_key_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "signing_password_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "token_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "username_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "verification_key_env": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "repositoryPath": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$"
+    }
+  }
+}
