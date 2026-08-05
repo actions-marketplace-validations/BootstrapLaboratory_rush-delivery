@@ -480,11 +480,10 @@ behavioral or release gate below.
       and fail if current working-tree docs leaked into the snapshot.
 - [x] Never hand-edit the generated `v0.8.0` documentation, sidebars, or the
       released [`../schemas/v0.8.0`](../schemas/v0.8.0) snapshot.
-- [x] Add focused defect-reproduction tests before changing behavior: no-OCI
-      provider activation, credential projection, reserved env collisions, key
-      mismatch timing, and multi-target side effects. Only tests reproducing an
-      existing defect are expected to fail initially; compatibility goldens and
-      already-correct behavior tests must pass.
+- [x] Retain focused regression tests that fail if any corrected defect returns:
+      no-OCI provider activation, credential projection, reserved env
+      collisions, key-mismatch timing, and multi-target side effects. Keep
+      compatibility goldens and already-correct behavior tests passing.
 - [x] Capture current filesystem-only manifest and deploy-result fixtures as
       compatibility goldens.
 - [x] Add prototype-shaped-name regressions so absent `constructor`/`toString`
@@ -556,11 +555,11 @@ results can be accepted.
 
 ### Phase 0 Exit Gate
 
-- [x] Released docs are frozen from the tag, each defect reproduction fails for
-      its expected reason, compatibility/positive tests pass, clean-clone
+- [x] Released docs are frozen from the tag, each corrected defect has a focused
+      retained regression, compatibility/positive tests pass, clean-clone
       self-check is independent of host-generated SDK state, the live registry
-      harness has bounded and classified failure behavior, and no current root
-      documentation has been edited yet.
+      harness has bounded and classified failure behavior, and baseline review
+      completed before current root documentation changed.
 
 ## Phase 1: Correct Provider Activation And Environment Ownership
 
@@ -718,7 +717,7 @@ results can be accepted.
 - [x] Scanner-integrity tests reject absent/non-array `matches`, missing IDs,
       malformed vulnerability entries, and unsupported severities while
       accepting an explicit empty `matches` array.
-- [x] The documented empty Grype configuration is accepted by the pinned Grype
+- [ ] The documented empty Grype configuration is accepted by the pinned Grype
       image in live acceptance. Do not manufacture a database-dependent
       “narrowly ignored CVE” fixture against Grype's drifting network database.
       If a non-empty exception is ever checked in, require a separate governed
@@ -1251,7 +1250,7 @@ provider documentation during implementation and link those sources.
 
 ### Upgrade Guide
 
-- [x] Add a `v0.8.0` to `v0.8.1` upgrade checklist to the production guide and
+- [ ] Add a `v0.8.0` to `v0.8.1` upgrade checklist to the production guide and
       GitHub Release notes.
 - [x] State that filesystem-only consumers need no `.dagger` or credential
       additions for OCI and that a globally supplied named provider no longer
