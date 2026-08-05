@@ -26,13 +26,13 @@ cleanup_pending_module() {
 
 validate_state_file() {
 	local state_file="$1"
-	local output_root="${OCI_V081_MATRIX_LIVE_OUTPUT_ROOT-}"
-	local output_marker="${output_root}/.rush-delivery-v081-live-owned"
+	local work_root="${OCI_V081_MATRIX_FAULT_WORK_ROOT-}"
+	local output_marker="${work_root}/.rush-delivery-v081-live-owned"
 	local marker_contents
 
-	[[ ${state_file} == /* && ${output_root} == /* &&
-		${state_file} == "${output_root}/state/finalization-fault-module" &&
-		-d ${output_root} && ! -L ${output_root} &&
+	[[ ${state_file} == /* && ${work_root} == /* &&
+		${state_file} == "${work_root}/state/finalization-fault-module" &&
+		-d ${work_root} && ! -L ${work_root} &&
 		-f ${output_marker} && ! -L ${output_marker} ]] || {
 		printf 'v0.8.1 finalization fault state path is not bound to the live output\n' >&2
 		return 1

@@ -6,6 +6,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   readlink,
   rm,
@@ -18,6 +19,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  assertProtectedScanCapacity,
+  MAX_PROTECTED_SCAN_BYTES,
+  MAX_PROTECTED_SCAN_FILES,
+} from "./scripts/lib/oci-v081-protected-scan-limits.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +48,10 @@ const daggerStubPath = path.join(
   repoRoot,
   "test/scripts/stub-oci-v081-matrix-dagger.mjs",
 );
+const realFaultHookPath = path.join(
+  repoRoot,
+  "test/scripts/configure-oci-v081-finalization-fault.sh",
+);
 const gitSha = "0123456789abcdef0123456789abcdef01234567";
 
 async function runBash(source: string, args: string[] = []) {
@@ -64,6 +74,48 @@ async function buildFixture(
 
 function sha256(contents: Buffer | string): string {
   return `sha256:${createHash("sha256").update(contents).digest("hex")}`;
+}
+
+function registryInventoryVersion(
+  digest: string,
+  registryVersionId: number,
+  tags: string[] = [`sha-${gitSha}`],
+) {
+  return {
+    created_at: "2026-08-05T00:00:00.000Z",
+    digest,
+    registry_version_id: registryVersionId,
+    subject: tags.includes(`sha-${gitSha}`),
+    tags,
+  };
+}
+
+function cosignInventoryVersions(
+  _subjectDigest: string,
+  firstRegistryVersionId: number,
+) {
+  return ["a", "b"].map((digestCharacter, index) =>
+    registryInventoryVersion(
+      `sha256:${digestCharacter.repeat(64)}`,
+      firstRegistryVersionId + index,
+      [],
+    ),
+  );
+}
+
+function registryInventoryEvent(
+  target: string,
+  version: ReturnType<typeof registryInventoryVersion>,
+  sequence: number,
+) {
+  return {
+    ...version,
+    operation: version.subject
+      ? "subject-published"
+      : "package-version-present",
+    sequence,
+    target,
+  };
 }
 
 test("v0.8.1 deterministic matrix names every executable scenario and passes shell syntax", async () => {
@@ -331,6 +383,47 @@ test("deferred live fixtures cover multi-target preparation and key-preflight de
       "control-plane-api",
       "matrix-worker",
     ]);
+    const fixtureProjects: Array<[string, string[]]> = [
+      [success, ["control-plane-api", "matrix-worker"]],
+      [
+        finalizationFailure,
+        ["control-plane-api", "matrix-worker", "matrix-later"],
+      ],
+    ];
+    for (const [fixture, expectedProjects] of fixtureProjects) {
+      const rush = JSON.parse(
+        await readFile(path.join(fixture, "rush.json"), "utf8"),
+      );
+      assert.deepEqual(
+        new Set(
+          rush.projects.map(
+            ({ packageName }: { packageName: string }) => packageName,
+          ),
+        ),
+        new Set(expectedProjects),
+      );
+      const lockfile = await readFile(
+        path.join(fixture, "common/config/rush/pnpm-lock.yaml"),
+        "utf8",
+      );
+      for (const project of expectedProjects) {
+        assert.match(lockfile, new RegExp(`@rush-temp/${project}`, "u"));
+      }
+      for (const project of expectedProjects.slice(1)) {
+        const packageDefinition = JSON.parse(
+          await readFile(
+            path.join(fixture, "apps", project, "package.json"),
+            "utf8",
+          ),
+        );
+        assert.deepEqual(Object.keys(packageDefinition.scripts).sort(), [
+          "build",
+          "lint",
+          "test",
+          "verify",
+        ]);
+      }
+    }
     assert.match(
       await readFile(
         path.join(failure, ".dagger/package/targets/matrix-worker.yaml"),
@@ -423,6 +516,117 @@ test("deferred live runner is one-shot, hard-bounded, and requires independent z
   }
 });
 
+test("successful live mutation remains completed after crossing the publication boundary", async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(tmpdir(), "rush-delivery-v081-successful-mutation-"),
+  );
+  const capturedLog = path.join(temporaryRoot, "package.log");
+
+  try {
+    await writeFile(
+      capturedLog,
+      "[package] OCI publication boundary crossed; ordered finalization is starting.\n",
+    );
+    const { stdout } = await runBash(
+      'source "$1"; oci_v081_matrix_classify_mutation_state "$2" none 0',
+      [libraryPath, capturedLog],
+    );
+    assert.equal(stdout.trim(), "completed");
+  } finally {
+    await rm(temporaryRoot, { force: true, recursive: true });
+  }
+});
+
+test("prepublication acceptance rejects a crossed boundary despite a zero-inventory hook", async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(tmpdir(), "rush-delivery-v081-prepublication-boundary-"),
+  );
+  const executableDirectory = path.join(temporaryRoot, "bin");
+  const daggerPath = path.join(executableDirectory, "dagger");
+  const inventoryHook = path.join(temporaryRoot, "inventory-hook.mjs");
+  const fixture = path.join(temporaryRoot, "fixture");
+  const deployEnvFile = path.join(temporaryRoot, "deploy.env");
+  const dockerConfigFile = path.join(temporaryRoot, "docker-config.json");
+  const packageOutput = path.join(temporaryRoot, "package-output");
+  const capturedLog = path.join(temporaryRoot, "package.log");
+  const stateDirectory = path.join(temporaryRoot, "state");
+  const inventoryEvidence = path.join(temporaryRoot, "inventory.json");
+  const inventoryLog = path.join(temporaryRoot, "inventory.log");
+
+  try {
+    await Promise.all([
+      mkdir(executableDirectory, { recursive: true }),
+      mkdir(fixture, { recursive: true }),
+    ]);
+    await writeFile(
+      daggerPath,
+      [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        "printf '%s\\n' '[package] OCI publication boundary crossed; ordered finalization is starting.' >&2",
+        "printf '%s\\n' 'OCI application image preparation failed: Grype scan/policy.' >&2",
+        "exit 1",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      inventoryHook,
+      [
+        "#!/usr/bin/env node",
+        'import { writeFileSync } from "node:fs";',
+        "const [assertion, registry, repositoryPrefix, targetsCsv, outputPath] = process.argv.slice(2);",
+        'const targets = targetsCsv.split(",");',
+        "const repositories = Object.fromEntries(targets.map((target) => [target, { inspected: true, package_version_count: 0, publication_count: 0, versions: [] }]));",
+        'writeFileSync(outputPath, JSON.stringify({ assertion, event_order: "target-list-then-registry-version-id", events: [], registry, repositories, repository_prefix: repositoryPrefix, targets }) + "\\n");',
+        "",
+      ].join("\n"),
+    );
+    await Promise.all([chmod(daggerPath, 0o755), chmod(inventoryHook, 0o755)]);
+    await writeFile(
+      deployEnvFile,
+      [
+        "OCI_MATRIX_USERNAME=boundary-user",
+        "OCI_MATRIX_TOKEN=BOUNDARY_TOKEN_SENTINEL_112233",
+        "OCI_MATRIX_SIGNING_KEY=BOUNDARY_PRIVATE_SENTINEL_223344",
+        "OCI_MATRIX_SIGNING_PASSWORD=BOUNDARY_PASSWORD_SENTINEL_334455",
+        "OCI_MATRIX_VERIFICATION_KEY=BOUNDARY_PUBLIC_SENTINEL_445566",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      dockerConfigFile,
+      `${JSON.stringify({ auths: { "registry.example": { auth: "BOUNDARY_AUTH_SENTINEL_556677" } } })}\n`,
+    );
+
+    await assert.rejects(
+      runBash(
+        [
+          'source "$1"',
+          'export PATH="$2:$PATH"',
+          'oci_v081_matrix_expect_prepublication_failure_once multi-target-preparation-failure "$3" "$4" "$5" "$6" "$7" "$8" registry.example matrix/adversarial "$9" "${10}" "${11}"',
+        ].join("; "),
+        [
+          libraryPath,
+          executableDirectory,
+          fixture,
+          deployEnvFile,
+          packageOutput,
+          capturedLog,
+          stateDirectory,
+          inventoryHook,
+          inventoryEvidence,
+          inventoryLog,
+          dockerConfigFile,
+        ],
+      ),
+      /prepublication scenario crossed the publication boundary/u,
+    );
+    await assert.rejects(readFile(inventoryEvidence), /ENOENT/u);
+  } finally {
+    await rm(temporaryRoot, { force: true, recursive: true });
+  }
+});
+
 test("live runner exposes credential-gated execution for every deferred release scenario", async () => {
   const runner = await readFile(runnerPath, "utf8");
   for (const scenario of [
@@ -443,6 +647,8 @@ test("live runner exposes credential-gated execution for every deferred release 
   assert.match(runner, /OCI_V081_MATRIX_INVENTORY_HOOK/u);
   assert.match(runner, /OCI_V081_MATRIX_CLEANUP_HOOK/u);
   assert.match(runner, /OCI_V081_MATRIX_FAULT_HOOK/u);
+  assert.match(runner, /OCI_V081_MATRIX_CANDIDATE_SHA/u);
+  assert.doesNotMatch(runner, /git .*rev-parse HEAD/u);
   assert.match(runner, /randomBytes\(16\)/u);
   assert.match(runner, /trap cleanup_live_scenario EXIT/u);
   assert.match(runner, /pre-mutation-inventory\.json/u);
@@ -450,6 +656,18 @@ test("live runner exposes credential-gated execution for every deferred release 
   assert.match(runner, /fault-teardown\.log/u);
   assert.match(runner, /registry-inventory\.json/u);
   assert.match(runner, /package\.log/u);
+  assert.match(runner, /rush-delivery-v081-live-work\.\$\{scenario\}\.XXXXXX/u);
+  assert.match(runner, /oci_v081_matrix_publish_sanitized_output/u);
+  assert.match(runner, /oci_v081_matrix_write_namespace_record/u);
+  assert.match(
+    runner,
+    /OCI_V081_MATRIX_FAULT_WORK_ROOT="\$\{OCI_V081_MATRIX_LIVE_WORK_ROOT\}"/u,
+  );
+  assert.doesNotMatch(runner, /fixture="\$\{output_root\}\/fixture"/u);
+  assert.doesNotMatch(
+    runner,
+    /namespace cleanup or inspection failed[\s\S]{0,160}OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=/u,
+  );
 
   const library = await readFile(libraryPath, "utf8");
   assert.match(
@@ -470,6 +688,11 @@ test("live runner exposes credential-gated execution for every deferred release 
       ),
     );
   }
+  assert.match(library, /\[\[ -f \$\{source\} && ! -L \$\{source\}/u);
+  assert.match(
+    library,
+    /oci_v081_matrix_assert_protected_capture[\s\S]*?"\$\{staging_root\}"[\s\S]*?false/u,
+  );
 });
 
 test("credential-gated runner executes every deferred scenario with unique cleanup-bound namespaces", async () => {
@@ -512,31 +735,40 @@ test("credential-gated runner executes every deferred scenario with unique clean
         'import { writeFileSync } from "node:fs";',
         "const [assertion, registry, repositoryPrefix, targetsCsv, outputPath] = process.argv.slice(2);",
         'const targets = targetsCsv.split(",");',
+        'if (assertion !== "zero" && process.env.OCI_V081_MATRIX_INVENTORY_LEAK_VALUE) process.stdout.write(process.env.OCI_V081_MATRIX_INVENTORY_LEAK_VALUE + "\\n");',
         "const repositories = {};",
         "const events = [];",
+        'const subjectVersion = (digest, id) => ({ created_at: "2026-08-05T00:00:00.000Z", digest, registry_version_id: id, subject: true, tags: ["sha-0123456789abcdef0123456789abcdef01234567"] });',
+        'const cosignVersions = (_digest, index) => [{ created_at: "2026-08-05T00:00:01.000Z", digest: "sha256:" + String(index + 7).repeat(64), registry_version_id: 100 + index * 2, subject: false, tags: [] }, { created_at: "2026-08-05T00:00:02.000Z", digest: "sha256:" + String(index + 8).repeat(64), registry_version_id: 101 + index * 2, subject: false, tags: [] }];',
+        'const appendEvents = (target, versions) => { for (const version of versions) events.push({ ...version, operation: version.subject ? "subject-published" : "package-version-present", sequence: events.length + 1, target }); };',
         'if (assertion === "success") {',
         "  for (const [index, target] of targets.entries()) {",
         '    const digest = "sha256:" + String(index + 1).repeat(64);',
         '    const reference = registry + "/" + repositoryPrefix + "/" + target + "@" + digest;',
-        "    repositories[target] = { publication_count: 1, subject_digest: digest, reference, signature_verified: true, spdx_attestation_verified: true, provenance_attestation_verified: true };",
-        '    events.push({ operation: "subject-published", sequence: index + 1, target });',
+        "    const version = subjectVersion(digest, index + 1);",
+        "    const versions = [version, ...cosignVersions(digest, index)];",
+        "    repositories[target] = { inspected: true, package_version_count: versions.length, publication_count: 1, subject_digest: digest, reference, signature_verified: true, spdx_attestation_verified: true, provenance_attestation_verified: true, versions };",
+        "    appendEvents(target, versions);",
         "  }",
         '} else if (assertion === "ordered-partial") {',
         '  const firstDigest = "sha256:" + "1".repeat(64);',
         '  const failedDigest = "sha256:" + "2".repeat(64);',
         '  const firstReference = registry + "/" + repositoryPrefix + "/" + targets[0] + "@" + firstDigest;',
         '  const failedReference = registry + "/" + repositoryPrefix + "/" + targets[1] + "@" + failedDigest;',
-        "  repositories[targets[0]] = { publication_count: 1, reference: firstReference, subject_digest: firstDigest, signature_verified: true, spdx_attestation_verified: true, provenance_attestation_verified: true };",
-        '  repositories[targets[1]] = { inspected: true, publication_count: 1, reference: failedReference, subject_digest: failedDigest, status: "published-then-failed" };',
-        "  repositories[targets[2]] = { publication_count: 0 };",
-        '  events.push({ operation: "subject-published", sequence: 1, target: targets[0] });',
-        '  events.push({ operation: "subject-published", sequence: 2, target: targets[1] });',
+        "  const firstVersion = subjectVersion(firstDigest, 1);",
+        "  const failedVersion = subjectVersion(failedDigest, 2);",
+        "  const firstVersions = [firstVersion, ...cosignVersions(firstDigest, 0)];",
+        "  repositories[targets[0]] = { inspected: true, package_version_count: firstVersions.length, publication_count: 1, reference: firstReference, subject_digest: firstDigest, signature_verified: true, spdx_attestation_verified: true, provenance_attestation_verified: true, versions: firstVersions };",
+        '  repositories[targets[1]] = { inspected: true, package_version_count: 1, publication_count: 1, reference: failedReference, subject_digest: failedDigest, status: "published-then-failed", versions: [failedVersion] };',
+        "  repositories[targets[2]] = { inspected: true, package_version_count: 0, publication_count: 0, versions: [] };",
+        "  appendEvents(targets[0], firstVersions);",
+        "  appendEvents(targets[1], [failedVersion]);",
         '} else if (assertion === "zero") {',
-        "  for (const target of targets) repositories[target] = { publication_count: 0 };",
+        "  for (const target of targets) repositories[target] = { inspected: true, package_version_count: 0, publication_count: 0, versions: [] };",
         "} else {",
         '  throw new Error("unsupported synthetic inventory assertion");',
         "}",
-        'writeFileSync(outputPath, JSON.stringify({ assertion, events, repositories }) + "\\n", { mode: 0o600 });',
+        'writeFileSync(outputPath, JSON.stringify({ assertion, event_order: "target-list-then-registry-version-id", events, registry, repositories, repository_prefix: repositoryPrefix, targets }) + "\\n", { mode: 0o600 });',
         "",
       ].join("\n"),
     );
@@ -547,8 +779,9 @@ test("credential-gated runner executes every deferred scenario with unique clean
         'import { writeFileSync } from "node:fs";',
         "const [action, registry, repositoryPrefix, targetsCsv, outputPath] = process.argv.slice(2);",
         'if (action !== "inspect-and-clean") throw new Error("unsupported cleanup action");',
+        'if (process.env.OCI_V081_MATRIX_CLEANUP_LEAK_VALUE) process.stdout.write(process.env.OCI_V081_MATRIX_CLEANUP_LEAK_VALUE + "\\n");',
         'const targets = targetsCsv.split(",");',
-        "const repositories = Object.fromEntries(targets.map((target) => [target, { inspected: true, remaining_publication_count: 0 }]));",
+        "const repositories = Object.fromEntries(targets.map((target) => [target, { inspected: true, package_absent: true, remaining_publication_count: 0 }]));",
         'writeFileSync(outputPath, JSON.stringify({ assertion: "cleanup", cleanup_completed: true, registry, repositories, repository_prefix: repositoryPrefix }) + "\\n", { mode: 0o600 });',
         'process.stdout.write("safe cleanup hook output\\n");',
         "",
@@ -560,6 +793,7 @@ test("credential-gated runner executes every deferred scenario with unique clean
         "#!/usr/bin/env node",
         "const [action] = process.argv.slice(2);",
         'if (action !== "configure-finalization-failure" && action !== "teardown-finalization-failure") throw new Error("unsupported fault action");',
+        'if (action === "teardown-finalization-failure" && process.env.OCI_V081_MATRIX_FAULT_TEARDOWN_LEAK_VALUE) process.stdout.write(process.env.OCI_V081_MATRIX_FAULT_TEARDOWN_LEAK_VALUE + "\\n");',
         'process.stdout.write("safe fault hook " + action + "\\n");',
         "",
       ].join("\n"),
@@ -618,6 +852,7 @@ test("credential-gated runner executes every deferred scenario with unique clean
           env: {
             ...process.env,
             OCI_V081_MATRIX_CLEANUP_HOOK: cleanupHook,
+            OCI_V081_MATRIX_CANDIDATE_SHA: gitSha,
             OCI_V081_MATRIX_DEPLOY_ENV_FILE: deployEnvFile,
             OCI_V081_MATRIX_DOCKER_CONFIG_FILE: dockerConfigFile,
             OCI_V081_MATRIX_FAULT_HOOK: faultHook,
@@ -630,46 +865,189 @@ test("credential-gated runner executes every deferred scenario with unique clean
         },
       );
       assert.match(stdout, /checks passed; cleanup is armed/u);
-      const packageLog = await readFile(
-        path.join(outputRoot, "package.log"),
-        "utf8",
+      const cleanupEvidence = JSON.parse(
+        await readFile(path.join(outputRoot, "cleanup-inventory.json"), "utf8"),
       );
-      assert.match(packageLog, /safe package stdout/u);
-      assert.match(packageLog, /safe package stderr/u);
-      const providerSource = await readFile(
-        path.join(
-          outputRoot,
-          "fixture/.dagger/application-images/providers.yaml",
-        ),
-        "utf8",
-      );
-      const namespace = /repository_prefix:\s*(\S+)/u.exec(providerSource)?.[1];
+      const namespace = cleanupEvidence.repository_prefix;
       assert.match(
         namespace ?? "",
         new RegExp(`^matrix/synthetic/v081-${scenario}-[a-f0-9]{32}$`, "u"),
       );
       observedNamespaces.add(namespace ?? "");
-      const cleanupEvidence = JSON.parse(
-        await readFile(path.join(outputRoot, "cleanup-inventory.json"), "utf8"),
-      );
       assert.equal(cleanupEvidence.cleanup_completed, true);
       assert.equal(cleanupEvidence.repository_prefix, namespace);
+      const expectedStage =
+        scenario === "multi-target-success"
+          ? "none"
+          : scenario === "multi-target-preparation-failure"
+            ? "image-preparation"
+            : scenario === "multi-target-finalization-failure"
+              ? "registry-publication"
+              : scenario === "malformed-private-pem" ||
+                  scenario === "malformed-public-pem"
+                ? "credential-shape-preflight"
+                : "cosign-preflight";
+      const expectedMutation =
+        scenario === "multi-target-success"
+          ? "completed"
+          : scenario === "multi-target-finalization-failure"
+            ? "started"
+            : "not-started";
+      const expectedFaultState =
+        scenario === "multi-target-finalization-failure"
+          ? "succeeded"
+          : "not-required";
       assert.equal(
-        (
-          await stat(
-            path.join(outputRoot, "state/mutating-package-call.started"),
-          )
-        ).isFile(),
-        true,
+        await readFile(
+          path.join(outputRoot, "scenario-diagnostic.txt"),
+          "utf8",
+        ),
+        [
+          "schema=rush-delivery-v081-live-scenario-diagnostic/v2",
+          `scenario=${scenario}`,
+          "outcome=passed",
+          `observed_stage=${expectedStage}`,
+          `mutation_state=${expectedMutation}`,
+          `fault_teardown_state=${expectedFaultState}`,
+          "cleanup_state=succeeded",
+          "evidence_state=sanitized",
+          "registry=registry.example",
+          `repository_prefix=${namespace}`,
+          `targets=${cleanupEvidence ? Object.keys(cleanupEvidence.repositories).join(",") : ""}`,
+          "source_revision=0123456789abcdef0123456789abcdef01234567",
+          "",
+        ].join("\n"),
       );
-      if (scenario === "multi-target-finalization-failure") {
-        assert.match(
-          await readFile(path.join(outputRoot, "fault-teardown.log"), "utf8"),
-          /safe fault hook teardown-finalization-failure/u,
-        );
+      const retainedEntries = [
+        ".rush-delivery-v081-live-owned",
+        "cleanup-inventory.json",
+        "pre-mutation-inventory.json",
+        "registry-inventory.json",
+        "scenario-diagnostic.txt",
+        ...(scenario === "multi-target-success" ? ["package-output"] : []),
+      ].sort();
+      assert.deepEqual((await readdir(outputRoot)).sort(), retainedEntries);
+      await execFileAsync(process.execPath, [
+        verifierPath,
+        "protected-capture",
+        outputRoot,
+        deployEnvFile,
+        dockerConfigFile,
+        "false",
+      ]);
+      if (scenario === "multi-target-success") {
+        await execFileAsync(process.execPath, [
+          verifierPath,
+          "live-success",
+          path.join(outputRoot, "package-output"),
+          path.join(outputRoot, "registry-inventory.json"),
+          "control-plane-api,matrix-worker",
+          "registry.example",
+          namespace ?? "",
+        ]);
       }
     }
     assert.equal(observedNamespaces.size, scenarios.length);
+    const namespaceRecordNames = (
+      await readdir(path.join(temporaryRoot, "namespace-records"))
+    ).sort();
+    assert.equal(namespaceRecordNames.length, scenarios.length);
+    for (const scenario of scenarios) {
+      const recordName = namespaceRecordNames.find((name) =>
+        new RegExp(`^${scenario}-[a-f0-9]{32}\\.txt$`, "u").test(name),
+      );
+      assert.ok(recordName);
+      const namespaceRecord = await readFile(
+        path.join(temporaryRoot, "namespace-records", recordName),
+        "utf8",
+      );
+      assert.match(
+        namespaceRecord,
+        new RegExp(
+          [
+            "^schema=rush-delivery-v081-live-namespace/v1",
+            `scenario=${scenario}`,
+            "candidate_commit=[a-f0-9]{40}",
+            "registry=registry.example",
+            `repository_prefix=matrix/synthetic/v081-${scenario}-[a-f0-9]{32}`,
+            "targets=control-plane-api(?:,matrix-worker(?:,matrix-later)?)?",
+            "$",
+          ].join("\\n"),
+          "u",
+        ),
+      );
+    }
+
+    const unexpectedOutputRoot = path.join(
+      temporaryRoot,
+      "output-unexpected-failure",
+    );
+    const unexpectedFailure = spawnSync(
+      runnerPath,
+      ["--run-live-scenario", "multi-target-success", unexpectedOutputRoot],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          OCI_V081_MATRIX_CLEANUP_HOOK: cleanupHook,
+          OCI_V081_MATRIX_CANDIDATE_SHA: gitSha,
+          OCI_V081_MATRIX_DEPLOY_ENV_FILE: path.join(
+            temporaryRoot,
+            "multi-target-success.env",
+          ),
+          OCI_V081_MATRIX_DOCKER_CONFIG_FILE: dockerConfigFile,
+          OCI_V081_MATRIX_FAULT_HOOK: faultHook,
+          OCI_V081_MATRIX_INVENTORY_HOOK: inventoryHook,
+          OCI_V081_MATRIX_REGISTRY: "registry.example",
+          OCI_V081_MATRIX_REPOSITORY_PREFIX: "matrix/synthetic",
+          OCI_V081_MATRIX_STUB_UNEXPECTED_FAILURE: "true",
+          PATH: `${executableDirectory}:${process.env.PATH ?? ""}`,
+        },
+        timeout: 120_000,
+      },
+    );
+    assert.notEqual(unexpectedFailure.status, 0);
+    assert.deepEqual((await readdir(unexpectedOutputRoot)).sort(), [
+      ".rush-delivery-v081-live-owned",
+      "cleanup-inventory.json",
+      "pre-mutation-inventory.json",
+      "scenario-diagnostic.txt",
+    ]);
+    const unexpectedDiagnostic = (
+      await readFile(
+        path.join(unexpectedOutputRoot, "scenario-diagnostic.txt"),
+        "utf8",
+      )
+    )
+      .trimEnd()
+      .split("\n");
+    assert.deepEqual(unexpectedDiagnostic.slice(0, 9), [
+      "schema=rush-delivery-v081-live-scenario-diagnostic/v2",
+      "scenario=multi-target-success",
+      "outcome=failed",
+      "observed_stage=package-contract",
+      "mutation_state=unknown",
+      "fault_teardown_state=not-required",
+      "cleanup_state=succeeded",
+      "evidence_state=sanitized",
+      "registry=registry.example",
+    ]);
+    assert.match(
+      unexpectedDiagnostic[9],
+      /^repository_prefix=matrix\/synthetic\/v081-multi-target-success-[a-f0-9]{32}$/u,
+    );
+    assert.deepEqual(unexpectedDiagnostic.slice(10), [
+      "targets=control-plane-api,matrix-worker",
+      "source_revision=0123456789abcdef0123456789abcdef01234567",
+    ]);
+    await execFileAsync(process.execPath, [
+      verifierPath,
+      "protected-capture",
+      unexpectedOutputRoot,
+      path.join(temporaryRoot, "multi-target-success.env"),
+      dockerConfigFile,
+      "false",
+    ]);
 
     const leakedOutputRoot = path.join(temporaryRoot, "output-secret-leak");
     const rejectedLeak = spawnSync(
@@ -680,6 +1058,7 @@ test("credential-gated runner executes every deferred scenario with unique clean
         env: {
           ...process.env,
           OCI_V081_MATRIX_CLEANUP_HOOK: cleanupHook,
+          OCI_V081_MATRIX_CANDIDATE_SHA: gitSha,
           OCI_V081_MATRIX_DEPLOY_ENV_FILE: path.join(
             temporaryRoot,
             "multi-target-success.env",
@@ -699,7 +1078,135 @@ test("credential-gated runner executes every deferred scenario with unique clean
     assert.notEqual(rejectedLeak.status, 0);
     assert.equal(rejectedLeakOutput.includes(token), false);
     assert.match(rejectedLeakOutput, /contains a credential sentinel/u);
-    await assert.rejects(lstat(leakedOutputRoot), /ENOENT/u);
+    assert.deepEqual((await readdir(leakedOutputRoot)).sort(), [
+      ".rush-delivery-v081-live-owned",
+      "scenario-diagnostic.txt",
+    ]);
+    assert.match(
+      await readFile(
+        path.join(leakedOutputRoot, "scenario-diagnostic.txt"),
+        "utf8",
+      ),
+      /observed_stage=protected-output[\s\S]*evidence_state=quarantined/u,
+    );
+
+    for (const leakCase of [
+      {
+        envName: "OCI_V081_MATRIX_INVENTORY_LEAK_VALUE",
+        name: "inventory",
+        scenario: "multi-target-success",
+      },
+      {
+        envName: "OCI_V081_MATRIX_CLEANUP_LEAK_VALUE",
+        name: "cleanup",
+        scenario: "multi-target-success",
+      },
+      {
+        envName: "OCI_V081_MATRIX_FAULT_TEARDOWN_LEAK_VALUE",
+        name: "fault-teardown",
+        scenario: "multi-target-finalization-failure",
+      },
+    ]) {
+      const outputRoot = path.join(
+        temporaryRoot,
+        `output-${leakCase.name}-leak`,
+      );
+      const rejected = spawnSync(
+        runnerPath,
+        ["--run-live-scenario", leakCase.scenario, outputRoot],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            [leakCase.envName]: token,
+            OCI_V081_MATRIX_CLEANUP_HOOK: cleanupHook,
+            OCI_V081_MATRIX_CANDIDATE_SHA: gitSha,
+            OCI_V081_MATRIX_DEPLOY_ENV_FILE: path.join(
+              temporaryRoot,
+              `${leakCase.scenario}.env`,
+            ),
+            OCI_V081_MATRIX_DOCKER_CONFIG_FILE: dockerConfigFile,
+            OCI_V081_MATRIX_FAULT_HOOK: faultHook,
+            OCI_V081_MATRIX_INVENTORY_HOOK: inventoryHook,
+            OCI_V081_MATRIX_REGISTRY: "registry.example",
+            OCI_V081_MATRIX_REPOSITORY_PREFIX: "matrix/synthetic",
+            PATH: `${executableDirectory}:${process.env.PATH ?? ""}`,
+          },
+          timeout: 120_000,
+        },
+      );
+      const combined = `${rejected.stdout}${rejected.stderr}`;
+      assert.notEqual(rejected.status, 0);
+      assert.equal(combined.includes(token), false);
+      assert.deepEqual((await readdir(outputRoot)).sort(), [
+        ".rush-delivery-v081-live-owned",
+        "scenario-diagnostic.txt",
+      ]);
+      assert.match(
+        await readFile(
+          path.join(outputRoot, "scenario-diagnostic.txt"),
+          "utf8",
+        ),
+        /outcome=failed[\s\S]*observed_stage=protected-output[\s\S]*evidence_state=quarantined/u,
+      );
+    }
+
+    let repositoryHasHead = false;
+    try {
+      await execFileAsync("git", [
+        "-C",
+        repoRoot,
+        "rev-parse",
+        "--verify",
+        "HEAD",
+      ]);
+      repositoryHasHead = true;
+    } catch {
+      // Dagger self-check deliberately excludes Git metadata from module source.
+    }
+    if (repositoryHasHead) {
+      const realFaultOutputRoot = path.join(
+        temporaryRoot,
+        "output-real-finalization-fault",
+      );
+      const { stdout } = await execFileAsync(
+        runnerPath,
+        [
+          "--run-live-scenario",
+          "multi-target-finalization-failure",
+          realFaultOutputRoot,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            OCI_V081_MATRIX_CANDIDATE_SHA: gitSha,
+            OCI_V081_MATRIX_CLEANUP_HOOK: cleanupHook,
+            OCI_V081_MATRIX_DEPLOY_ENV_FILE: path.join(
+              temporaryRoot,
+              "multi-target-finalization-failure.env",
+            ),
+            OCI_V081_MATRIX_DOCKER_CONFIG_FILE: dockerConfigFile,
+            OCI_V081_MATRIX_FAULT_HOOK: realFaultHookPath,
+            OCI_V081_MATRIX_INVENTORY_HOOK: inventoryHook,
+            OCI_V081_MATRIX_REGISTRY: "ghcr.io",
+            OCI_V081_MATRIX_REPOSITORY_PREFIX:
+              "bootstraplaboratory/rush-delivery-v081-acceptance",
+            PATH: `${executableDirectory}:${process.env.PATH ?? ""}`,
+            RUNNER_TEMP: temporaryRoot,
+          },
+          timeout: 120_000,
+        },
+      );
+      assert.match(stdout, /checks passed; cleanup is armed/u);
+      assert.match(
+        await readFile(
+          path.join(realFaultOutputRoot, "scenario-diagnostic.txt"),
+          "utf8",
+        ),
+        /outcome=passed[\s\S]*observed_stage=registry-publication[\s\S]*mutation_state=started[\s\S]*fault_teardown_state=succeeded[\s\S]*cleanup_state=succeeded/u,
+      );
+    }
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
@@ -816,9 +1323,80 @@ test("live retained-output scanner rejects raw and derived credential canaries w
       ),
       false,
     );
+
+    const oldLimitRegressionRoot = path.join(
+      temporaryRoot,
+      "old-limit-regression",
+    );
+    await mkdir(oldLimitRegressionRoot);
+    for (let offset = 0; offset <= 20_000; offset += 250) {
+      const batch = [];
+      for (
+        let index = offset;
+        index < Math.min(offset + 250, 20_001);
+        index += 1
+      ) {
+        batch.push(
+          writeFile(
+            path.join(
+              oldLimitRegressionRoot,
+              `entry-${String(index).padStart(5, "0")}`,
+            ),
+            "",
+          ),
+        );
+      }
+      await Promise.all(batch);
+    }
+    await execFileAsync(process.execPath, [
+      verifierPath,
+      "protected-capture",
+      oldLimitRegressionRoot,
+      protectedValuesFile,
+      dockerConfigFile,
+      "false",
+    ]);
+
+    const lateCanaryPath = path.join(oldLimitRegressionRoot, "entry-20000");
+    await writeFile(lateCanaryPath, token);
+    const rejectedLateLeak = spawnSync(
+      process.execPath,
+      [
+        verifierPath,
+        "protected-capture",
+        oldLimitRegressionRoot,
+        protectedValuesFile,
+        dockerConfigFile,
+        "false",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(rejectedLateLeak.status, 0);
+    assert.equal(
+      `${rejectedLateLeak.stdout}${rejectedLateLeak.stderr}`.includes(token),
+      false,
+    );
+    assert.match(
+      `${rejectedLateLeak.stdout}${rejectedLateLeak.stderr}`,
+      /contains a credential sentinel/u,
+    );
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
+});
+
+test("live retained-output scanner keeps measured file and byte bounds strict", () => {
+  assert.equal(MAX_PROTECTED_SCAN_FILES, 30_000);
+  assert.equal(MAX_PROTECTED_SCAN_BYTES, 1024 * 1024 * 1024);
+  assert.doesNotThrow(() => assertProtectedScanCapacity(22_426, 100_722_029));
+  assert.throws(
+    () => assertProtectedScanCapacity(MAX_PROTECTED_SCAN_FILES + 1, 0),
+    /file-count bound/u,
+  );
+  assert.throws(
+    () => assertProtectedScanCapacity(0, MAX_PROTECTED_SCAN_BYTES + 1),
+    /byte bound/u,
+  );
 });
 
 test("key-failure profiles are independently constrained before live mutation", async () => {
@@ -862,6 +1440,75 @@ test("key-failure profiles are independently constrained before live mutation", 
   }
 });
 
+test("live zero verifier rejects referrer versions and incomplete event ledgers", async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(tmpdir(), "rush-delivery-v081-zero-ledger-"),
+  );
+  const evidencePath = path.join(temporaryRoot, "inventory.json");
+  const registry = "registry.example";
+  const repositoryPrefix = "matrix/v081-zero-ledger";
+  const target = "control-plane-api";
+  const emptyInventory = {
+    assertion: "zero",
+    event_order: "target-list-then-registry-version-id",
+    events: [],
+    registry,
+    repositories: {
+      [target]: {
+        inspected: true,
+        package_version_count: 0,
+        publication_count: 0,
+        versions: [],
+      },
+    },
+    repository_prefix: repositoryPrefix,
+    targets: [target],
+  };
+
+  try {
+    await writeFile(evidencePath, `${JSON.stringify(emptyInventory)}\n`);
+    const verifierArguments = [
+      verifierPath,
+      "live-zero-inventory",
+      evidencePath,
+      target,
+      registry,
+      repositoryPrefix,
+    ];
+    await execFileAsync(process.execPath, verifierArguments);
+
+    const referrerVersion = registryInventoryVersion(
+      `sha256:${"9".repeat(64)}`,
+      9,
+      [`sha256-${"9".repeat(64)}.att`],
+    );
+    const completeMutation = JSON.parse(JSON.stringify(emptyInventory));
+    completeMutation.repositories[target] = {
+      inspected: true,
+      package_version_count: 1,
+      publication_count: 0,
+      versions: [referrerVersion],
+    };
+    completeMutation.events.push(
+      registryInventoryEvent(target, referrerVersion, 1),
+    );
+    await writeFile(evidencePath, `${JSON.stringify(completeMutation)}\n`);
+    await assert.rejects(
+      execFileAsync(process.execPath, verifierArguments),
+      /found package versions/u,
+    );
+
+    completeMutation.events = [];
+    await writeFile(evidencePath, `${JSON.stringify(completeMutation)}\n`);
+    await assert.rejects(
+      execFileAsync(process.execPath, verifierArguments),
+      /event ledger does not exactly match package versions/u,
+    );
+  } finally {
+    await rm(temporaryRoot, { force: true, recursive: true });
+  }
+});
+
 test("live failure verifier requires zero inventory and stable published-then-failed evidence", async () => {
   const temporaryRoot = await mkdtemp(
     path.join(tmpdir(), "rush-delivery-v081-live-verifier-"),
@@ -874,16 +1521,27 @@ test("live failure verifier requires zero inventory and stable published-then-fa
   const mismatchLog = path.join(temporaryRoot, "mismatch.log");
   const partialInventory = path.join(temporaryRoot, "partial.json");
   const partialLog = path.join(temporaryRoot, "partial.log");
+  const registry = "registry.example";
+  const repositoryPrefix = "matrix/v081-live-verifier";
 
   try {
     await writeFile(
       zeroInventory,
       `${JSON.stringify({
         assertion: "zero",
+        event_order: "target-list-then-registry-version-id",
         events: [],
+        registry,
         repositories: {
-          "control-plane-api": { publication_count: 0 },
+          "control-plane-api": {
+            inspected: true,
+            package_version_count: 0,
+            publication_count: 0,
+            versions: [],
+          },
         },
+        repository_prefix: repositoryPrefix,
+        targets: ["control-plane-api"],
       })}\n`,
     );
     await writeFile(
@@ -918,6 +1576,8 @@ test("live failure verifier requires zero inventory and stable published-then-fa
         logFile,
         zeroInventory,
         "control-plane-api",
+        registry,
+        repositoryPrefix,
       ]);
     }
     await execFileAsync(process.execPath, [
@@ -927,6 +1587,8 @@ test("live failure verifier requires zero inventory and stable published-then-fa
       invalidLog,
       zeroInventory,
       "control-plane-api",
+      registry,
+      repositoryPrefix,
     ]);
     await execFileAsync(process.execPath, [
       verifierPath,
@@ -935,48 +1597,73 @@ test("live failure verifier requires zero inventory and stable published-then-fa
       mismatchLog,
       zeroInventory,
       "control-plane-api",
+      registry,
+      repositoryPrefix,
     ]);
 
+    const firstDigest = `sha256:${"1".repeat(64)}`;
+    const failedDigest = `sha256:${"2".repeat(64)}`;
+    const firstVersion = registryInventoryVersion(firstDigest, 1);
+    const failedVersion = registryInventoryVersion(failedDigest, 2);
+    const firstVersions = [
+      firstVersion,
+      ...cosignInventoryVersions(firstDigest, 10),
+    ];
+    const validPartialInventory = {
+      assertion: "ordered-partial",
+      event_order: "target-list-then-registry-version-id",
+      events: [
+        ...firstVersions.map((version, index) =>
+          registryInventoryEvent("control-plane-api", version, index + 1),
+        ),
+        registryInventoryEvent(
+          "matrix-worker",
+          failedVersion,
+          firstVersions.length + 1,
+        ),
+      ],
+      registry,
+      repositories: {
+        "control-plane-api": {
+          inspected: true,
+          package_version_count: firstVersions.length,
+          provenance_attestation_verified: true,
+          publication_count: 1,
+          reference: `${registry}/${repositoryPrefix}/control-plane-api@${firstDigest}`,
+          signature_verified: true,
+          spdx_attestation_verified: true,
+          subject_digest: firstDigest,
+          versions: firstVersions,
+        },
+        "matrix-worker": {
+          inspected: true,
+          package_version_count: 1,
+          publication_count: 1,
+          reference: `${registry}/${repositoryPrefix}/matrix-worker@${failedDigest}`,
+          status: "published-then-failed",
+          subject_digest: failedDigest,
+          versions: [failedVersion],
+        },
+        "matrix-later": {
+          inspected: true,
+          package_version_count: 0,
+          publication_count: 0,
+          versions: [],
+        },
+      },
+      repository_prefix: repositoryPrefix,
+      targets: ["control-plane-api", "matrix-worker", "matrix-later"],
+    };
     await writeFile(
       partialInventory,
-      `${JSON.stringify({
-        assertion: "ordered-partial",
-        events: [
-          {
-            operation: "subject-published",
-            sequence: 1,
-            target: "control-plane-api",
-          },
-          {
-            operation: "subject-published",
-            sequence: 2,
-            target: "matrix-worker",
-          },
-        ],
-        repositories: {
-          "control-plane-api": {
-            provenance_attestation_verified: true,
-            publication_count: 1,
-            signature_verified: true,
-            spdx_attestation_verified: true,
-          },
-          "matrix-worker": {
-            inspected: true,
-            publication_count: 1,
-            reference: `registry.example/matrix-worker@sha256:${"2".repeat(64)}`,
-            status: "published-then-failed",
-            subject_digest: `sha256:${"2".repeat(64)}`,
-          },
-          "matrix-later": { publication_count: 0 },
-        },
-      })}\n`,
+      `${JSON.stringify(validPartialInventory)}\n`,
     );
     await writeFile(
       partialLog,
       [
         'OCI package target "matrix-worker" failed during registry publish.',
         'Earlier published target "control-plane-api": registry.example/control-plane-api@sha256:abc.',
-        `Failed target "matrix-worker" published reference: registry.example/matrix-worker@sha256:${"2".repeat(64)}`,
+        `Failed target "matrix-worker" published reference: ${registry}/${repositoryPrefix}/matrix-worker@${failedDigest}`,
         'Later target "matrix-later" was not started.',
         "OCI publication is nontransactional.",
         "",
@@ -989,7 +1676,89 @@ test("live failure verifier requires zero inventory and stable published-then-fa
       partialLog,
       partialInventory,
       "control-plane-api,matrix-worker,matrix-later",
+      registry,
+      repositoryPrefix,
     ]);
+    const lateFailedVersion = registryInventoryVersion(
+      `sha256:${"4".repeat(64)}`,
+      40,
+      [],
+    );
+    const lateFinalizationInventory = JSON.parse(
+      JSON.stringify(validPartialInventory),
+    );
+    lateFinalizationInventory.repositories[
+      "matrix-worker"
+    ].package_version_count = 2;
+    lateFinalizationInventory.repositories["matrix-worker"].versions.push(
+      lateFailedVersion,
+    );
+    lateFinalizationInventory.events.push(
+      registryInventoryEvent(
+        "matrix-worker",
+        lateFailedVersion,
+        lateFinalizationInventory.events.length + 1,
+      ),
+    );
+    await writeFile(
+      partialInventory,
+      `${JSON.stringify(lateFinalizationInventory)}\n`,
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        verifierPath,
+        "live-failure",
+        "ordered-finalization",
+        partialLog,
+        partialInventory,
+        "control-plane-api,matrix-worker,matrix-later",
+        registry,
+        repositoryPrefix,
+      ]),
+      /Failed target is not independently proven published before failure/u,
+    );
+    const skippedVersion = registryInventoryVersion(
+      `sha256:${"3".repeat(64)}`,
+      3,
+      [`sha256-${"3".repeat(64)}.sig`],
+    );
+    const mutatedSkippedInventory = JSON.parse(
+      JSON.stringify(validPartialInventory),
+    );
+    mutatedSkippedInventory.repositories["matrix-later"] = {
+      inspected: true,
+      package_version_count: 1,
+      publication_count: 0,
+      versions: [skippedVersion],
+    };
+    mutatedSkippedInventory.events.push(
+      registryInventoryEvent(
+        "matrix-later",
+        skippedVersion,
+        mutatedSkippedInventory.events.length + 1,
+      ),
+    );
+    await writeFile(
+      partialInventory,
+      `${JSON.stringify(mutatedSkippedInventory)}\n`,
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        verifierPath,
+        "live-failure",
+        "ordered-finalization",
+        partialLog,
+        partialInventory,
+        "control-plane-api,matrix-worker,matrix-later",
+        registry,
+        repositoryPrefix,
+      ]),
+      /Later skipped target was mutated/u,
+    );
+    await writeFile(
+      partialInventory,
+      `${JSON.stringify(validPartialInventory)}\n`,
+    );
     const missingFailedPublication = JSON.parse(
       await readFile(partialInventory, "utf8"),
     );
@@ -1007,8 +1776,10 @@ test("live failure verifier requires zero inventory and stable published-then-fa
         partialLog,
         partialInventory,
         "control-plane-api,matrix-worker,matrix-later",
+        registry,
+        repositoryPrefix,
       ]),
-      /Failed target is not independently proven published before failure/u,
+      /incomplete package-version inventory/u,
     );
     missingFailedPublication.repositories["matrix-worker"].publication_count =
       1;
@@ -1034,8 +1805,10 @@ test("live failure verifier requires zero inventory and stable published-then-fa
         partialLog,
         partialInventory,
         "control-plane-api,matrix-worker,matrix-later",
+        registry,
+        repositoryPrefix,
       ]),
-      /Earlier target is not independently proven complete/u,
+      /incomplete package-version inventory/u,
     );
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
@@ -1051,12 +1824,20 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
   const targets = ["control-plane-api", "matrix-worker"];
   const artifacts: Record<string, unknown> = {};
   const repositories: Record<string, unknown> = {};
+  const events: Array<ReturnType<typeof registryInventoryEvent>> = [];
+  const registry = "registry.example";
+  const repositoryPrefix = "matrix";
 
   try {
     for (const [index, target] of targets.entries()) {
       const digest = `sha256:${String(index + 1).repeat(64)}`;
-      const repository = `registry.example/matrix/${target}`;
+      const repository = `${registry}/${repositoryPrefix}/${target}`;
       const reference = `${repository}@${digest}`;
+      const version = registryInventoryVersion(digest, index + 1);
+      const versions = [
+        version,
+        ...cosignInventoryVersions(digest, 100 + index * 2),
+      ];
       const evidenceRoot = `.dagger/runtime/evidence/${target}`;
       const evidenceContents = {
         provenance: `${JSON.stringify({ target, type: "provenance" })}\n`,
@@ -1103,13 +1884,21 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
         status: "published",
       };
       repositories[target] = {
+        inspected: true,
+        package_version_count: versions.length,
         provenance_attestation_verified: true,
         publication_count: 1,
         reference,
         signature_verified: true,
         spdx_attestation_verified: true,
         subject_digest: digest,
+        versions,
       };
+      for (const inventoryVersion of versions) {
+        events.push(
+          registryInventoryEvent(target, inventoryVersion, events.length + 1),
+        );
+      }
     }
     await mkdir(path.join(outputDirectory, ".dagger/runtime"), {
       recursive: true,
@@ -1122,12 +1911,12 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
       inventoryPath,
       `${JSON.stringify({
         assertion: "success",
-        events: targets.map((target, index) => ({
-          operation: "subject-published",
-          sequence: index + 1,
-          target,
-        })),
+        event_order: "target-list-then-registry-version-id",
+        events,
+        registry,
         repositories,
+        repository_prefix: repositoryPrefix,
+        targets,
       })}\n`,
     );
     await execFileAsync(process.execPath, [
@@ -1136,9 +1925,102 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
       outputDirectory,
       inventoryPath,
       targets.join(","),
+      registry,
+      repositoryPrefix,
     ]);
 
-    const overPublished = JSON.parse(await readFile(inventoryPath, "utf8"));
+    const validInventory = JSON.parse(await readFile(inventoryPath, "utf8"));
+    const withUntaggedHistory = JSON.parse(JSON.stringify(validInventory));
+    const historicalVersion = registryInventoryVersion(
+      `sha256:${"f".repeat(64)}`,
+      999,
+      [],
+    );
+    withUntaggedHistory.repositories[targets[0]].versions.push(
+      historicalVersion,
+    );
+    withUntaggedHistory.repositories[targets[0]].package_version_count += 1;
+    withUntaggedHistory.events.splice(
+      validInventory.repositories[targets[0]].versions.length,
+      0,
+      registryInventoryEvent(targets[0], historicalVersion, 0),
+    );
+    withUntaggedHistory.events.forEach(
+      (event: { sequence: number }, index: number) => {
+        event.sequence = index + 1;
+      },
+    );
+    await writeFile(inventoryPath, `${JSON.stringify(withUntaggedHistory)}\n`);
+    await execFileAsync(process.execPath, [
+      verifierPath,
+      "live-success",
+      outputDirectory,
+      inventoryPath,
+      targets.join(","),
+      registry,
+      repositoryPrefix,
+    ]);
+
+    const missingAttestationObject = JSON.parse(JSON.stringify(validInventory));
+    const removedVersion =
+      missingAttestationObject.repositories[targets[0]].versions.pop();
+    missingAttestationObject.repositories[targets[0]].package_version_count -=
+      1;
+    missingAttestationObject.events = missingAttestationObject.events.filter(
+      (event: { registry_version_id: number; target: string }) =>
+        event.target !== targets[0] ||
+        event.registry_version_id !== removedVersion.registry_version_id,
+    );
+    missingAttestationObject.events.forEach(
+      (event: { sequence: number }, index: number) => {
+        event.sequence = index + 1;
+      },
+    );
+    await writeFile(
+      inventoryPath,
+      `${JSON.stringify(missingAttestationObject)}\n`,
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        verifierPath,
+        "live-success",
+        outputDirectory,
+        inventoryPath,
+        targets.join(","),
+        registry,
+        repositoryPrefix,
+      ]),
+      /Independent registry evidence is incomplete/u,
+    );
+
+    const nonCanonicalInventory = JSON.parse(JSON.stringify(validInventory));
+    [nonCanonicalInventory.events[0], nonCanonicalInventory.events[1]] = [
+      nonCanonicalInventory.events[1],
+      nonCanonicalInventory.events[0],
+    ];
+    nonCanonicalInventory.events.forEach(
+      (event: { sequence: number }, index: number) => {
+        event.sequence = index + 1;
+      },
+    );
+    await writeFile(
+      inventoryPath,
+      `${JSON.stringify(nonCanonicalInventory)}\n`,
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        verifierPath,
+        "live-success",
+        outputDirectory,
+        inventoryPath,
+        targets.join(","),
+        registry,
+        repositoryPrefix,
+      ]),
+      /event ledger does not exactly match package versions/u,
+    );
+
+    const overPublished = JSON.parse(JSON.stringify(validInventory));
     overPublished.repositories[targets[0]].publication_count = 2;
     await writeFile(inventoryPath, `${JSON.stringify(overPublished)}\n`);
     await assert.rejects(
@@ -1148,15 +2030,16 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
         outputDirectory,
         inventoryPath,
         targets.join(","),
+        registry,
+        repositoryPrefix,
       ]),
-      /Independent registry evidence is incomplete/u,
+      /incomplete package-version inventory/u,
     );
 
     overPublished.repositories[targets[0]].publication_count = 1;
     overPublished.events.push({
-      operation: "subject-published",
-      sequence: 99,
-      target: targets[0],
+      ...overPublished.events[0],
+      sequence: overPublished.events.length + 1,
     });
     await writeFile(inventoryPath, `${JSON.stringify(overPublished)}\n`);
     await assert.rejects(
@@ -1166,8 +2049,10 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
         outputDirectory,
         inventoryPath,
         targets.join(","),
+        registry,
+        repositoryPrefix,
       ]),
-      /must contain one subject publication/u,
+      /event ledger does not exactly match package versions/u,
     );
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
@@ -1191,7 +2076,11 @@ test("live cleanup evidence proves every disposable repository absent", async ()
         repositories: Object.fromEntries(
           targets.map((target) => [
             target,
-            { inspected: true, remaining_publication_count: 0 },
+            {
+              inspected: true,
+              package_absent: true,
+              remaining_publication_count: 0,
+            },
           ]),
         ),
         repository_prefix: "matrix/v081-run-0123456789abcdef",
@@ -1207,6 +2096,21 @@ test("live cleanup evidence proves every disposable repository absent", async ()
     ]);
 
     const evidence = JSON.parse(await readFile(evidencePath, "utf8"));
+    delete evidence.repositories["matrix-worker"].package_absent;
+    await writeFile(evidencePath, `${JSON.stringify(evidence)}\n`);
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        verifierPath,
+        "live-cleanup",
+        evidencePath,
+        "registry.example",
+        "matrix/v081-run-0123456789abcdef",
+        targets.join(","),
+      ]),
+      /did not prove matrix-worker absent/u,
+    );
+
+    evidence.repositories["matrix-worker"].package_absent = true;
     evidence.repositories["matrix-worker"].remaining_publication_count = 1;
     await writeFile(evidencePath, `${JSON.stringify(evidence)}\n`);
     await assert.rejects(
@@ -1231,4 +2135,68 @@ test("matrix JavaScript helpers parse before any Dagger acceptance is attempted"
     execFileAsync(process.execPath, ["--check", verifierPath]),
     execFileAsync(process.execPath, ["--check", daggerStubPath]),
   ]);
+});
+
+test("live matrix retains exact allowlisted publication failure stages", async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(tmpdir(), "rush-delivery-v081-registry-stages-"),
+  );
+  const cases = [
+    [
+      'OCI package target "api" failed during registry publication authentication.',
+      "registry-publication-authentication",
+    ],
+    [
+      'OCI package target "api" failed during registry publication authorization.',
+      "registry-publication-authorization",
+    ],
+    [
+      'OCI package target "api" failed during registry publication transport.',
+      "registry-publication-transport",
+    ],
+    [
+      'OCI package target "api" failed during registry publication.',
+      "registry-publication",
+    ],
+    ['OCI package target "api" failed during Cosign sign.', "cosign-sign"],
+    [
+      'OCI package target "api" failed during Cosign attest-spdx.',
+      "cosign-attest-spdx",
+    ],
+    [
+      'OCI package target "api" failed during Cosign attest-provenance.',
+      "cosign-attest-provenance",
+    ],
+    [
+      'OCI package target "api" failed during Cosign verify-signature.',
+      "cosign-verify-signature",
+    ],
+    [
+      'OCI package target "api" failed during Cosign verify-spdx-attestation.',
+      "cosign-verify-spdx-attestation",
+    ],
+    [
+      'OCI package target "api" failed during Cosign verify-provenance-attestation.',
+      "cosign-verify-provenance-attestation",
+    ],
+  ] as const;
+
+  try {
+    for (const [message, expected] of cases) {
+      const log = path.join(temporaryRoot, `${expected}.log`);
+      await writeFile(log, `${message}\n`);
+      const { stdout } = await runBash(
+        'source "$1"; oci_v081_matrix_classify_failure_stage "$2"',
+        [libraryPath, log],
+      );
+      assert.equal(stdout.trim(), expected);
+      const { stdout: mutationState } = await runBash(
+        'source "$1"; oci_v081_matrix_classify_mutation_state "$2" "$3" 1',
+        [libraryPath, log, expected],
+      );
+      assert.equal(mutationState.trim(), "started");
+    }
+  } finally {
+    await rm(temporaryRoot, { force: true, recursive: true });
+  }
 });

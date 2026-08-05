@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { connect } from "../../sdk/core.js";
 import {
   buildCosignPreflightScript,
+  buildCosignPublicationCommandPlan,
   COSIGN_PREFLIGHT_BUSYBOX_IMAGE,
   COSIGN_PREFLIGHT_BUSYBOX_PATH,
 } from "../../src/application-images/cosign-plan.ts";
@@ -137,6 +138,47 @@ async function canDerivePublicKey(client, toolContainer, privateKey, password) {
   }
 }
 
+async function assertRegistryBundleFlagSupport(toolContainer) {
+  await Promise.all(
+    ["sign", "attest", "verify", "verify-attestation"].map((command) =>
+      toolContainer
+        .withExec([
+          "/ko-app/cosign",
+          command,
+          "--new-bundle-format=false",
+          "--help",
+        ])
+        .sync(),
+    ),
+  );
+}
+
+async function assertPublicationRedirectSupport(toolContainer) {
+  const reference = `registry.example/platform/api@sha256:${"a".repeat(64)}`;
+  const representativeStep = buildCosignPublicationCommandPlan(reference)[0];
+
+  assert.equal(representativeStep.stage, "sign");
+  assert.notEqual(representativeStep.redirectStdout, undefined);
+  assert.notEqual(representativeStep.redirectStdout, "/dev/null");
+
+  const helpArgs = [...representativeStep.args.slice(0, -1), "--help"];
+  const redirected = toolContainer.withExec(helpArgs, {
+    redirectStdout: representativeStep.redirectStdout,
+  });
+
+  await redirected.sync();
+  assert.match(
+    await redirected.file(representativeStep.redirectStdout).contents(),
+    /Usage:/u,
+  );
+
+  await assert.rejects(async () => {
+    await toolContainer
+      .withExec(helpArgs, { redirectStdout: "/dev/null" })
+      .sync();
+  });
+}
+
 await connect(async (client) => {
   const [cosignContainer, busyboxContainer] = await Promise.all([
     client.container().from(COSIGN_IMAGE).sync(),
@@ -149,6 +191,8 @@ await connect(async (client) => {
       { permissions: 0o555 },
     )
     .sync();
+  await assertRegistryBundleFlagSupport(toolContainer);
+  await assertPublicationRedirectSupport(toolContainer);
   const password = `engine-preflight-${randomBytes(16).toString("hex")}`;
   const otherPassword = `engine-preflight-${randomBytes(16).toString("hex")}`;
   const [primary, other] = await Promise.all([
@@ -246,4 +290,4 @@ await connect(async (client) => {
   );
 });
 
-process.stdout.write("Cosign preflight engine regression passed.\n");
+process.stdout.write("Cosign engine regressions passed.\n");

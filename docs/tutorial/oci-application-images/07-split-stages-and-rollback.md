@@ -458,12 +458,13 @@ tarball, checksum, artifact upload, and protected record shown here.
 
 Coordinate these lifecycles:
 
-- retain registry subject digests and signature/SPDX/provenance referrers for at
-  least as long as any environment can deploy or roll them back;
+- retain registry subject digests and their signature/combined-attestation
+  attachments for at least as long as any environment can deploy or roll them
+  back;
 - retain package archives, protected records, and old public keys for the same
   rollback/audit window;
 - treat `sha-<source-sha>` as navigation only; tag deletion/movement must not
-  delete the digest/referrers needed by retained records;
+  delete the subject or Cosign attachments needed by retained records;
 - keep target-platform pull identity valid for every retained private digest;
 - make project deploy scripts idempotent before automatically retrying Deploy;
 - retry pre-publication preparation after fixing inputs, but inspect registry
@@ -471,11 +472,12 @@ Coordinate these lifecycles:
   post-publication Cosign failure;
 - when a batch fails after a sibling target was published, inventory every
   reported canonical reference and apply explicit retain/delete policy to the
-  subject, navigation tag, and partial referrers.
+  subject, navigation tag, attachments, and tagged/untagged package versions.
 
 Registry cleanup is an external destructive operation. Require a reviewed list
-of exact digest/referrer/tag targets and retention approval; do not delete by a
-broad prefix or because a successful bundle was absent.
+of exact subject, attachment-tag, and package-version targets plus retention
+approval; do not delete by a broad prefix or because a successful bundle was
+absent.
 
 ## Unsigned Bundle Limitation
 

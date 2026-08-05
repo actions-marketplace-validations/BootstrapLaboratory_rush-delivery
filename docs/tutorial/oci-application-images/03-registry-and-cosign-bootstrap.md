@@ -406,7 +406,8 @@ failure of the no-credential contract.
 
 The five roles are distinct:
 
-- username and token authenticate the single publish and Cosign referrer writes;
+- username and token authenticate the subject publish plus Cosign's
+  digest-derived signature/attestation attachment-tag writes;
 - the encrypted private key signs the digest and two attestations;
 - the password decrypts that private key only inside framework-owned Cosign
   execution;

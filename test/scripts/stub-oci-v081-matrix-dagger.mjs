@@ -73,6 +73,11 @@ async function livePackage(repo, outputDirectory) {
   if (process.env.OCI_V081_MATRIX_STUB_LEAK_VALUE) {
     process.stdout.write(`${process.env.OCI_V081_MATRIX_STUB_LEAK_VALUE}\n`);
   }
+  if (process.env.OCI_V081_MATRIX_STUB_UNEXPECTED_FAILURE === "true") {
+    process.stderr.write("unexpected synthetic package failure\n");
+    process.exitCode = 1;
+    return;
+  }
   if (!privateKey.includes("BEGIN ENCRYPTED SIGSTORE PRIVATE KEY")) {
     process.stderr.write(
       "Application image signing env OCI_MATRIX_SIGNING_KEY must contain the expected PEM key.\n",
@@ -213,6 +218,29 @@ async function exportPackage() {
           status: "planned",
         },
       },
+      schema_version: "rush-delivery-package-manifest/v2",
+    });
+    return;
+  }
+  const plan = JSON.parse(
+    await readFile(path.join(repo, "ci/oci-plan.json"), "utf8"),
+  );
+  if (provider === "off" && plan.deploy_targets.length > 1) {
+    const sourceRevision =
+      option("git-sha") ?? "0123456789abcdef0123456789abcdef01234567";
+    await writeManifest(outputDirectory, {
+      artifacts: Object.fromEntries(
+        plan.deploy_targets.map((target) => [
+          target,
+          {
+            image: target,
+            kind: "oci_image",
+            platforms: ["linux/amd64"],
+            source_revision: sourceRevision,
+            status: "planned",
+          },
+        ]),
+      ),
       schema_version: "rush-delivery-package-manifest/v2",
     });
     return;

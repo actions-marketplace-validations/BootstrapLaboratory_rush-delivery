@@ -222,8 +222,13 @@ export function classifyCosignPreflightExitCode(
 export function buildCosignPublicationCommandPlan(
   imageReference: string,
 ): CosignCommandStep<CosignPublicationStage>[] {
-  const signingArgs = ["--key", PRIVATE_KEY_REFERENCE];
+  const signingArgs = [
+    "--new-bundle-format=false",
+    "--key",
+    PRIVATE_KEY_REFERENCE,
+  ];
   const verificationArgs = [
+    "--new-bundle-format=false",
     "--key",
     PUBLIC_KEY_REFERENCE,
     "--insecure-ignore-tlog",
@@ -240,7 +245,7 @@ export function buildCosignPublicationCommandPlan(
         ...signingArgs,
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-sign.stdout",
       stage: "sign",
     },
     {
@@ -257,7 +262,7 @@ export function buildCosignPublicationCommandPlan(
         ...signingArgs,
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-attest-spdx.stdout",
       stage: "attest-spdx",
     },
     {
@@ -274,12 +279,12 @@ export function buildCosignPublicationCommandPlan(
         ...signingArgs,
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-attest-provenance.stdout",
       stage: "attest-provenance",
     },
     {
       args: [COSIGN_BINARY, "verify", ...verificationArgs, imageReference],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-verify-signature.stdout",
       stage: "verify-signature",
     },
     {
@@ -291,7 +296,8 @@ export function buildCosignPublicationCommandPlan(
         "spdxjson",
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout:
+        "/tmp/rush-delivery-cosign-verify-spdx-attestation.stdout",
       stage: "verify-spdx-attestation",
     },
     {
@@ -303,7 +309,8 @@ export function buildCosignPublicationCommandPlan(
         "slsaprovenance1",
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout:
+        "/tmp/rush-delivery-cosign-verify-provenance-attestation.stdout",
       stage: "verify-provenance-attestation",
     },
   ];

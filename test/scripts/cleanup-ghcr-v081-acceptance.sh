@@ -10,6 +10,60 @@ OCI_V081_GHCR_CLEANUP_TEMP=""
 # shellcheck source=test/scripts/lib/oci-v081-ghcr-acceptance.sh
 source "${OCI_V081_GHCR_CLEANUP_LIB}"
 
+load_namespace_record() {
+	local record_path="$1"
+	local record_name
+	local scenario
+	local suffix
+	local expected_targets
+	local -a record_lines=()
+
+	[[ ${record_path} == /* && -f ${record_path} && ! -L ${record_path} &&
+		${record_path%/*} == */namespace-records ]] || {
+		printf 'v0.8.1 GHCR cleanup rejected an unsafe namespace record\n' >&2
+		return 2
+	}
+	mapfile -t record_lines <"${record_path}"
+	if ((${#record_lines[@]} != 6)) ||
+		[[ ${record_lines[0]} != 'schema=rush-delivery-v081-live-namespace/v1' ||
+			! ${record_lines[1]} =~ ^scenario=([a-z0-9-]+)$ ||
+			! ${record_lines[2]} =~ ^candidate_commit=[a-f0-9]{40}$ ||
+			${record_lines[3]} != 'registry=ghcr.io' ]]; then
+		printf 'v0.8.1 GHCR cleanup namespace record failed fixed-schema validation\n' >&2
+		return 2
+	fi
+	scenario="${record_lines[1]#scenario=}"
+	case "${scenario}" in
+	malformed-private-pem | malformed-public-pem | wrong-signing-password | invalid-key | mismatched-key)
+		expected_targets=control-plane-api
+		;;
+	multi-target-success | multi-target-preparation-failure)
+		expected_targets=control-plane-api,matrix-worker
+		;;
+	multi-target-finalization-failure)
+		expected_targets=control-plane-api,matrix-worker,matrix-later
+		;;
+	*)
+		printf 'v0.8.1 GHCR cleanup namespace record names an unsupported scenario\n' >&2
+		return 2
+		;;
+	esac
+	record_name="${record_path##*/}"
+	[[ ${record_name} =~ ^${scenario}-([a-f0-9]{32})\.txt$ ]] || {
+		printf 'v0.8.1 GHCR cleanup namespace record filename is invalid\n' >&2
+		return 2
+	}
+	suffix="${BASH_REMATCH[1]}"
+	OCI_V081_GHCR_CLEANUP_REGISTRY=ghcr.io
+	OCI_V081_GHCR_CLEANUP_REPOSITORY_PREFIX="bootstraplaboratory/rush-delivery-v081-acceptance/v081-${scenario}-${suffix}"
+	OCI_V081_GHCR_CLEANUP_TARGETS="${expected_targets}"
+	if [[ ${record_lines[4]} != "repository_prefix=${OCI_V081_GHCR_CLEANUP_REPOSITORY_PREFIX}" ||
+		${record_lines[5]} != "targets=${OCI_V081_GHCR_CLEANUP_TARGETS}" ]]; then
+		printf 'v0.8.1 GHCR cleanup namespace record coordinates are inconsistent\n' >&2
+		return 2
+	fi
+}
+
 cleanup_scratch() {
 	local original_status=$?
 
@@ -24,19 +78,22 @@ cleanup_scratch() {
 	exit "${original_status}"
 }
 
-[[ $# -eq 5 ]] || {
+if (($# == 3)) && [[ $1 == --namespace-record ]]; then
+	load_namespace_record "$2"
+	registry="${OCI_V081_GHCR_CLEANUP_REGISTRY}"
+	repository_prefix="${OCI_V081_GHCR_CLEANUP_REPOSITORY_PREFIX}"
+	targets_csv="${OCI_V081_GHCR_CLEANUP_TARGETS}"
+	evidence_file="$3"
+elif (($# == 5)) && [[ $1 == inspect-and-clean ]]; then
+	registry="$2"
+	repository_prefix="$3"
+	targets_csv="$4"
+	evidence_file="$5"
+else
 	printf 'Usage: %s inspect-and-clean REGISTRY REPOSITORY_PREFIX TARGETS_CSV EVIDENCE_FILE\n' "$0" >&2
-	exit 1
-}
-[[ $1 == inspect-and-clean ]] || {
-	printf 'v0.8.1 GHCR cleanup rejected an unsupported action\n' >&2
-	exit 1
-}
-
-registry="$2"
-repository_prefix="$3"
-targets_csv="$4"
-evidence_file="$5"
+	printf '   or: %s --namespace-record ABSOLUTE_RECORD_PATH EVIDENCE_FILE\n' "$0" >&2
+	exit 2
+fi
 
 oci_v081_ghcr_require_commands
 oci_v081_ghcr_validate_namespace "${registry}" "${repository_prefix}"

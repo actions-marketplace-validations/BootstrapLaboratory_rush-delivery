@@ -103,7 +103,7 @@ export async function finalizeOciPackageResults<T>(
         ...operations
           .slice(index + 1)
           .map(({ target }) => `Later target "${target}" was not started.`),
-        "OCI publication is nontransactional. Inspect the registry and clean up any published digest and referrer artifacts before retrying.",
+        "OCI publication is nontransactional. Inspect the registry and clean up any published digest, signature, and attestation artifacts before retrying.",
       ];
 
       throw new Error(lines.join("\n"));

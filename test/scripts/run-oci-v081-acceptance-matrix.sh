@@ -21,7 +21,19 @@ OCI_V081_MATRIX_LIVE_CLEANUP_EVIDENCE=""
 OCI_V081_MATRIX_LIVE_CLEANUP_LOG=""
 OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_LOG=""
 OCI_V081_MATRIX_LIVE_OUTPUT_ROOT=""
-OCI_V081_MATRIX_LIVE_OUTPUT_MARKER=""
+OCI_V081_MATRIX_LIVE_WORK_ROOT=""
+OCI_V081_MATRIX_LIVE_WORK_MARKER=""
+OCI_V081_MATRIX_LIVE_OUTPUT_SAFE=false
+OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=false
+OCI_V081_MATRIX_LIVE_SCENARIO=""
+OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=harness-execution
+OCI_V081_MATRIX_LIVE_MUTATION_STATE=unknown
+OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_STATE=not-required
+OCI_V081_MATRIX_LIVE_PRE_INVENTORY_VALIDATED=false
+OCI_V081_MATRIX_LIVE_REGISTRY_INVENTORY_VALIDATED=false
+OCI_V081_MATRIX_LIVE_CLEANUP_VALIDATED=false
+OCI_V081_MATRIX_LIVE_PACKAGE_EVIDENCE_VALIDATED=false
+OCI_V081_MATRIX_LIVE_SCENARIO_VALIDATED=false
 OCI_V081_MATRIX_FAULT_STATE_FILE=""
 
 # shellcheck source=test/scripts/lib/oci-v081-acceptance-matrix.sh
@@ -70,6 +82,9 @@ cleanup_live_scenario() {
 	local original_status=$?
 	local lifecycle_failed=false
 	local lifecycle_status
+	local registry_cleanup_state=not-required
+	local scenario_outcome=failed
+	local publish_status
 
 	trap - EXIT
 	set +e
@@ -85,10 +100,14 @@ cleanup_live_scenario() {
 		lifecycle_status=$?
 		if ((lifecycle_status != 0)); then
 			printf 'v0.8.1 live matrix fault teardown failed\n' >&2
+			OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_STATE=failed
 			lifecycle_failed=true
+		else
+			OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_STATE=succeeded
 		fi
 	fi
 	if [[ ${OCI_V081_MATRIX_LIVE_CLEANUP_ARMED} == true ]]; then
+		registry_cleanup_state=failed
 		oci_v081_matrix_cleanup_live_namespace \
 			"${OCI_V081_MATRIX_LIVE_CLEANUP_HOOK}" \
 			"${OCI_V081_MATRIX_LIVE_REGISTRY}" \
@@ -102,19 +121,56 @@ cleanup_live_scenario() {
 		if ((lifecycle_status != 0)); then
 			printf 'v0.8.1 live matrix namespace cleanup or inspection failed\n' >&2
 			lifecycle_failed=true
+		else
+			registry_cleanup_state=succeeded
+			OCI_V081_MATRIX_LIVE_CLEANUP_VALIDATED=true
 		fi
 	fi
 	if [[ ${lifecycle_failed} == true && ${original_status} -eq 0 ]]; then
 		original_status=1
 	fi
-	if ((original_status != 0)); then
-		if [[ -n ${OCI_V081_MATRIX_LIVE_OUTPUT_ROOT} &&
-			-f ${OCI_V081_MATRIX_LIVE_OUTPUT_MARKER} ]] &&
-			[[ $(<"${OCI_V081_MATRIX_LIVE_OUTPUT_MARKER}") == rush-delivery-v081-live-owned ]]; then
-			find "${OCI_V081_MATRIX_LIVE_OUTPUT_ROOT}" -depth -delete
-		else
-			printf 'v0.8.1 live matrix refused to remove an unowned failed output root\n' >&2
+	if [[ ${OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED} == true ]]; then
+		OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=protected-output
+		lifecycle_failed=true
+	fi
+	if [[ ${lifecycle_failed} == false && ${original_status} -eq 0 &&
+		${OCI_V081_MATRIX_LIVE_SCENARIO_VALIDATED} == true ]]; then
+		scenario_outcome=passed
+	fi
+	if [[ -n ${OCI_V081_MATRIX_LIVE_WORK_ROOT} &&
+		-f ${OCI_V081_MATRIX_LIVE_WORK_MARKER} ]] &&
+		[[ $(<"${OCI_V081_MATRIX_LIVE_WORK_MARKER}") == rush-delivery-v081-live-owned ]]; then
+		oci_v081_matrix_publish_sanitized_output \
+			"${OCI_V081_MATRIX_LIVE_WORK_ROOT}" \
+			"${OCI_V081_MATRIX_LIVE_OUTPUT_ROOT}" \
+			"${OCI_V081_MATRIX_LIVE_SCENARIO}" "${scenario_outcome}" \
+			"${OCI_V081_MATRIX_LIVE_OBSERVED_STAGE}" \
+			"${OCI_V081_MATRIX_LIVE_MUTATION_STATE}" \
+			"${OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_STATE}" \
+			"${registry_cleanup_state}" \
+			"${OCI_V081_MATRIX_LIVE_REGISTRY}" \
+			"${OCI_V081_MATRIX_LIVE_REPOSITORY_PREFIX}" \
+			"${OCI_V081_MATRIX_LIVE_TARGETS}" \
+			"${OCI_V081_MATRIX_LIVE_OUTPUT_SAFE}" \
+			"${OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED}" \
+			"${OCI_V081_MATRIX_LIVE_PRE_INVENTORY_VALIDATED}" \
+			"${OCI_V081_MATRIX_LIVE_REGISTRY_INVENTORY_VALIDATED}" \
+			"${OCI_V081_MATRIX_LIVE_CLEANUP_VALIDATED}" \
+			"${OCI_V081_MATRIX_LIVE_PACKAGE_EVIDENCE_VALIDATED}" \
+			"${OCI_V081_MATRIX_LIVE_DEPLOY_ENV_FILE}" \
+			"${OCI_V081_MATRIX_LIVE_DOCKER_CONFIG_FILE}"
+		publish_status=$?
+		if ((publish_status != 0)); then
+			printf 'v0.8.1 live matrix failed to publish sanitized diagnostic evidence\n' >&2
+			lifecycle_failed=true
 		fi
+		find "${OCI_V081_MATRIX_LIVE_WORK_ROOT}" -depth -delete || lifecycle_failed=true
+	else
+		printf 'v0.8.1 live matrix refused an unowned live work root\n' >&2
+		lifecycle_failed=true
+	fi
+	if [[ ${lifecycle_failed} == true ]]; then
+		original_status=1
 	fi
 	exit "${original_status}"
 }
@@ -179,6 +235,22 @@ run_live_scenario() {
 	local pre_inventory_evidence
 	local pre_inventory_log
 	local fault_log
+	local artifact_parent
+	local external_parent
+	local candidate_commit
+	local namespace_record_root
+
+	OCI_V081_MATRIX_LIVE_SCENARIO="${scenario}"
+	OCI_V081_MATRIX_LIVE_OUTPUT_SAFE=false
+	OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=false
+	OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=harness-execution
+	OCI_V081_MATRIX_LIVE_MUTATION_STATE=unknown
+	OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_STATE=not-required
+	OCI_V081_MATRIX_LIVE_PRE_INVENTORY_VALIDATED=false
+	OCI_V081_MATRIX_LIVE_REGISTRY_INVENTORY_VALIDATED=false
+	OCI_V081_MATRIX_LIVE_CLEANUP_VALIDATED=false
+	OCI_V081_MATRIX_LIVE_PACKAGE_EVIDENCE_VALIDATED=false
+	OCI_V081_MATRIX_LIVE_SCENARIO_VALIDATED=false
 
 	case "${scenario}" in
 	malformed-private-pem | malformed-public-pem | wrong-signing-password | invalid-key | mismatched-key)
@@ -215,35 +287,59 @@ run_live_scenario() {
 		printf 'v0.8.1 live matrix inventory and cleanup hooks must be absolute executables\n' >&2
 		return 1
 	}
-	[[ ! -e ${output_root} && ! -L ${output_root} ]] || {
+	artifact_parent="${output_root%/*}"
+	external_parent="${artifact_parent%/*}"
+	[[ ${output_root} == /* && ! -e ${output_root} && ! -L ${output_root} &&
+		-d ${artifact_parent} && ! -L ${artifact_parent} &&
+		-d ${external_parent} && ! -L ${external_parent} ]] || {
 		printf 'v0.8.1 live matrix output root already exists\n' >&2
 		return 1
 	}
-	mkdir -p "${output_root}"
-	OCI_V081_MATRIX_LIVE_OUTPUT_ROOT="${output_root}"
-	OCI_V081_MATRIX_LIVE_OUTPUT_MARKER="${output_root}/.rush-delivery-v081-live-owned"
-	printf 'rush-delivery-v081-live-owned\n' >"${OCI_V081_MATRIX_LIVE_OUTPUT_MARKER}"
-	export OCI_V081_MATRIX_LIVE_OUTPUT_ROOT
-	trap cleanup_live_scenario EXIT
 	random_suffix="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(16).toString("hex"))')"
 	[[ ${random_suffix} =~ ^[a-f0-9]{32}$ ]] || {
 		printf 'v0.8.1 live matrix failed to create a unique namespace\n' >&2
 		return 1
 	}
 	repository_prefix="${repository_prefix_base}/v081-${scenario}-${random_suffix}"
-	fixture="${output_root}/fixture"
-	package_output="${output_root}/package-output"
-	captured_log="${output_root}/package.log"
-	state_directory="${output_root}/state"
-	inventory_evidence="${output_root}/registry-inventory.json"
-	inventory_log="${output_root}/registry-inventory.log"
-	pre_inventory_evidence="${output_root}/pre-mutation-inventory.json"
-	pre_inventory_log="${output_root}/pre-mutation-inventory.log"
-	fault_log="${output_root}/fault-configure.log"
+	candidate_commit="${OCI_V081_MATRIX_CANDIDATE_SHA-}"
+	[[ ${candidate_commit} =~ ^[a-f0-9]{40}$ ]] || {
+		printf 'v0.8.1 live matrix requires the exact candidate commit SHA\n' >&2
+		return 1
+	}
+	namespace_record_root="${artifact_parent}/namespace-records"
+	if [[ -e ${namespace_record_root} || -L ${namespace_record_root} ]]; then
+		[[ -d ${namespace_record_root} && ! -L ${namespace_record_root} ]] || {
+			printf 'v0.8.1 live matrix namespace-record root is unsafe\n' >&2
+			return 1
+		}
+	else
+		mkdir -m 700 "${namespace_record_root}"
+	fi
+	oci_v081_matrix_write_namespace_record \
+		"${namespace_record_root}/${scenario}-${random_suffix}.txt" "${scenario}" \
+		"${candidate_commit}" "${registry}" "${repository_prefix}" \
+		"${expected_targets}"
+	printf 'v0.8.1 live matrix registered disposable namespace %s/%s\n' \
+		"${registry}" "${repository_prefix}"
+	OCI_V081_MATRIX_LIVE_WORK_ROOT="$(
+		mktemp -d \
+			"${external_parent}/rush-delivery-v081-live-work.${scenario}.XXXXXX"
+	)"
+	chmod 700 "${OCI_V081_MATRIX_LIVE_WORK_ROOT}"
+	OCI_V081_MATRIX_LIVE_WORK_MARKER="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/.rush-delivery-v081-live-owned"
+	printf 'rush-delivery-v081-live-owned\n' >"${OCI_V081_MATRIX_LIVE_WORK_MARKER}"
+	chmod 600 "${OCI_V081_MATRIX_LIVE_WORK_MARKER}"
+	OCI_V081_MATRIX_LIVE_OUTPUT_ROOT="${output_root}"
+	fixture="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/fixture"
+	package_output="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/package-output"
+	captured_log="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/package.log"
+	state_directory="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/state"
+	inventory_evidence="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/registry-inventory.json"
+	inventory_log="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/registry-inventory.log"
+	pre_inventory_evidence="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/pre-mutation-inventory.json"
+	pre_inventory_log="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/pre-mutation-inventory.log"
+	fault_log="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/fault-configure.log"
 
-	oci_v081_matrix_build_live_fixture \
-		"${fixture_mode}" "${fixture}" "${registry}" "${repository_prefix}"
-	OCI_V081_MATRIX_LIVE_CLEANUP_ARMED=true
 	OCI_V081_MATRIX_LIVE_CLEANUP_HOOK="${cleanup_hook}"
 	OCI_V081_MATRIX_LIVE_FAULT_HOOK="${fault_hook}"
 	OCI_V081_MATRIX_LIVE_REGISTRY="${registry}"
@@ -251,17 +347,22 @@ run_live_scenario() {
 	OCI_V081_MATRIX_LIVE_TARGETS="${expected_targets}"
 	OCI_V081_MATRIX_LIVE_DEPLOY_ENV_FILE="${deploy_env_file}"
 	OCI_V081_MATRIX_LIVE_DOCKER_CONFIG_FILE="${docker_config_file}"
-	OCI_V081_MATRIX_LIVE_CLEANUP_EVIDENCE="${output_root}/cleanup-inventory.json"
-	OCI_V081_MATRIX_LIVE_CLEANUP_LOG="${output_root}/cleanup.log"
-	OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_LOG="${output_root}/fault-teardown.log"
+	OCI_V081_MATRIX_LIVE_CLEANUP_EVIDENCE="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/cleanup-inventory.json"
+	OCI_V081_MATRIX_LIVE_CLEANUP_LOG="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/cleanup.log"
+	OCI_V081_MATRIX_LIVE_FAULT_TEARDOWN_LOG="${OCI_V081_MATRIX_LIVE_WORK_ROOT}/fault-teardown.log"
 	trap cleanup_live_scenario EXIT
+	oci_v081_matrix_build_live_fixture \
+		"${fixture_mode}" "${fixture}" "${registry}" "${repository_prefix}"
+	OCI_V081_MATRIX_LIVE_CLEANUP_ARMED=true
 
 	oci_v081_matrix_capture_inventory \
 		zero "${inventory_hook}" "${registry}" "${repository_prefix}" \
 		"${expected_targets}" "${pre_inventory_evidence}" \
 		"${pre_inventory_log}" "${deploy_env_file}" "${docker_config_file}"
 	node "${OCI_V081_MATRIX_VERIFY}" live-zero-inventory \
-		"${pre_inventory_evidence}" "${expected_targets}"
+		"${pre_inventory_evidence}" "${expected_targets}" \
+		"${registry}" "${repository_prefix}"
+	OCI_V081_MATRIX_LIVE_PRE_INVENTORY_VALIDATED=true
 	case "${scenario}" in
 	malformed-private-pem | malformed-public-pem | wrong-signing-password | invalid-key | mismatched-key | multi-target-preparation-failure)
 		oci_v081_matrix_expect_prepublication_failure_once \
@@ -281,7 +382,8 @@ run_live_scenario() {
 		;;
 	multi-target-finalization-failure)
 		OCI_V081_MATRIX_FAULT_STATE_FILE="${state_directory}/finalization-fault-module"
-		export OCI_V081_MATRIX_FAULT_STATE_FILE
+		OCI_V081_MATRIX_FAULT_WORK_ROOT="${OCI_V081_MATRIX_LIVE_WORK_ROOT}"
+		export OCI_V081_MATRIX_FAULT_STATE_FILE OCI_V081_MATRIX_FAULT_WORK_ROOT
 		oci_v081_matrix_run_live_finalization_failure_once \
 			"${fixture}" "${deploy_env_file}" "${package_output}" \
 			"${captured_log}" "${state_directory}" \
@@ -294,6 +396,11 @@ run_live_scenario() {
 		return 1
 		;;
 	esac
+	OCI_V081_MATRIX_LIVE_REGISTRY_INVENTORY_VALIDATED=true
+	if [[ ${scenario} == multi-target-success ]]; then
+		OCI_V081_MATRIX_LIVE_PACKAGE_EVIDENCE_VALIDATED=true
+	fi
+	OCI_V081_MATRIX_LIVE_SCENARIO_VALIDATED=true
 	printf 'v0.8.1 live matrix scenario %s checks passed; cleanup is armed and evidence is retained at %s\n' \
 		"${scenario}" "${output_root}"
 }
@@ -312,6 +419,40 @@ run_named_provider_dry_run() {
 		--application-image-provider=ghcr \
 		export --path="${output}"
 	node "${OCI_V081_MATRIX_VERIFY}" named-dry "${output}"
+}
+
+run_multi_target_provider_off_build_smoke() {
+	local mode
+	local targets
+	local fixture
+	local output
+
+	for mode in live-multi-target-success live-multi-target-finalization-failure; do
+		case "${mode}" in
+		live-multi-target-success)
+			targets=control-plane-api,matrix-worker
+			;;
+		live-multi-target-finalization-failure)
+			targets=control-plane-api,matrix-worker,matrix-later
+			;;
+		*)
+			printf 'v0.8.1 provider-off smoke mode is unsupported: %s\n' "${mode}" >&2
+			return 1
+			;;
+		esac
+		fixture="${OCI_V081_MATRIX_TEMP}/provider-off-${mode}"
+		output="${OCI_V081_MATRIX_TEMP}/provider-off-${mode}-output"
+		oci_v081_matrix_build_fixture "${mode}" "${fixture}"
+		oci_v081_matrix_run_dagger call build-and-package-deploy-targets \
+			--repo="${fixture}" \
+			--ci-plan-file="${fixture}/ci/oci-plan.json" \
+			--git-sha="${OCI_V081_MATRIX_GIT_SHA}" \
+			--source-repository-url=https://github.com/BootstrapLaboratory/rush-delivery.git \
+			--dry-run=true \
+			--application-image-provider=off \
+			export --path="${output}"
+		node "${OCI_V081_MATRIX_VERIFY}" planned-multi "${output}" "${targets}"
+	done
 }
 
 run_filesystem_entrypoint_matrix() {
@@ -513,6 +654,7 @@ OCI_V081_MATRIX_TEMP="$(mktemp -d "${OCI_V081_MATRIX_TEMP_ROOT%/}/rush-delivery-
 trap cleanup EXIT
 
 run_named_provider_dry_run
+run_multi_target_provider_off_build_smoke
 run_filesystem_entrypoint_matrix
 run_archive_restore_rollback_and_isolation
 run_reserved_env_attack

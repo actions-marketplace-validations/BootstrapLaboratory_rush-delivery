@@ -28,8 +28,8 @@ and
   equivalent deployment policy.
 - Store the five values from Chapter 3 in that environment.
 - The repository's GHCR package policy must allow the dedicated PAT identity
-  created in Chapter 3 to write the subject and its signature/attestation
-  referrers.
+  created in Chapter 3 to write the subject and its digest-derived `.sig`/`.att`
+  attachment tags.
 
 ## Filesystem-Compatible Baseline
 
@@ -132,7 +132,7 @@ The PEM secrets above must already contain literal `\n` pairs and no physical
 newline. `contents: write` lets the composed Git-source workflow move its deploy
 tag after a successful deploy. This tutorial authenticates GHCR with the
 dedicated PAT in `RD_OCI_GHCR_TOKEN`; the PAT's `write:packages` scope and its
-account/package access permit subject and referrer writes. A workflow-level
+account/package access permit subject and Cosign attachment-tag writes. A workflow-level
 `packages: write` permission would affect only `${{ github.token }}` and would
 not narrow or strengthen this PAT, so it is intentionally absent. If you replace
 the PAT mapping with `${{ github.actor }}` plus `${{ github.token }}`, add
@@ -246,8 +246,9 @@ that would imply a public surface the Action does not provide.
   permission needed for source or deploy-tag access. A GHCR denial in this
   tutorial instead means the PAT identity, scope, SSO authorization, or package
   policy is wrong.
-- A post-publish Cosign failure can leave a digest/navigation tag/referrer;
-  inspect the reported canonical reference before retrying.
+- A post-publish Cosign failure can leave a subject, navigation tag, `.sig`,
+  `.att`, or untagged historical package version; inspect the reported canonical
+  reference and full package inventory before retrying.
 - Composite `entrypoint` rejected: only `workflow`, `validate`, and
   `release-packages` are supported; use the raw module call for stage functions.
 
@@ -265,8 +266,10 @@ OCI-only job had docker-socket set to the empty string
 no live OCI job ran for a pull request or fork
 ```
 
-The GHCR package should show the digest plus Cosign signature/SPDX/provenance
-referrers. Registry UI presentation can differ; the manifest and verification
-result remain the release contract.
+The GHCR package should contain exactly one subject plus at least two non-subject
+package versions for the signature and combined attestation attachment. It may
+contain additional untagged history. Registry UI counts remain secondary: the
+manifest plus successful signature, SPDX-attestation, and provenance-attestation
+verification are the release contract.
 
 Next: [Split Stages And Rollback](07-split-stages-and-rollback.md).

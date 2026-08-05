@@ -14,17 +14,17 @@ repository_prefix=""
 cleanup_hook=""
 cleanup_github_token=""
 acceptance_log=""
+namespace_record_path="${OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH-}"
 declare -ar OCI_ACCEPTANCE_PACKAGE_SUFFIXES=(control-plane-api)
 printf -v cleanup_package_suffixes '%s\n' "${OCI_ACCEPTANCE_PACKAGE_SUFFIXES[@]}"
 cleanup_package_suffixes="${cleanup_package_suffixes%$'\n'}"
 cleanup_registered=false
-publication_boundary_crossed=false
-publication_boundary_message='[package] OCI publication boundary crossed; ordered finalization is starting.'
 diagnostic_path="${OCI_ACCEPTANCE_DIAGNOSTIC_PATH-}"
 diagnostic_outcome=failed
-diagnostic_failure_class=internal-error
-diagnostic_mutation_state=not-started
-diagnostic_cleanup_state=not-required
+diagnostic_failure_class="internal-error"
+diagnostic_failure_stage=internal
+diagnostic_mutation_state="not-started"
+diagnostic_cleanup_state="not-required"
 
 # shellcheck source=test/scripts/lib/oci-acceptance.sh
 source "${OCI_ACCEPTANCE_LIB}"
@@ -34,13 +34,6 @@ cleanup() {
 	local cleanup_failed=false
 
 	trap - EXIT
-
-	if [[ ${publication_boundary_crossed} != true &&
-		-f ${acceptance_log} ]] &&
-		grep -Fq "${publication_boundary_message}" "${acceptance_log}"; then
-		publication_boundary_crossed=true
-		diagnostic_mutation_state=started
-	fi
 
 	if [[ ${cleanup_registered} == true && -n ${cleanup_hook} ]]; then
 		diagnostic_cleanup_state=pending
@@ -61,6 +54,7 @@ cleanup() {
 			diagnostic_cleanup_state=failed
 			if ((original_status == 0)); then
 				diagnostic_failure_class="registry-cleanup"
+				diagnostic_failure_stage="registry-cleanup"
 			fi
 		else
 			diagnostic_cleanup_state=succeeded
@@ -73,8 +67,10 @@ cleanup() {
 	set -e
 	if ((cleanup_tree_status != 0)); then
 		cleanup_failed=true
+		diagnostic_cleanup_state=failed
 		if ((original_status == 0)); then
 			diagnostic_failure_class="temp-cleanup"
+			diagnostic_failure_stage="temp-cleanup"
 		fi
 	fi
 
@@ -84,6 +80,7 @@ cleanup() {
 	if ((original_status == 0)); then
 		diagnostic_outcome=passed
 		diagnostic_failure_class=none
+		diagnostic_failure_stage=none
 		diagnostic_mutation_state=completed
 	else
 		diagnostic_outcome=failed
@@ -95,6 +92,7 @@ cleanup() {
 			"${diagnostic_path}" \
 			"${diagnostic_outcome}" \
 			"${diagnostic_failure_class}" \
+			"${diagnostic_failure_stage}" \
 			"${diagnostic_mutation_state}" \
 			"${diagnostic_cleanup_state}"
 		local diagnostic_write_status=$?
@@ -111,7 +109,7 @@ trap cleanup EXIT
 
 if [[ -n ${diagnostic_path} ]]; then
 	oci_acceptance_write_diagnostic \
-		"${diagnostic_path}" pending none not-started not-required
+		"${diagnostic_path}" pending none none not-started not-required
 fi
 
 require_command() {
@@ -127,7 +125,21 @@ require_command node
 require_command tar
 require_command timeout
 
-diagnostic_failure_class=node-runtime
+assert_protected_capture() {
+	set +e
+	oci_acceptance_assert_protected_file_absent \
+		"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" "$@"
+	local protected_capture_status=$?
+	set -e
+	if ((protected_capture_status != 0)); then
+		diagnostic_failure_class="verification-contract"
+		diagnostic_failure_stage="protected-output"
+		return 1
+	fi
+}
+
+diagnostic_failure_class="node-runtime"
+diagnostic_failure_stage="node-runtime"
 set +e
 oci_acceptance_node_runtime_ready
 node_runtime_status=$?
@@ -138,6 +150,7 @@ if ((node_runtime_status != 0)); then
 fi
 
 diagnostic_failure_class=configuration
+diagnostic_failure_stage=configuration
 probe_attempts="${OCI_ACCEPTANCE_PROBE_ATTEMPTS:-3}"
 probe_delay_seconds="${OCI_ACCEPTANCE_PROBE_DELAY_SECONDS:-2}"
 OCI_ACCEPTANCE_CONNECT_TIMEOUT_SECONDS="${OCI_ACCEPTANCE_CONNECT_TIMEOUT_SECONDS:-5}"
@@ -206,6 +219,11 @@ if [[ -z ${repository_prefix} || -z ${retention_policy} ]]; then
 	exit 1
 fi
 
+if [[ -n ${namespace_record_path} && ${github_project_mode} != true ]]; then
+	printf 'OCI acceptance configuration: namespace recovery records are reserved for the project-controlled GHCR run\n' >&2
+	exit 1
+fi
+
 if [[ -n ${cleanup_hook} && (${cleanup_hook} != /* || ! -x ${cleanup_hook}) ]]; then
 	printf 'OCI acceptance configuration: cleanup hook must be an absolute executable file\n' >&2
 	exit 1
@@ -235,6 +253,7 @@ registry_readiness_status=$?
 set -e
 if ((registry_readiness_status != 0)); then
 	diagnostic_failure_class="registry-readiness"
+	diagnostic_failure_stage="registry-readiness"
 	printf 'OCI acceptance infrastructure [registry-transport]: trusted-TLS registry readiness failed after bounded retries\n' >&2
 	exit 1
 fi
@@ -243,7 +262,8 @@ export OCI_ACCEPTANCE_SIGNING_PASSWORD="${signing_password}"
 key_directory="${OCI_ACCEPTANCE_TEMP}/keys"
 mkdir -p "${key_directory}"
 
-diagnostic_failure_class=key-generation
+diagnostic_failure_class="key-generation"
+diagnostic_failure_stage="key-generation"
 key_generation_log="${OCI_ACCEPTANCE_TEMP}/key-generation.log"
 set +e
 oci_acceptance_run_with_timeout \
@@ -253,13 +273,23 @@ oci_acceptance_run_with_timeout \
 	"container | from ${OCI_ACCEPTANCE_COSIGN_IMAGE} | with-new-file /tmp/rush-delivery-key-generation-cache ${random_suffix} | with-secret-variable COSIGN_PASSWORD \$(secret env://OCI_ACCEPTANCE_SIGNING_PASSWORD) | with-workdir /keys | with-exec --args=/ko-app/cosign,generate-key-pair,--output-key-prefix,/keys/cosign | directory /keys | export ${key_directory}"
 key_generation_status=$?
 set -e
+set +e
 oci_acceptance_assert_absent \
 	"${key_generation_log}" "${username}" "${token}" "${signing_password}"
+key_generation_protected_status=$?
+set -e
+if ((key_generation_protected_status != 0)); then
+	diagnostic_failure_class="verification-contract"
+	diagnostic_failure_stage="protected-output"
+	exit 1
+fi
 if ((key_generation_status != 0)); then
 	printf 'OCI acceptance infrastructure [key-generation]: pinned Cosign key generation failed\n' >&2
 	exit "${key_generation_status}"
 fi
 unset OCI_ACCEPTANCE_SIGNING_PASSWORD
+diagnostic_failure_class=configuration
+diagnostic_failure_stage=configuration
 
 private_key="$(awk '{printf "%s\\n", $0}' "${key_directory}/cosign.key")"
 public_key="$(awk '{printf "%s\\n", $0}' "${key_directory}/cosign.pub")"
@@ -312,11 +342,20 @@ oci_acceptance_rewrite_provider_coordinates \
 	"${registry}" \
 	"${repository_prefix}"
 
+if [[ -n ${namespace_record_path} ]]; then
+	oci_acceptance_write_namespace_record \
+		"${namespace_record_path}" \
+		"${registry}" \
+		"${repository_prefix}" \
+		"${OCI_ACCEPTANCE_PACKAGE_SUFFIXES[0]}"
+fi
+
 output_directory="${OCI_ACCEPTANCE_TEMP}/output"
 acceptance_log="${OCI_ACCEPTANCE_TEMP}/acceptance.log"
 cleanup_registered=true
-diagnostic_failure_class=product-contract
-diagnostic_mutation_state=not-started
+diagnostic_failure_class="product-contract"
+diagnostic_failure_stage="package-contract"
+diagnostic_mutation_state="not-started"
 if [[ -n ${cleanup_hook} ]]; then
 	diagnostic_cleanup_state=pending
 fi
@@ -324,7 +363,7 @@ set +e
 oci_acceptance_run_with_timeout \
 	"${mutation_timeout_seconds}" \
 	"${acceptance_log}" \
-	env DAGGER_NO_NAG=1 dagger --silent call build-and-package-deploy-targets \
+	env DAGGER_NO_NAG=1 dagger --progress=logs call build-and-package-deploy-targets \
 	--repo="${fixture}" \
 	--ci-plan-file="${fixture}/ci/oci-plan.json" \
 	--git-sha="${OCI_ACCEPTANCE_GIT_SHA}" \
@@ -336,21 +375,22 @@ oci_acceptance_run_with_timeout \
 acceptance_status=$?
 set -e
 
-if grep -Fq "${publication_boundary_message}" "${acceptance_log}"; then
-	publication_boundary_crossed=true
-	diagnostic_mutation_state=started
-fi
+diagnostic_failure_stage="$(
+	oci_acceptance_classify_failure_stage "${acceptance_log}"
+)"
+diagnostic_mutation_state="$(
+	oci_acceptance_detect_mutation_state \
+		"${acceptance_log}" "${acceptance_status}" \
+		"${diagnostic_failure_stage}"
+)"
 
-oci_acceptance_assert_protected_file_absent \
-	"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-	"${acceptance_log}" \
-	"${deploy_env}" \
-	"${docker_config}"
+assert_protected_capture \
+	"${acceptance_log}" "${deploy_env}" "${docker_config}"
 
 if ((acceptance_status != 0)); then
 	failure_class="$(
 		oci_acceptance_classify_failure \
-			"${acceptance_log}" "${publication_boundary_crossed}" "${acceptance_status}"
+			"${acceptance_log}" "${diagnostic_mutation_state}" "${acceptance_status}"
 	)"
 	diagnostic_failure_class="${failure_class}"
 	if [[ ${failure_class} == registry-transport-ambiguous ]]; then
@@ -358,18 +398,16 @@ if ((acceptance_status != 0)); then
 	elif [[ ${failure_class} == mutation-timeout-ambiguous ]]; then
 		printf 'OCI acceptance infrastructure [mutation-timeout-ambiguous]: the bounded package mutation timed out; publication may have completed and the unique namespace must be inspected before a manual retry\n' >&2
 	else
-		printf 'OCI acceptance [%s]: package/evidence flow failed; inspect the controlled diagnostic artifact\n' "${failure_class}" >&2
+		printf 'OCI acceptance [%s/%s]: package/evidence flow failed; inspect the controlled diagnostic artifact\n' \
+			"${failure_class}" "${diagnostic_failure_stage}" >&2
 	fi
 	exit "${acceptance_status}"
 fi
 
-if [[ ${publication_boundary_crossed} != true ]]; then
-	diagnostic_failure_class=verification-contract
-	printf 'OCI acceptance [verification-contract]: successful Package output omitted the publication-boundary marker\n' >&2
-	exit 1
-fi
+diagnostic_mutation_state=completed
 
-diagnostic_failure_class=verification-contract
+diagnostic_failure_class="verification-contract"
+diagnostic_failure_stage="bundle-verification"
 bundle_verification_log="${OCI_ACCEPTANCE_TEMP}/bundle-verification.log"
 set +e
 oci_acceptance_run_with_timeout \
@@ -385,11 +423,8 @@ oci_acceptance_run_with_timeout \
 	"${docker_config}"
 bundle_verification_status=$?
 set -e
-oci_acceptance_assert_protected_file_absent \
-	"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-	"${bundle_verification_log}" \
-	"${deploy_env}" \
-	"${docker_config}"
+assert_protected_capture \
+	"${bundle_verification_log}" "${deploy_env}" "${docker_config}"
 if ((bundle_verification_status != 0)); then
 	printf 'OCI acceptance [verification-contract]: local package and evidence verification failed\n' >&2
 	exit "${bundle_verification_status}"
@@ -409,7 +444,7 @@ verify_published_evidence() {
 		"${read_timeout_seconds}" \
 		"${cosign_verification_log}" \
 		env DAGGER_NO_NAG=1 dagger --silent -c \
-		"container | from ${OCI_ACCEPTANCE_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${key_directory}/cosign.pub) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--key,/keys/cosign.pub,--insecure-ignore-tlog,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${published_reference} | sync"
+		"container | from ${OCI_ACCEPTANCE_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${key_directory}/cosign.pub) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${published_reference} | sync"
 }
 
 set +e
@@ -420,28 +455,24 @@ oci_acceptance_retry_read \
 published_evidence_status=$?
 set -e
 if ((published_evidence_status != 0)); then
-	oci_acceptance_assert_protected_file_absent \
-		"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-		"${cosign_verification_log}" \
-		"${deploy_env}" \
-		"${docker_config}"
+	assert_protected_capture \
+		"${cosign_verification_log}" "${deploy_env}" "${docker_config}"
 	if grep -Eqi \
 		'connection (refused|reset)|context deadline|dial tcp|i/o timeout|network is unreachable|no such host|TLS handshake timeout|unexpected EOF' \
 		"${cosign_verification_log}"; then
 		diagnostic_failure_class="registry-immutable-read"
+		diagnostic_failure_stage="registry-immutable-read"
 		printf 'OCI acceptance infrastructure [registry-immutable-read]: independent Cosign verification could not read the immutable subject after bounded retries\n' >&2
 	else
 		diagnostic_failure_class="verification-contract"
+		diagnostic_failure_stage="bundle-verification"
 		printf 'OCI acceptance [verification-contract]: independent Cosign verification rejected the subject signature or required attestations\n' >&2
 	fi
 	exit 1
 fi
 
-oci_acceptance_assert_protected_file_absent \
-	"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-	"${cosign_verification_log}" \
-	"${deploy_env}" \
-	"${docker_config}"
+assert_protected_capture \
+	"${cosign_verification_log}" "${deploy_env}" "${docker_config}"
 
 image_tarball="${OCI_ACCEPTANCE_TEMP}/published-image.tar"
 image_export_log="${OCI_ACCEPTANCE_TEMP}/image-export.log"
@@ -464,21 +495,16 @@ image_export_status=$?
 set -e
 unset OCI_ACCEPTANCE_REGISTRY_TOKEN
 if ((image_export_status != 0)); then
-	oci_acceptance_assert_protected_file_absent \
-		"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-		"${image_export_log}" \
-		"${deploy_env}" \
-		"${docker_config}"
+	assert_protected_capture \
+		"${image_export_log}" "${deploy_env}" "${docker_config}"
 	diagnostic_failure_class="registry-immutable-read"
+	diagnostic_failure_stage="registry-immutable-read"
 	printf 'OCI acceptance infrastructure [registry-immutable-read]: published digest could not be exported after bounded retries\n' >&2
 	exit 1
 fi
 
-oci_acceptance_assert_protected_file_absent \
-	"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-	"${image_export_log}" \
-	"${deploy_env}" \
-	"${docker_config}"
+assert_protected_capture \
+	"${image_export_log}" "${deploy_env}" "${docker_config}"
 
 deploy_result="${OCI_ACCEPTANCE_TEMP}/deploy-result.json"
 deploy_log="${OCI_ACCEPTANCE_TEMP}/deploy.log"
@@ -502,29 +528,29 @@ deploy_status=$?
 set -e
 
 for protected_log in "${deploy_result}" "${deploy_log}"; do
-	oci_acceptance_assert_protected_file_absent \
-		"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-		"${protected_log}" \
-		"${deploy_env}" \
-		"${docker_config}"
+	assert_protected_capture \
+		"${protected_log}" "${deploy_env}" "${docker_config}"
 done
 
 if ((deploy_status != 0)); then
 	deploy_failure_class="$(
 		oci_acceptance_classify_failure \
-			"${deploy_log}" true "${deploy_status}"
+			"${deploy_log}" started "${deploy_status}"
 	)"
 	if [[ ${deploy_failure_class} == mutation-timeout-ambiguous || ${deploy_failure_class} == registry-transport-ambiguous ]]; then
 		diagnostic_failure_class="${deploy_failure_class}"
+		diagnostic_failure_stage=deploy
 		printf 'OCI acceptance infrastructure [%s]: bounded digest-only Deploy ended after mutation could have started\n' "${deploy_failure_class}" >&2
 	else
-		diagnostic_failure_class=deploy-contract
+		diagnostic_failure_class="deploy-contract"
+		diagnostic_failure_stage=deploy
 		printf 'OCI acceptance [deploy-contract]: digest-only Deploy failed; inspect the controlled diagnostic artifact\n' >&2
 	fi
 	exit "${deploy_status}"
 fi
 
-diagnostic_failure_class=verification-contract
+diagnostic_failure_class="verification-contract"
+diagnostic_failure_stage="bundle-verification"
 complete_verification_log="${OCI_ACCEPTANCE_TEMP}/complete-verification.log"
 set +e
 oci_acceptance_run_with_timeout \
@@ -540,17 +566,15 @@ oci_acceptance_run_with_timeout \
 	"${docker_config}"
 complete_verification_status=$?
 set -e
-oci_acceptance_assert_protected_file_absent \
-	"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-	"${complete_verification_log}" \
-	"${deploy_env}" \
-	"${docker_config}"
+assert_protected_capture \
+	"${complete_verification_log}" "${deploy_env}" "${docker_config}"
 if ((complete_verification_status != 0)); then
 	printf 'OCI acceptance [verification-contract]: package, image archive, or digest-only Deploy verification failed\n' >&2
 	exit "${complete_verification_status}"
 fi
 
 diagnostic_failure_class=none
+diagnostic_failure_stage=none
 diagnostic_mutation_state=completed
 printf 'OCI acceptance passed for %s/%s (retention: %s)\n' \
 	"${registry}" "${repository_prefix}" "${retention_policy}"

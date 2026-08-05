@@ -31,7 +31,23 @@ or daemon. It creates temporary Cosign material and performs framework image
 build/publication through Dagger.
 The Package implementation pins Syft 1.50.0, Grype 0.116.1, and Cosign 3.1.2 by
 immutable image digest. Update each version and digest together, then rerun the
-unit, Dagger self-check, and live acceptance paths.
+unit, Dagger self-check, and live acceptance paths. Cosign `3.1.2` also pins the
+deprecated `--new-bundle-format=false` registry-storage contract. A Cosign bump
+must first prove the replacement CLI flags, signature/attestation storage,
+independent three-way verification, full tagged/untagged cleanup, and exact live
+registry acceptance; never update only the version/digest and assume compatible
+artifact semantics.
+
+The pinned Dagger `v0.20.7` engine requires `Container.withExec` stdout
+redirection to resolve to a writable regular file in the container filesystem.
+It rejects `redirectStdout: "/dev/null"` before starting the command with
+`Error: open redirect stdout file: cannot resolve path "/dev/null"`. Keep the
+six registry Cosign commands on their distinct
+`/tmp/rush-delivery-cosign-*.stdout` sinks. Those files exist only in the
+ephemeral Cosign container and are neither exported nor retained as release
+evidence. Engine or Cosign upgrades must retain the engine regression proving a
+real regular-file redirect works; a failure at a named Cosign stage does not by
+itself prove that the Cosign process started.
 
 Every public Dagger function must declare an intentional cache scope. Calls that
 observe mutable external state, execute project code, or create side effects use

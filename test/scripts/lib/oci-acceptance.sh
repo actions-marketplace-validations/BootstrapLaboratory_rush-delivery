@@ -89,11 +89,11 @@ oci_acceptance_registry_ready() {
 
 oci_acceptance_classify_failure() {
 	local log_file="$1"
-	local mutation_started="$2"
+	local mutation_state="$2"
 	local exit_status="${3:-1}"
 
 	if [[ ${exit_status} == 124 || ${exit_status} == 137 ]]; then
-		if [[ ${mutation_started} == true ]]; then
+		if [[ ${mutation_state} == started || ${mutation_state} == unknown ]]; then
 			printf 'mutation-timeout-ambiguous\n'
 		else
 			printf 'operation-timeout\n'
@@ -102,9 +102,9 @@ oci_acceptance_classify_failure() {
 	fi
 
 	if grep -Eqi \
-		'connection (refused|reset)|context deadline|dial tcp|i/o timeout|network is unreachable|no such host|TLS handshake timeout|unexpected EOF' \
+		'connection (refused|reset)|context deadline|dial tcp|i/o timeout|network is unreachable|no such host|TLS handshake timeout|unexpected EOF|failed during registry publication transport\.' \
 		"${log_file}"; then
-		if [[ ${mutation_started} == true ]]; then
+		if [[ ${mutation_state} == started || ${mutation_state} == unknown ]]; then
 			printf 'registry-transport-ambiguous\n'
 		else
 			printf 'registry-transport\n'
@@ -113,6 +113,79 @@ oci_acceptance_classify_failure() {
 	fi
 
 	printf 'product-contract\n'
+}
+
+oci_acceptance_classify_failure_stage() {
+	local log_file="$1"
+
+	if grep -Fq 'Dagger metadata contract validation failed:' "${log_file}"; then
+		printf 'metadata-validation\n'
+	elif grep -Fq 'Cosign preflight failed for ' "${log_file}"; then
+		printf 'cosign-preflight\n'
+	elif grep -Fq 'OCI application image preparation failed:' "${log_file}"; then
+		printf 'image-preparation\n'
+	elif grep -Fq 'failed during registry publication authentication.' "${log_file}"; then
+		printf 'registry-publication-authentication\n'
+	elif grep -Fq 'failed during registry publication authorization.' "${log_file}"; then
+		printf 'registry-publication-authorization\n'
+	elif grep -Fq 'failed during registry publication transport.' "${log_file}"; then
+		printf 'registry-publication-transport\n'
+	elif grep -Fq 'failed during registry publication.' "${log_file}"; then
+		printf 'registry-publication\n'
+	elif grep -Fq 'failed during returned publication reference validation.' "${log_file}"; then
+		printf 'returned-reference-validation\n'
+	elif grep -Fq 'failed during provenance construction.' "${log_file}"; then
+		printf 'provenance-construction\n'
+	elif grep -Fq 'failed during Cosign sign.' "${log_file}"; then
+		printf 'cosign-sign\n'
+	elif grep -Fq 'failed during Cosign attest-spdx.' "${log_file}"; then
+		printf 'cosign-attest-spdx\n'
+	elif grep -Fq 'failed during Cosign attest-provenance.' "${log_file}"; then
+		printf 'cosign-attest-provenance\n'
+	elif grep -Fq 'failed during Cosign verify-signature.' "${log_file}"; then
+		printf 'cosign-verify-signature\n'
+	elif grep -Fq 'failed during Cosign verify-spdx-attestation.' "${log_file}"; then
+		printf 'cosign-verify-spdx-attestation\n'
+	elif grep -Fq 'failed during Cosign verify-provenance-attestation.' "${log_file}"; then
+		printf 'cosign-verify-provenance-attestation\n'
+	elif grep -Fq 'failed during evidence finalization.' "${log_file}"; then
+		printf 'evidence-finalization\n'
+	elif grep -Fq 'OCI application image finalization failed:' "${log_file}"; then
+		printf 'image-finalization\n'
+	else
+		printf 'package-contract\n'
+	fi
+}
+
+oci_acceptance_detect_mutation_state() {
+	local log_file="$1"
+	local exit_status="$2"
+	local failure_stage="$3"
+	local publication_boundary_message='[package] OCI publication boundary crossed; ordered finalization is starting.'
+
+	if grep -Fq "${publication_boundary_message}" "${log_file}"; then
+		printf 'started\n'
+		return 0
+	fi
+	if ((exit_status == 0)); then
+		printf 'completed\n'
+		return 0
+	fi
+	if [[ ${exit_status} == 124 || ${exit_status} == 137 ]]; then
+		printf 'unknown\n'
+		return 0
+	fi
+	case "${failure_stage}" in
+	metadata-validation | cosign-preflight | image-preparation)
+		printf 'not-started\n'
+		;;
+	registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | returned-reference-validation | provenance-construction | cosign-sign | cosign-attest-spdx | cosign-attest-provenance | cosign-verify-signature | cosign-verify-spdx-attestation | cosign-verify-provenance-attestation | evidence-finalization | image-finalization)
+		printf 'started\n'
+		;;
+	*)
+		printf 'unknown\n'
+		;;
+	esac
 }
 
 oci_acceptance_run_with_timeout() {
@@ -216,8 +289,9 @@ oci_acceptance_write_diagnostic() {
 	local diagnostic_path="$1"
 	local outcome="$2"
 	local failure_class="$3"
-	local mutation_state="$4"
-	local cleanup_state="$5"
+	local failure_stage="$4"
+	local mutation_state="$5"
+	local cleanup_state="$6"
 
 	case "${outcome}" in
 	pending | passed | failed) ;;
@@ -227,8 +301,12 @@ oci_acceptance_write_diagnostic() {
 	none | internal-error | configuration | node-runtime | registry-readiness | key-generation | product-contract | registry-transport | registry-transport-ambiguous | operation-timeout | mutation-timeout-ambiguous | verification-contract | registry-immutable-read | deploy-contract | registry-cleanup | temp-cleanup) ;;
 	*) return 2 ;;
 	esac
+	case "${failure_stage}" in
+	none | internal | configuration | node-runtime | registry-readiness | key-generation | metadata-validation | cosign-preflight | image-preparation | image-finalization | registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | returned-reference-validation | provenance-construction | cosign-sign | cosign-attest-spdx | cosign-attest-provenance | cosign-verify-signature | cosign-verify-spdx-attestation | cosign-verify-provenance-attestation | evidence-finalization | package-contract | protected-output | bundle-verification | registry-immutable-read | deploy | registry-cleanup | temp-cleanup) ;;
+	*) return 2 ;;
+	esac
 	case "${mutation_state}" in
-	not-started | started | completed) ;;
+	not-started | started | completed | unknown) ;;
 	*) return 2 ;;
 	esac
 	case "${cleanup_state}" in
@@ -248,13 +326,49 @@ oci_acceptance_write_diagnostic() {
 	(
 		umask 077
 		{
-			printf 'schema=rush-delivery-oci-acceptance-diagnostic/v1\n'
+			printf 'schema=rush-delivery-oci-acceptance-diagnostic/v2\n'
 			printf 'outcome=%s\n' "${outcome}"
 			printf 'failure_class=%s\n' "${failure_class}"
+			printf 'failure_stage=%s\n' "${failure_stage}"
 			printf 'mutation_state=%s\n' "${mutation_state}"
 			printf 'cleanup_state=%s\n' "${cleanup_state}"
 		} >"${diagnostic_path}"
 		chmod 600 "${diagnostic_path}"
+	)
+}
+
+oci_acceptance_write_namespace_record() {
+	local record_path="$1"
+	local registry="$2"
+	local repository_prefix="$3"
+	local package_suffix="$4"
+
+	if [[ ${registry} != ghcr.io ||
+		! ${repository_prefix} =~ ^bootstraplaboratory/rush-delivery-acceptance-[a-f0-9]{32}$ ||
+		${package_suffix} != control-plane-api ]]; then
+		printf 'OCI acceptance namespace record rejected unsafe coordinates\n' >&2
+		return 2
+	fi
+	if [[ ${record_path} != /* ||
+		${record_path} != */rush-delivery-oci-acceptance-namespace.txt ||
+		-L ${record_path} ]]; then
+		printf 'OCI acceptance namespace record path is not allowed\n' >&2
+		return 2
+	fi
+	if [[ ! -d ${record_path%/*} ]]; then
+		printf 'OCI acceptance namespace record parent directory does not exist\n' >&2
+		return 2
+	fi
+
+	(
+		umask 077
+		{
+			printf 'schema=rush-delivery-oci-acceptance-namespace/v1\n'
+			printf 'registry=ghcr.io\n'
+			printf 'repository_prefix=%s\n' "${repository_prefix}"
+			printf 'package_suffix=control-plane-api\n'
+		} >"${record_path}"
+		chmod 600 "${record_path}"
 	)
 }
 

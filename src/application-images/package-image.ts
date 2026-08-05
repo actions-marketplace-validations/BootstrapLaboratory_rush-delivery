@@ -38,6 +38,7 @@ import {
   buildApplicationImageTagReference,
   normalizePublishedImageReference,
 } from "./reference.ts";
+import { sanitizeRegistryPublicationFailure } from "./publication-failure.ts";
 import { isolateApplicationImagePreparationCoordinates } from "./preparation-boundary.ts";
 import type { ResolvedApplicationImageProvider } from "./resolve-provider.ts";
 import { rejectedVulnerabilities, type GrypeReport } from "./scan-policy.ts";
@@ -410,8 +411,8 @@ export async function finalizeApplicationImage(
         provider.registryToken,
       )
       .publish(tagReference);
-  } catch {
-    throw new OciPackageOperationError("registry publication");
+  } catch (error) {
+    throw sanitizeRegistryPublicationFailure(error);
   }
 
   let published: ReturnType<typeof normalizePublishedImageReference>;

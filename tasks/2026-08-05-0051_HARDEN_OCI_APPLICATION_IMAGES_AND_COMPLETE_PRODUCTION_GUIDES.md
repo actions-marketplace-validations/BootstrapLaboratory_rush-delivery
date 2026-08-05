@@ -438,7 +438,11 @@ Deliver a `v0.8.1` release in which:
       availability, freshness, reproducibility, and fail-closed assumptions.
 - [x] Preserve the current private-registry-friendly key-backed Cosign mode:
       signing and attestations use `--tlog-upload=false`; verification uses
-      `--insecure-ignore-tlog`.
+      `--insecure-ignore-tlog`. Pin `--new-bundle-format=false` on all six
+      registry sign, attest, and verify commands so Cosign `3.1.2` uses
+      digest-derived `.sig` and shared `.att` tag attachments rather than the
+      OCI 1.1 Referrers API; distinguish this from legacy Docker media types and
+      leave the local blob preflight unchanged.
 - [x] State what this mode proves: the configured key verified the digest-bound
       subject signature and required attestations during Package.
 - [x] State what it does not prove: Rekor inclusion, public transparency,
@@ -991,7 +995,7 @@ checkpoint, and link to the next chapter.
 - [x] Show exact `gh secret set`/`gh variable set` forms without echoing values.
 - [x] Run a named-provider dry run that validates repository construction but
       does not read or preflight keys.
-- [x] Explain credential roles, minimum push/referrer permissions, dedicated
+- [x] Explain credential roles, minimum subject/attachment-tag push permissions, dedicated
       credentials, rotation, loss/recovery, retention of old public keys, and
       why the manifest does not record a key fingerprint. For GHCR classic
       PATs, state that `write:packages` is not token-scoped to one namespace or
@@ -1093,7 +1097,7 @@ checkpoint, and link to the next chapter.
       independently recorded release SHA to Deploy, checking that the manifest's
       `source_revision` agrees, and consuming its digest without editing the
       manifest or resolving a tag.
-- [x] Cover registry subject/referrer retention, package-bundle retention,
+- [x] Cover registry subject/attachment retention, package-bundle retention,
       deploy-tag effects, pull identity, retry safety, and cleanup of possible
       post-publication or sibling artifacts.
 - [x] State the unsigned-manifest/coordinated-replacement limitation directly.
@@ -1163,14 +1167,15 @@ into the authoritative production contract/runbook. Add
       secrets, SSH mount, or Dockerfile target; no keyless/OIDC/Rekor mode; no
       trusted timestamp; no custom-CA/insecure-registry configuration; no
       framework vendor deploy logic; no automatic cleanup; no signed portable
-      manifest; and registry support required for Cosign artifacts/referrers.
+      manifest; and registry support required for Cosign's tag-addressed
+      signature/attestation artifacts.
 - [x] Warn that target image suffixes must not collide within the same provider
       namespace because navigation tags are deterministic per SHA.
 
 ### Registry Recipes
 
 For each recipe, show complete provider YAML, credential acquisition, minimum
-push/referrer permissions, CI mapping, repository preparation, target-platform
+subject/attachment-tag push permissions, CI mapping, repository preparation, target-platform
 pull identity, retention, and cleanup. Verify details against current official
 provider documentation during implementation and link those sources.
 
@@ -1197,17 +1202,19 @@ provider documentation during implementation and link those sources.
       exchange with `id-token: write`, exact repository/environment admission,
       a narrowly bound `roles/iam.workloadIdentityUser` publisher service
       account, and the generated access-token output mapped directly to Rush
-      Delivery. Document that predefined Writer includes attachment deletion,
-      requiring a tested custom role for strict no-delete publication, and
+      Delivery. Document that predefined Writer includes broad deletion
+      authority, while the separate GAR Attachment resource API is not used by
+      this tag-addressed Cosign mode; require a tested custom role for strict
+      no-delete publication, and
       explain deterministic SHA-tag retry/cleanup effects when immutable tags
       are enabled.
 - [x] Add an Amazon ECR recipe covering the `AWS` username, short-lived login
       token, repository creation, token lifetime, and Cosign artifact retention.
       Include executable GitHub OIDC configuration with `id-token: write`, the
       standard STS audience, an exact protected-environment `sub`, and a
-      full-SHA-pinned credential action. State that reference artifacts expire
-      or archive within 24 hours after lifecycle deletion/archive of the subject,
-      making subject retention the root of Cosign retention.
+      full-SHA-pinned credential action. Do not apply ECR's OCI reference-
+      artifact lifecycle behavior or ORAS cleanup flow to `v0.8.1`; document
+      retention and cleanup of the subject plus `.sig`/`.att` image tags.
 - [x] Add a Docker Hub recipe using an access token and organization/user
       namespace. Distinguish PAT authentication with a personal Docker ID from
       OAT authentication with the organization name; document PAT
@@ -1217,8 +1224,10 @@ provider documentation during implementation and link those sources.
 - [x] Label each recipe as continuously tested, manually exercised, or
       syntax-reviewed; do not imply CI coverage that does not exist.
 - [x] State required registry capabilities: trusted TLS, image push, returned
-      digest, Cosign signature and attestation storage, digest/referrer
-      retention, cleanup permissions, and deployment-platform pull access.
+      digest, Cosign signature and attestation tag storage, complete tagged and
+      untagged version inventory, cleanup permissions, and deployment-platform
+      pull access. State that OCI 1.1 Referrers API support is not required or
+      exercised.
 - [x] Do not teach `docker login` as a Rush Delivery prerequisite; explain that
       Dagger and Cosign receive selected authentication directly.
 
@@ -1236,7 +1245,8 @@ provider documentation during implementation and link those sources.
       actual-newline versus literal-`\n` corruption, malformed PEM, wrong
       password, mismatched public key, and protected-name collision.
 - [x] Cover registry auth denial, repository permission/not-found, trusted-TLS or
-      custom-CA limitation, malformed returned reference, Cosign-referrer
+      custom-CA limitation, malformed returned reference, Cosign legacy-
+      attachment
       incompatibility, and deployment-platform pull denial.
 - [x] Cover Grype database download/cache/freshness errors, policy rejection,
       governed ignore configuration, and changed findings between runs.
@@ -1531,6 +1541,169 @@ the implementation commits, pushing the branch, and merging the reviewed
 candidate are the steps that make the newly tracked live workflow available on
 the default branch; they may begin after the pre-merge Phase 9 gate passes. The
 exact merged candidate must then pass every deferred live gate before tagging.
+
+### First Merged-Candidate Attempt And Corrective Gate
+
+The first exact-merged-candidate dispatch on 2026-08-05, GitHub Actions
+[run 30990272963](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/30990272963),
+tested merge commit `a0843f177cbb4916db5fc94ab789d56842b453c6` and
+failed both live jobs. It is diagnostic history, not release evidence, and does
+not satisfy any live completion criterion below.
+
+The retained evidence and logs established the matrix results and exposed two
+independent harness defects:
+
+- the five key-negative scenarios reached their required prepublication
+  failures, independently observed zero package inventory, and completed
+  namespace cleanup;
+- all three multi-target fixtures failed metadata validation because their
+  synthetic `matrix-worker` and `matrix-later` package/deploy targets had no
+  matching Rush projects; and
+- the single-target v1 artifact reported only `product-contract` and
+  `not-started`; the retained GitHub Actions output did not establish the exact
+  GHCR failure stage. A later controlled local non-routable-registry
+  reproduction showed that `dagger --silent` suppressed the publication
+  boundary and could make the v1 classifier report `not-started` after the
+  boundary. That reproduction justified correcting the harness, but it is not
+  retroactive proof that the failed GHCR attempt reached publication. Cleanup
+  completed, and the exact GHCR stage remains unresolved until a corrected
+  exact-candidate rerun passes.
+
+A correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31000299709](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31000299709),
+tested branch commit `0fde2deca45ff17281ddd5fcff5b99e2b12e114d` and is also
+diagnostic history rather than release evidence. All five key-negative scenarios
+and the multi-target preparation-failure scenario passed, while the positive and
+injected-finalization scenarios both stopped at the first target's allowlisted
+but over-broad `cosign-publication` stage. Every scenario cleanup and the
+independent recovery sweep succeeded.
+
+The exact-stage correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31001542904](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31001542904),
+tested commit `fd1cfb238c81dba7376dd32118457633be51f76e`. The single
+live path, multi-target success path, and injected-finalization path all stopped
+at the first target's exact `cosign-sign` stage after subject publication. All
+five key-negative scenarios and the multi-target preparation-failure scenario
+passed; every cleanup and the independent recovery sweep succeeded. This is
+diagnostic history, not release evidence. It narrowed the failure boundary to
+the framework's first Cosign step, but did not prove that Cosign itself started
+or that GHCR evaluated either bundle-storage mode.
+
+The legacy-storage correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31003076982](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31003076982),
+tested commit `f7c40718dba657db64500f06f68af7f053e438cd`. Its single
+live path, multi-target success path, and injected-finalization path again
+reported the exact `cosign-sign` stage. The five key-negative scenarios and the
+multi-target preparation-failure scenario passed. Cleanup for both jobs and the
+matrix's independent recovery sweep succeeded. This run is also diagnostic
+history rather than release evidence.
+
+A controlled reproduction against the pinned Dagger `v0.20.7` engine then
+proved the shared cause: `redirectStdout: "/dev/null"` fails before Cosign
+executes with
+`Error: open redirect stdout file: cannot resolve path "/dev/null"`. The exact
+pinned Cosign `3.1.2` sign command succeeds without stdout redirection and with a
+writable regular target at `/tmp/rush-delivery-cosign-sign.stdout`. The
+correction assigns all six sign, attest, and verify stages distinct regular
+`/tmp/rush-delivery-cosign-*.stdout` files in the ephemeral Cosign container;
+none is exported or retained. This pre-execution defect does not change the
+intentional registry-compatible legacy `.sig`/shared-`.att` storage contract,
+which still requires exact live verification before release.
+
+The next correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31004570025](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31004570025),
+tested commit `a16528acdce0f33fab4bbd63831d6dfc1ddad378`. The complete
+single-target job passed, including publication, all six Cosign finalization
+stages, independent signature and two-attestation verification, retained
+evidence, and cleanup. Seven of the eight matrix scenarios also passed. The
+multi-target success operation completed and its cleanup succeeded, but the
+harness then quarantined its Package output because the protected-value scanner
+reached its 20,000-file ceiling. No protected value was detected. A provider-off
+reproduction measured 22,426 scannable entries and 100,722,029 regular-file
+bytes; 22,352 entries came from the pinned Rush `5.160.0` bootstrap tree alone.
+The correction therefore continues to scan the entire output, retains the
+one-GiB and 300-second bounds, raises only the file ceiling to 30,000, and
+regression-tests both post-20,000 detection and the new hard ceiling. This run
+remains diagnostic history rather than release evidence.
+
+The corrected branch then passed GitHub Actions
+[run 31006805727](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31006805727)
+on 2026-08-05 at commit
+`855e4ab91fd0228bd301f062a9a00430e2fe5242`. The single-target job
+passed publication, all six Cosign stages, independent verification, evidence
+retention, and cleanup. All eight matrix scenarios passed, including the full
+multi-target success output scan. Its two completed targets each had one
+subject plus three observed non-subject package versions and passed real Cosign
+verification for the signature and both attestations. The injected-finalization
+case independently proved one earlier target complete, the failed target at
+exactly one subject and no Cosign attachments, and the later target untouched.
+The downloaded
+[matrix artifact](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31006805727/artifacts/8931099078)
+contained eight passing sanitized diagnostics, eight pre-mutation inventories,
+eight scenario cleanup proofs, eight independent recovery proofs, and the seven
+allowlisted Package evidence files for the success case, with no symlinks.
+Every namespace record bound the exact candidate commit. A separate authenticated
+GitHub Packages API readback returned `404` for all 13 disposable single-target
+and matrix packages. This is valid correction-branch evidence; the exact merged
+candidate must still repeat both live jobs before tagging.
+
+Complete this corrective gate before the next exact-candidate dispatch:
+
+- [x] Give every synthetic multi-target package/deploy target a matching Rush
+      project, deterministic lockfile entry, and executable no-op Rush scripts;
+      exercise both corrected multi-target fixtures through real provider-off
+      Dagger Package planning before any live registry call.
+- [x] Capture mutating Package progress with pinned Dagger `logs` mode, retain
+      only exact allowlisted stage/mutation diagnostics (including every fixed
+      Cosign sign, attest, and verify stage), and regression-test that the
+      progress mode exposes the controlled marker without exposing a secret
+      sentinel.
+- [x] Use a distinct writable regular stdout sink for each of the six registry
+      Cosign commands. Keep those files inside the ephemeral Cosign container,
+      never export or retain them, and regression-test the pinned Dagger engine's
+      rejection of `/dev/null` alongside successful regular-file redirection.
+- [x] Treat every paginated GHCR package version, including untagged partial
+      uploads and signature/attestation attachment history, as inventory. Zero and
+      skipped-target assertions must require zero total versions. For completed
+      targets, explicitly pin Cosign `3.1.2` legacy tag storage on publication
+      and independent verification, require exactly one subject plus at least
+      two non-subject package versions without using `.sig`/`.att` suffixes as
+      the acceptance predicate, run real Cosign verification for the signature
+      and both attestations, and retain a stable post-verification inventory
+      snapshot. The current `.att` attachment contains both predicates, while a
+      registry may retain additional untagged historical versions. For the injected
+      post-publication fault, require exactly the failed subject and zero
+      non-subject package versions so the evidence proves the hook ran before
+      any Cosign finalization. Serialize the inventory ledger canonically by
+      selected target and package-version ID, and do not treat IDs as a
+      cross-package chronology signal.
+- [x] Keep raw matrix fixtures, logs, and Package output outside the
+      always-uploaded artifact tree. Promote only validated regular JSON/local
+      evidence files after their own protected-value scans and cleanup; retain
+      a validated non-secret disposable-namespace record before mutation.
+- [x] Consume every matrix namespace record in an always-run, bounded recovery
+      sweep; fail the job if absence cannot be re-proven, retain the recovery
+      evidence, and explicitly include the scanned hidden `.dagger` evidence in
+      the uploaded artifact.
+- [x] Bound and narrow the single-target destructive cleanup hook, prove absence
+      with a GitHub-host-pinned readback whose HTTP status line authoritatively
+      reports `404`, classify protected-output failures only after
+      conservatively deriving mutation state, and give EXIT cleanup enough job
+      time to complete.
+- [x] Map untrusted registry errors to fixed authentication, authorization,
+      transport, or generic publication stages without retaining the original
+      exception; document that every stage remains possibly mutating, and sync
+      the canonical troubleshooting update into both generated sites.
+- [x] Calibrate the protected-output file ceiling above the measured pinned Rush
+      bootstrap tree without excluding any output from credential scanning.
+      Retain the one-GiB byte limit and 300-second process timeout, prove a safe
+      tree above the former 20,000-file ceiling is accepted, prove a protected
+      sentinel after that boundary is still rejected without being echoed, and
+      unit-test rejection at the new 30,000-file and one-GiB boundaries.
+- [ ] Re-run all focused and clean release-candidate gates after these
+      corrections, merge them through normal review, and dispatch the live
+      workflow on that new exact merge commit. Do not reuse the failed run as
+      evidence and do not create the release tag before both live jobs pass.
 
 - [x] Review the complete diff for accidental generated-file edits, secret/key
       material, unrelated scope, and changes to immutable release snapshots.

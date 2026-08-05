@@ -6,6 +6,7 @@ import path from "node:path";
 
 const FIXED_GIT_SHA = "0123456789abcdef0123456789abcdef01234567";
 const SUBJECT_TAG = `sha-${FIXED_GIT_SHA}`;
+const INVENTORY_EVENT_ORDER = "target-list-then-registry-version-id";
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 const REFERENCE_PATTERN =
   /^ghcr\.io\/bootstraplaboratory\/[a-z0-9]+(?:[._/-][a-z0-9]+)*@sha256:[a-f0-9]{64}$/u;
@@ -100,33 +101,64 @@ function normalizeVersion(version) {
   };
 }
 
-async function readSubjectVersions(snapshotDirectory, targets) {
+function normalizeVersionInventory(source) {
+  requireCondition(
+    Array.isArray(source),
+    "GHCR version inventory must be an array.",
+  );
+  const containsPages = source.some((entry) => Array.isArray(entry));
+  requireCondition(
+    !containsPages || source.every((entry) => Array.isArray(entry)),
+    "GHCR paginated version inventory is malformed.",
+  );
+  const entries = containsPages ? source.flat() : source;
+  return entries.map(normalizeVersion);
+}
+
+async function readPackageVersions(snapshotDirectory, targets) {
   const byTarget = new Map();
   for (const [index, target] of targets.entries()) {
     const source = JSON.parse(
       await readFile(path.join(snapshotDirectory, `${index}.json`), "utf8"),
     );
-    requireCondition(
-      Array.isArray(source),
-      "GHCR version inventory must be an array.",
-    );
-    const versions = source.map(normalizeVersion);
+    const versions = normalizeVersionInventory(source);
     requireCondition(
       new Set(versions.map(({ id }) => id)).size === versions.length,
       "GHCR version inventory contains duplicate identifiers.",
     );
-    byTarget.set(
-      target,
-      versions.filter(({ tags }) => tags.includes(SUBJECT_TAG)),
-    );
+    byTarget.set(target, versions);
   }
   return byTarget;
 }
 
-function repositoryRecord(registry, repositoryPrefix, target, subjects) {
+function isSubjectVersion(version) {
+  return version.tags.includes(SUBJECT_TAG);
+}
+
+function requireCompleteCosignPackageVersions(versions, target) {
+  requireCondition(
+    versions.filter((version) => !isSubjectVersion(version)).length >= 2,
+    `GHCR does not yet expose the signature and attestation package versions for ${target}.`,
+  );
+}
+
+function evidenceVersion(version) {
+  return {
+    created_at: version.createdAt,
+    digest: version.digest,
+    registry_version_id: version.id,
+    subject: isSubjectVersion(version),
+    tags: [...version.tags],
+  };
+}
+
+function repositoryRecord(registry, repositoryPrefix, target, versions) {
+  const subjects = versions.filter(isSubjectVersion);
   const record = {
     inspected: true,
+    package_version_count: versions.length,
     publication_count: subjects.length,
+    versions: versions.map(evidenceVersion),
   };
   if (subjects.length === 1) {
     const subject = subjects[0];
@@ -155,7 +187,7 @@ async function buildInventoryPlan(
   );
   validateCoordinates(registry, repositoryPrefix);
   const targets = parseTargets(targetsCsv);
-  const subjectsByTarget = await readSubjectVersions(
+  const versionsByTarget = await readPackageVersions(
     snapshotDirectory,
     targets,
   );
@@ -163,23 +195,25 @@ async function buildInventoryPlan(
   const verificationReferences = [];
 
   for (const [index, target] of targets.entries()) {
-    const subjects = subjectsByTarget.get(target);
+    const versions = versionsByTarget.get(target);
+    const subjects = versions.filter(isSubjectVersion);
     const record = repositoryRecord(
       registry,
       repositoryPrefix,
       target,
-      subjects,
+      versions,
     );
     if (assertion === "zero") {
       requireCondition(
-        subjects.length === 0,
-        `GHCR unexpectedly contains a subject publication for ${target}.`,
+        versions.length === 0,
+        `GHCR unexpectedly contains a package version for ${target}.`,
       );
     } else if (assertion === "success") {
       requireCondition(
         subjects.length === 1,
         `GHCR does not contain exactly one subject publication for ${target}.`,
       );
+      requireCompleteCosignPackageVersions(versions, target);
       record.signature_verified = true;
       record.spdx_attestation_verified = true;
       record.provenance_attestation_verified = true;
@@ -189,6 +223,7 @@ async function buildInventoryPlan(
         subjects.length === 1,
         "GHCR does not contain the completed first publication.",
       );
+      requireCompleteCosignPackageVersions(versions, target);
       record.signature_verified = true;
       record.spdx_attestation_verified = true;
       record.provenance_attestation_verified = true;
@@ -198,30 +233,42 @@ async function buildInventoryPlan(
         subjects.length === 1,
         "GHCR does not contain exactly one published subject for the failed target.",
       );
+      requireCondition(
+        versions.length === 1,
+        "GHCR failed target contains non-subject package versions after the injected boundary.",
+      );
       record.status = "published-then-failed";
     } else {
       requireCondition(
-        subjects.length === 0,
-        "GHCR contains a publication for a skipped target.",
+        versions.length === 0,
+        "GHCR contains a package version for a skipped target.",
       );
     }
     repositories[target] = record;
   }
 
-  const subjectEvents = targets.flatMap((target) =>
-    subjectsByTarget.get(target).map((subject) => ({
-      created_at: subject.createdAt,
-      operation: "subject-published",
-      registry_version_id: subject.id,
+  const versionEvents = targets.flatMap((target) =>
+    versionsByTarget.get(target).map((version) => ({
+      created_at: version.createdAt,
+      digest: version.digest,
+      operation: isSubjectVersion(version)
+        ? "subject-published"
+        : "package-version-present",
+      registry_version_id: version.id,
+      subject: isSubjectVersion(version),
+      tags: [...version.tags],
       target,
     })),
   );
-  subjectEvents.sort(
+  const targetOrder = new Map(targets.map((target, index) => [target, index]));
+  // This is a canonical serialization order, not an inference about mutation
+  // chronology across independent GHCR packages.
+  versionEvents.sort(
     (left, right) =>
-      left.registry_version_id - right.registry_version_id ||
-      left.target.localeCompare(right.target),
+      targetOrder.get(left.target) - targetOrder.get(right.target) ||
+      left.registry_version_id - right.registry_version_id,
   );
-  const events = subjectEvents.map((event, index) => ({
+  const events = versionEvents.map((event, index) => ({
     ...event,
     sequence: index + 1,
   }));
@@ -240,7 +287,15 @@ async function buildInventoryPlan(
   }
   await writePrivateFile(
     evidencePath,
-    `${JSON.stringify({ assertion, events, repositories })}\n`,
+    `${JSON.stringify({
+      assertion,
+      event_order: INVENTORY_EVENT_ORDER,
+      events,
+      registry,
+      repositories,
+      repository_prefix: repositoryPrefix,
+      targets,
+    })}\n`,
   );
   await writePrivateFile(
     verificationPath,
