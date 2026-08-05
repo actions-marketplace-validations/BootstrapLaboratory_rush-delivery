@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/toolchain-image-providers.schema.json",
+  "title": "Rush Delivery toolchain image providers",
+  "type": "object",
+  "required": ["providers"],
+  "additionalProperties": false,
+  "properties": {
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "github": {
+          "$ref": "#/$defs/githubRegistryProvider"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "githubRegistryProvider": {
+      "type": "object",
+      "required": ["kind", "repository_env", "token_env", "username_env"],
+      "additionalProperties": false,
+      "properties": {
+        "image_namespace": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "const": "github_container_registry"
+        },
+        "registry": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "repository_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "token_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "username_env": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

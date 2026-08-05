@@ -1,4 +1,4 @@
-import { Directory } from "@dagger.io/dagger";
+import type { Directory } from "@dagger.io/dagger";
 
 import type { DeployTargetDefinition } from "../../model/deploy-target.ts";
 import type { ServiceMesh } from "../../model/service-mesh.ts";

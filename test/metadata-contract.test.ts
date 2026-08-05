@@ -114,7 +114,10 @@ class MemoryMetadataRepository implements MetadataContractRepository {
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "fixtures/rush-repo");
-const ociRepoRoot = path.resolve(testDirectory, "fixtures/oci-rush-repo");
+const ociExampleRoot = path.resolve(
+  testDirectory,
+  "../examples/oci-application-image-rush-repo",
+);
 
 function validMetadataFiles(): Record<string, string> {
   return {
@@ -266,9 +269,9 @@ test("validates the fixture repository metadata contract", async () => {
   assert.ok(result.rush_projects.includes("webapp"));
 });
 
-test("validates the OCI acceptance fixture metadata contract", async () => {
+test("validates the canonical OCI example metadata contract", async () => {
   const result = await validateMetadataContractRepository(
-    new LocalMetadataRepository(ociRepoRoot),
+    new LocalMetadataRepository(ociExampleRoot),
   );
 
   assert.deepEqual(result.deploy_targets, ["control-plane-api"]);
@@ -333,6 +336,31 @@ test("does not require application image provider metadata for existing projects
   );
 
   assert.deepEqual(result.package_targets, ["server", "webapp"]);
+});
+
+test("explicit metadata validation rejects an OCI Dockerfile outside its context", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/package/targets/server.yaml"] = [
+    "name: server",
+    "artifact:",
+    "  kind: oci_image",
+    "  context: apps/server",
+    "  dockerfile: deploy/server.Dockerfile",
+    "  image: server",
+    "  platform: linux/amd64",
+    "  scan:",
+    "    fail_on: [critical]",
+    "",
+  ].join("\n");
+  files["deploy/server.Dockerfile"] = "FROM scratch\n";
+
+  await assert.rejects(
+    () =>
+      validateMetadataContractRepository(new MemoryMetadataRepository(files), {
+        require_application_image_provider_metadata: false,
+      }),
+    /OCI image dockerfile must be inside its context/,
+  );
 });
 
 test("accepts release-only metadata without deploy or cache metadata when scoped for package release", async () => {
@@ -593,6 +621,95 @@ test("reports unsafe deploy runtime workspace paths", async () => {
       assert.match(
         error.message,
         /Deploy target "server" metadata file ".+server\.yaml" is invalid: Deploy target runtime workspace dirs entry must stay inside the repository\./,
+      );
+      return true;
+    },
+  );
+});
+
+test("execution-scoped validation can skip an invalid unused application provider file", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/application-images/providers.yaml"] = "not: valid\n";
+
+  const result = await validateMetadataContractRepository(
+    new MemoryMetadataRepository(files),
+    { validate_application_image_provider_metadata: false },
+  );
+
+  assert.deepEqual(result.package_targets, ["server", "webapp"]);
+
+  await assert.rejects(
+    () =>
+      validateMetadataContractRepository(new MemoryMetadataRepository(files)),
+    /Application image provider metadata file.+is invalid/,
+  );
+});
+
+test("repository-wide validation reports provider credential projections across metadata files", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/application-images/providers.yaml"] = [
+    "providers:",
+    "  release:",
+    "    kind: oci_registry",
+    "    registry: registry.example",
+    "    repository_prefix: example/release",
+    "    username_env: RELEASE_USERNAME",
+    "    token_env: RELEASE_TOKEN",
+    "    signing_key_env: RELEASE_SIGNING_KEY",
+    "    signing_password_env: RELEASE_SIGNING_PASSWORD",
+    "    verification_key_env: RELEASE_VERIFICATION_KEY",
+    "",
+  ].join("\n");
+  files[".dagger/package/targets/webapp.yaml"] = [
+    "name: webapp",
+    "build:",
+    "  pass_env: [RELEASE_USERNAME]",
+    "  map_env:",
+    "    APP_TOKEN: RELEASE_TOKEN",
+    "  dry_run_defaults:",
+    "    RELEASE_USERNAME: dry-user",
+    "    RELEASE_TOKEN: dry-token",
+    "artifact:",
+    "  kind: directory",
+    "  path: apps/webapp/dist",
+    "",
+  ].join("\n");
+  files[".dagger/deploy/targets/server.yaml"] = [
+    "name: server",
+    "deploy_script: deploy/server.sh",
+    "runtime:",
+    "  image: node:24-bookworm-slim",
+    "  required_host_env: [RELEASE_SIGNING_KEY]",
+    "  file_mounts:",
+    "    - source_var: RELEASE_SIGNING_KEY",
+    "      target: /run/signing-key",
+    "",
+  ].join("\n");
+  files[".dagger/release/npm.yaml"] = files[".dagger/release/npm.yaml"].replace(
+    "token_env: NPM_TOKEN",
+    "token_env: RELEASE_VERIFICATION_KEY",
+  );
+
+  await assert.rejects(
+    () =>
+      validateMetadataContractRepository(new MemoryMetadataRepository(files)),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(
+        error.message,
+        /provider "release" credential field "username_env" protects environment variable "RELEASE_USERNAME".+package target "webapp".+build.pass_env/,
+      );
+      assert.match(
+        error.message,
+        /provider "release" credential field "token_env" protects environment variable "RELEASE_TOKEN".+package target "webapp".+build.map_env source/,
+      );
+      assert.match(
+        error.message,
+        /provider "release" credential field "signing_key_env" protects environment variable "RELEASE_SIGNING_KEY".+deploy target "server".+required_host_env/,
+      );
+      assert.match(
+        error.message,
+        /provider "release" credential field "verification_key_env" protects environment variable "RELEASE_VERIFICATION_KEY".+npm release "npm".+auth.token_env/,
       );
       return true;
     },

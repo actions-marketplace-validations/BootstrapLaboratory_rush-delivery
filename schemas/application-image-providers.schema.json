@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/application-image-providers.schema.json",
   "title": "Rush Delivery application image providers",
+  "description": "Credential environment names must be globally unique across every field and provider; this dynamic invariant is enforced by Rush Delivery metadata validation.",
   "type": "object",
   "required": ["providers"],
   "additionalProperties": false,
@@ -32,6 +33,7 @@
     },
     "ociRegistryProvider": {
       "type": "object",
+      "description": "All five credential environment names are distinct roles and must also be unique across other declared providers.",
       "required": [
         "kind",
         "registry",

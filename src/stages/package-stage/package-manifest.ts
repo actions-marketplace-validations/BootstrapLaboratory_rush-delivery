@@ -1,3 +1,4 @@
+import { isSafeApplicationImageTarget } from "../../application-images/evidence-target.ts";
 import { assertKnownKeys } from "../../metadata/parse-utils.ts";
 import {
   PACKAGE_MANIFEST_SCHEMA_V2,
@@ -16,6 +17,7 @@ const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const FULL_GIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
 const OCI_IMAGE_NAME_PATTERN =
   /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
+const OCI_EVIDENCE_RELATIVE_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 const OCI_PLATFORM_PATTERN = /^[a-z0-9]+\/[a-z0-9_]+(?:\/[a-z0-9._-]+)?$/;
 const OCI_REPOSITORY_PATTERN =
   /^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[1-9][0-9]{0,4})?\/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/;
@@ -143,11 +145,12 @@ function parseEvidencePath(
 ): string {
   const evidencePath = parseRequiredString(rawValue, name);
   const prefix = `.dagger/runtime/evidence/${target}/`;
+  const relativePath = evidencePath.slice(prefix.length);
 
   if (
     !evidencePath.startsWith(prefix) ||
-    evidencePath
-      .slice(prefix.length)
+    !OCI_EVIDENCE_RELATIVE_PATH_PATTERN.test(relativePath) ||
+    relativePath
       .split("/")
       .some(
         (segment) =>
@@ -158,6 +161,14 @@ function parseEvidencePath(
   }
 
   return evidencePath;
+}
+
+function assertSafeOciEvidenceTarget(target: string): void {
+  if (!isSafeApplicationImageTarget(target)) {
+    throw new Error(
+      `Package manifest OCI artifact target "${target}" must be a safe evidence path segment.`,
+    );
+  }
 }
 
 function parseEvidenceDocument(
@@ -365,6 +376,7 @@ function parseV2OciArtifact(
   rawValue: unknown,
   target: string,
 ): OciImagePackageManifestArtifact {
+  assertSafeOciEvidenceTarget(target);
   const name = `Package manifest OCI artifact "${target}"`;
   const value = parseObject(rawValue, name);
   const status = parseRequiredString(value.status, `${name} status`);
@@ -475,7 +487,7 @@ function parseArtifacts(
 export function validatePackageManifest(rawValue: unknown): PackageManifest {
   const value = parseObject(rawValue, "Package manifest");
 
-  if (!("artifacts" in value)) {
+  if (!Object.hasOwn(value, "artifacts")) {
     throw new Error('Package manifest field "artifacts" must be an object.');
   }
 

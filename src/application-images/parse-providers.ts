@@ -5,6 +5,7 @@ import type {
   ApplicationImageProvidersDefinition,
   OciRegistryProviderDefinition,
 } from "../model/application-image.ts";
+import { assertUniqueApplicationImageCredentialNames } from "./environment-boundary.ts";
 
 const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 const PROVIDER_NAME_PATTERN = /^[a-z][a-z0-9_-]*$/;
@@ -167,5 +168,7 @@ export function parseApplicationImageProviders(
     providers[providerName] = parseProvider(rawProvider, providerName);
   }
 
-  return { providers };
+  const definition = { providers };
+  assertUniqueApplicationImageCredentialNames(definition);
+  return definition;
 }

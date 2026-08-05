@@ -1,27 +1,37 @@
 import { Directory, File } from "@dagger.io/dagger";
 
+import type { ProtectedApplicationImageCredential } from "../../application-images/environment-boundary.ts";
 import { parseCiPlan } from "../../ci-plan/parse-ci-plan.ts";
 import { logSection } from "../../logging/sections.ts";
 import { installRush, prepareRushContainer } from "../../rush/container.ts";
 import { parseDeployEnvFile } from "../deploy/runtime-env.ts";
+import type { PreparedPackageTarget } from "../package-stage/package-planning.ts";
 import {
   resolvePackageBuildEnvironment,
+  resolvePackageBuildEnvironmentFromDefinitions,
   withBuildEnvironment,
 } from "./build-env.ts";
 import { buildRushBuildSteps } from "./rush-build-plan.ts";
 
 const WORKDIR = "/workspace";
 
+export type BuildDeployTargetsOptions = {
+  hostEnv?: Record<string, string>;
+  packageTargets?: PreparedPackageTarget[];
+  protectedApplicationImageCredentials?: ProtectedApplicationImageCredential[];
+};
+
 export async function buildDeployTargets(
   repo: Directory,
   ciPlanFile: File,
   deployEnvFile?: File,
   dryRun: boolean = false,
+  options: BuildDeployTargetsOptions = {},
 ): Promise<Directory> {
   const ciPlan = parseCiPlan(await ciPlanFile.contents());
-  const hostEnv = deployEnvFile
-    ? parseDeployEnvFile(await deployEnvFile.contents())
-    : {};
+  const hostEnv =
+    options.hostEnv ??
+    (deployEnvFile ? parseDeployEnvFile(await deployEnvFile.contents()) : {});
 
   logSection("Rush build");
 
@@ -32,16 +42,25 @@ export async function buildDeployTargets(
 
   console.log(`[build] Rush targets: ${ciPlan.deploy_targets.join(", ")}`);
 
-  const buildEnv = await resolvePackageBuildEnvironment(
-    repo,
-    ciPlan.deploy_targets,
-    hostEnv,
-    {
-      dryRun,
-      requirePackageTargets: true,
-      stage: "build",
-    },
-  );
+  const buildEnvironmentOptions = {
+    dryRun,
+    protectedApplicationImageCredentials:
+      options.protectedApplicationImageCredentials,
+    requirePackageTargets: true,
+    stage: "build",
+  };
+  const buildEnv = options.packageTargets
+    ? resolvePackageBuildEnvironmentFromDefinitions(
+        options.packageTargets,
+        hostEnv,
+        buildEnvironmentOptions,
+      )
+    : await resolvePackageBuildEnvironment(
+        repo,
+        ciPlan.deploy_targets,
+        hostEnv,
+        buildEnvironmentOptions,
+      );
   if (Object.keys(buildEnv).length > 0) {
     console.log(
       `[build] Environment: ${Object.keys(buildEnv).sort().join(", ")}`,

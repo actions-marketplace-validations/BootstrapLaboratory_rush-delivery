@@ -2,6 +2,7 @@ import type {
   ApplicationImageProvidersDefinition,
   OciRegistryProviderDefinition,
 } from "../model/application-image.ts";
+import { assertUniqueApplicationImageCredentialNames } from "./environment-boundary.ts";
 import { parseApplicationImageProvider } from "./options.ts";
 
 export type SelectedApplicationImageProvider = {
@@ -58,7 +59,14 @@ export function selectApplicationImageProvider(
     return { name };
   }
 
-  const definition = providers?.providers[name];
+  if (providers !== undefined) {
+    assertUniqueApplicationImageCredentialNames(providers);
+  }
+
+  const definition =
+    providers !== undefined && Object.hasOwn(providers.providers, name)
+      ? providers.providers[name]
+      : undefined;
 
   if (definition === undefined) {
     throw new Error(

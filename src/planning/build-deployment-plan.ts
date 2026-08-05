@@ -8,14 +8,14 @@ export function buildDeploymentPlan(
   const selectedTargetSet = new Set(selectedTargets);
 
   for (const target of selectedTargets) {
-    if (!(target in mesh.services)) {
+    if (!Object.hasOwn(mesh.services, target)) {
       throw new Error(`Unknown release target "${target}" in services mesh.`);
     }
   }
 
   for (const [target, service] of Object.entries(mesh.services)) {
     for (const dependency of service.deploy_after) {
-      if (!(dependency in mesh.services)) {
+      if (!Object.hasOwn(mesh.services, dependency)) {
         throw new Error(
           `Unknown dependency "${dependency}" referenced by "${target}".`,
         );

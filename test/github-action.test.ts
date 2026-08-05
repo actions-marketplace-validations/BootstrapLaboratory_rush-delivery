@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -76,7 +76,9 @@ test("action metadata defines a composite action over dagger-for-github", () => 
   assert.equal(metadata.runs.using, "composite");
   assert.ok(
     metadata.runs.steps.some(
-      (step) => step.uses === "dagger/dagger-for-github@v8.4.1",
+      (step) =>
+        step.uses ===
+        "dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77",
     ),
   );
 });
@@ -85,9 +87,12 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
   const tempDir = mkdtempSync(path.join(tmpdir(), "rush-delivery-action-"));
   const outputPath = path.join(tempDir, "github-output");
   const sourceCredential = path.join(tempDir, "gha-creds.json");
+  const sourceExecutable = path.join(tempDir, "deploy-helper.sh");
   const deployEnvFile = path.join(tempDir, "base.env");
 
   writeFileSync(sourceCredential, '{"ok":true}\n');
+  writeFileSync(sourceExecutable, "#!/usr/bin/env bash\nexit 0\n");
+  chmodSync(sourceExecutable, 0o755);
   writeFileSync(deployEnvFile, "BASE_VALUE=from-file\n");
 
   const result = runPrepare({
@@ -113,7 +118,7 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
     INPUT_INCLUDE_GITHUB_ENV: "true",
     INPUT_MODULE: "",
     INPUT_PR_BASE_SHA: "",
-    INPUT_RUNTIME_FILE_MAP: `${sourceCredential}=>gcp-credentials.json\n=>ignored.json`,
+    INPUT_RUNTIME_FILE_MAP: `${sourceCredential}=>gcp-credentials.json\n${sourceExecutable}=>bin/deploy-helper.sh\n=>ignored.json`,
     INPUT_RUNTIME_FILES: "",
     INPUT_RUSH_CACHE_POLICY: "lazy",
     INPUT_RUSH_CACHE_PROVIDER: "github",
@@ -163,13 +168,29 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
   const releaseEnv = await readFile(outputs["release-env-file"], "utf8");
   assert.equal(releaseEnv, "");
 
+  for (const envFile of [
+    outputs["workflow-env-file"],
+    outputs["deploy-env-file"],
+    outputs["release-env-file"],
+  ]) {
+    assert.equal((await stat(envFile)).mode & 0o777, 0o600);
+  }
+
+  const copiedRuntimeCredential = path.join(
+    outputs["runtime-files"],
+    "gcp-credentials.json",
+  );
   assert.equal(
-    await readFile(
-      path.join(outputs["runtime-files"], "gcp-credentials.json"),
-      "utf8",
-    ),
+    await readFile(copiedRuntimeCredential, "utf8"),
     '{"ok":true}\n',
   );
+  assert.equal((await stat(copiedRuntimeCredential)).mode & 0o777, 0o600);
+  assert.equal(
+    (await stat(path.join(outputs["runtime-files"], "bin/deploy-helper.sh")))
+      .mode & 0o777,
+    0o700,
+  );
+  assert.equal((await stat(outputs["runtime-files"])).mode & 0o777, 0o700);
 
   await assert.rejects(
     stat(path.join(outputs["runtime-files"], "ignored.json")),

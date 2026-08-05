@@ -1,6 +1,7 @@
 import type { OciRegistryProviderDefinition } from "../model/application-image.ts";
 import type { PlannedOciImagePackageManifestArtifact } from "../model/package-manifest.ts";
 import type { OciImagePackagePlan } from "../stages/package-stage/package-action-plan.ts";
+import { normalizeCredentialFreeRepositoryLocator } from "../source/repository-locator.ts";
 import { buildApplicationImageRepository } from "./reference.ts";
 
 const FULL_GIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
@@ -24,27 +25,10 @@ export function normalizeApplicationImageSourceUrl(
     return "";
   }
 
-  if (/[^\S\r\n]|[\u0000-\u001f\u007f]/u.test(sourceRepositoryUrl)) {
-    throw new Error(
-      "OCI image source repository URL must not contain whitespace or control characters.",
-    );
-  }
-
-  try {
-    const parsed = new URL(sourceRepositoryUrl);
-
-    if (parsed.username.length > 0 || parsed.password.length > 0) {
-      throw new Error(
-        "OCI image source repository URL must not embed credentials.",
-      );
-    }
-  } catch (error) {
-    if (!(error instanceof TypeError)) {
-      throw error;
-    }
-  }
-
-  return sourceRepositoryUrl;
+  return normalizeCredentialFreeRepositoryLocator(
+    sourceRepositoryUrl,
+    "OCI image source repository URL",
+  );
 }
 
 export function createPlannedApplicationImageArtifact(

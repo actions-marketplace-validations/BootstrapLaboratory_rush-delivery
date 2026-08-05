@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { dockerfilePathInsideBuildContext } from "../../application-images/docker-build-context.ts";
+import { assertSafeApplicationImageTarget } from "../../application-images/evidence-target.ts";
 import type { PackageManifestArtifact } from "../../model/package-manifest.ts";
 import type {
   OciImageScanSpec,
@@ -103,15 +105,18 @@ export function buildPackageActionPlan(
       };
     }
 
-    case "oci_image":
+    case "oci_image": {
+      assertSafeApplicationImageTarget(target);
+      dockerfilePathInsideBuildContext(
+        definition.artifact.context,
+        definition.artifact.dockerfile,
+      );
+
       return {
         commands: [],
         oci: {
           context: definition.artifact.context,
-          dockerfile: path.posix.relative(
-            definition.artifact.context,
-            definition.artifact.dockerfile,
-          ),
+          dockerfile: definition.artifact.dockerfile,
           image: definition.artifact.image,
           platform: definition.artifact.platform,
           scan: definition.artifact.scan,
@@ -135,6 +140,7 @@ export function buildPackageActionPlan(
               ]),
         ],
       };
+    }
 
     default:
       throw new Error("Unsupported package target artifact kind.");

@@ -76,3 +76,12 @@ export type PackageManifest = {
   artifacts: Record<string, PackageManifestArtifact>;
   schema_version?: typeof PACKAGE_MANIFEST_SCHEMA_V2;
 };
+
+export function getOwnPackageManifestArtifact(
+  manifest: PackageManifest,
+  target: string,
+): PackageManifestArtifact | undefined {
+  return Object.hasOwn(manifest.artifacts, target)
+    ? manifest.artifacts[target]
+    : undefined;
+}

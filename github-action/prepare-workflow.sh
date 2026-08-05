@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 die() {
 	printf 'rush-delivery action: %s\n' "$*" >&2
@@ -81,6 +82,7 @@ copy_file_if_present() {
 	[[ -f ${source} ]] || die "runtime file source does not exist: ${source}"
 	mkdir -p "$(dirname "${dest}")"
 	cp "${source}" "${dest}"
+	chmod go-rwx "${dest}"
 }
 
 normalize_runtime_dest() {
@@ -139,6 +141,7 @@ runtime_files="${INPUT_RUNTIME_FILES:-${action_temp}/runtime-files}"
 : >"${workflow_env_file}"
 : >"${deploy_env_file}"
 : >"${release_env_file}"
+chmod 0600 "${workflow_env_file}" "${deploy_env_file}" "${release_env_file}"
 
 append_env_content "${workflow_env_file}" "${INPUT_WORKFLOW_ENV_FILE-}" "${INPUT_WORKFLOW_ENV-}" "workflow-env"
 append_env_content "${deploy_env_file}" "${INPUT_DEPLOY_ENV_FILE-}" "${INPUT_DEPLOY_ENV-}" "deploy-env"

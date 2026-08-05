@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/package-target.schema.json
 name: control-plane-api
 artifact:
   kind: oci_image

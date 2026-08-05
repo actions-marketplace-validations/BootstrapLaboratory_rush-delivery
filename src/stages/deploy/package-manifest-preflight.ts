@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
-import type { PackageManifest } from "../../model/package-manifest.ts";
+import {
+  getOwnPackageManifestArtifact,
+  type PackageManifest,
+} from "../../model/package-manifest.ts";
+import { validatePackageManifest } from "../package-stage/package-manifest.ts";
 
 const FULL_GIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
 
@@ -10,10 +14,11 @@ export function assertPackageManifestDeployPreflight(
   gitSha: string,
   dryRun: boolean,
 ): void {
+  const validatedManifest = validatePackageManifest(packageManifest);
   const normalizedGitSha = gitSha.toLowerCase();
 
   for (const target of selectedTargets) {
-    const artifact = packageManifest.artifacts[target];
+    const artifact = getOwnPackageManifestArtifact(validatedManifest, target);
 
     if (artifact === undefined) {
       throw new Error(
@@ -50,8 +55,10 @@ export async function assertPackageManifestEvidenceIntegrity(
   packageManifest: PackageManifest,
   readEvidence: (path: string) => Promise<string>,
 ): Promise<void> {
+  const validatedManifest = validatePackageManifest(packageManifest);
+
   for (const target of selectedTargets) {
-    const artifact = packageManifest.artifacts[target];
+    const artifact = getOwnPackageManifestArtifact(validatedManifest, target);
 
     if (artifact?.kind !== "oci_image" || artifact.status !== "published") {
       continue;
@@ -62,12 +69,21 @@ export async function assertPackageManifestEvidenceIntegrity(
       sbom: artifact.evidence.sbom,
       scan: artifact.evidence.scan,
     })) {
-      const contents = await readEvidence(evidence.path);
+      let contents: string;
+
+      try {
+        contents = await readEvidence(evidence.path);
+      } catch {
+        throw new Error(
+          `OCI artifact ${kind} evidence file for target "${target}" is missing or unreadable at "${evidence.path}".`,
+        );
+      }
+
       const digest = `sha256:${createHash("sha256").update(contents).digest("hex")}`;
 
       if (digest !== evidence.digest) {
         throw new Error(
-          `OCI artifact ${kind} evidence digest for target "${target}" does not match "${evidence.path}".`,
+          `OCI artifact ${kind} evidence hash for target "${target}" does not match manifest digest for "${evidence.path}".`,
         );
       }
     }
