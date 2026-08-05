@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/deploy-target.schema.json",
+  "title": "Rush Delivery deploy target",
+  "type": "object",
+  "required": ["deploy_script", "name", "runtime"],
+  "additionalProperties": false,
+  "properties": {
+    "deploy_script": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["image"],
+      "additionalProperties": false,
+      "properties": {
+        "dry_run_defaults": {
+          "$ref": "#/$defs/envMap"
+        },
+        "env": {
+          "$ref": "#/$defs/envMap"
+        },
+        "file_mounts": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["source_var", "target"],
+                "additionalProperties": false,
+                "properties": {
+                  "source_var": {
+                    "$ref": "#/$defs/projectEnvName"
+                  },
+                  "target": {
+                    "$ref": "#/$defs/fileMountTarget"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["source"],
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "$ref": "#/$defs/repoPath"
+                  },
+                  "target": {
+                    "$ref": "#/$defs/fileMountTarget"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "install": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "map_env": {
+          "$ref": "#/$defs/envNameMap"
+        },
+        "pass_env": {
+          "$ref": "#/$defs/envNameList"
+        },
+        "required_host_env": {
+          "$ref": "#/$defs/envNameList"
+        },
+        "workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dirs": {
+              "$ref": "#/$defs/repoPathList"
+            },
+            "files": {
+              "$ref": "#/$defs/repoPathList"
+            },
+            "mode": {
+              "const": "full"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "envMap": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/projectEnvName"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "envNameList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/projectEnvName"
+      },
+      "uniqueItems": true
+    },
+    "envNameMap": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/projectEnvName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/envName"
+      }
+    },
+    "fileMountTarget": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^/$"
+          },
+          {
+            "pattern": "^/workspace(?:/\\.dagger(?:/runtime(?:/evidence(?:/.*)?)?)?)?$"
+          },
+          {
+            "pattern": "^\\.dagger(?:/runtime(?:/evidence(?:/.*)?)?)?$"
+          }
+        ]
+      }
+    },
+    "projectEnvName": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/envName"
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "const": "GIT_SHA"
+              },
+              {
+                "const": "DRY_RUN"
+              },
+              {
+                "type": "string",
+                "pattern": "^ARTIFACT_"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "repoPath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^/"
+          },
+          {
+            "pattern": "(^|/)\\.\\.(/|$)"
+          }
+        ]
+      }
+    },
+    "repoPathList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/repoPath"
+      },
+      "uniqueItems": true
+    }
+  }
+}

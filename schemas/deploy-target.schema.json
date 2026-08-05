@@ -35,11 +35,10 @@
                 "additionalProperties": false,
                 "properties": {
                   "source_var": {
-                    "$ref": "#/$defs/envName"
+                    "$ref": "#/$defs/projectEnvName"
                   },
                   "target": {
-                    "type": "string",
-                    "minLength": 1
+                    "$ref": "#/$defs/fileMountTarget"
                   }
                 }
               },
@@ -52,8 +51,7 @@
                     "$ref": "#/$defs/repoPath"
                   },
                   "target": {
-                    "type": "string",
-                    "minLength": 1
+                    "$ref": "#/$defs/fileMountTarget"
                   }
                 }
               }
@@ -102,7 +100,7 @@
     "envMap": {
       "type": "object",
       "propertyNames": {
-        "$ref": "#/$defs/envName"
+        "$ref": "#/$defs/projectEnvName"
       },
       "additionalProperties": {
         "type": "string"
@@ -115,18 +113,58 @@
     "envNameList": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/envName"
+        "$ref": "#/$defs/projectEnvName"
       },
       "uniqueItems": true
     },
     "envNameMap": {
       "type": "object",
       "propertyNames": {
-        "$ref": "#/$defs/envName"
+        "$ref": "#/$defs/projectEnvName"
       },
       "additionalProperties": {
         "$ref": "#/$defs/envName"
       }
+    },
+    "fileMountTarget": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^/$"
+          },
+          {
+            "pattern": "^/workspace(?:/\\.dagger(?:/runtime(?:/evidence(?:/.*)?)?)?)?$"
+          },
+          {
+            "pattern": "^\\.dagger(?:/runtime(?:/evidence(?:/.*)?)?)?$"
+          }
+        ]
+      }
+    },
+    "projectEnvName": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/envName"
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "const": "GIT_SHA"
+              },
+              {
+                "const": "DRY_RUN"
+              },
+              {
+                "type": "string",
+                "pattern": "^ARTIFACT_"
+              }
+            ]
+          }
+        }
+      ]
     },
     "repoPath": {
       "type": "string",

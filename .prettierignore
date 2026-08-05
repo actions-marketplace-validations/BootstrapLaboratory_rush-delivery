@@ -1,0 +1,8 @@
+# Rush-generated bootstrap bundles are byte-validated by Rush itself.
+examples/oci-application-image-rush-repo/common/scripts/install-run.js
+examples/oci-application-image-rush-repo/common/scripts/install-run-rush.js
+examples/oci-application-image-rush-repo/common/scripts/install-run-rushx.js
+examples/oci-application-image-rush-repo/common/scripts/install-run-rush-pnpm.js
+
+# Released documentation snapshots are immutable inputs, not formatter targets.
+docs-versions/versioned_docs/**

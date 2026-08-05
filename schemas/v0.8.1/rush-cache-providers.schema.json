@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/rush-cache-providers.schema.json",
+  "title": "Rush Delivery Rush cache providers",
+  "type": "object",
+  "required": ["cache", "providers"],
+  "additionalProperties": false,
+  "properties": {
+    "cache": {
+      "type": "object",
+      "required": ["paths", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "$ref": "#/$defs/repoPathList"
+        },
+        "version": {
+          "$ref": "#/$defs/ociTag"
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "github": {
+          "$ref": "#/$defs/githubRegistryProvider"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "githubRegistryProvider": {
+      "type": "object",
+      "required": ["kind", "repository_env", "token_env", "username_env"],
+      "additionalProperties": false,
+      "properties": {
+        "image_namespace": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "const": "github_container_registry"
+        },
+        "registry": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "repository_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "token_env": {
+          "$ref": "#/$defs/envName"
+        },
+        "username_env": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ociTag": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$"
+    },
+    "repoPath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^/"
+          },
+          {
+            "pattern": "(^|/)\\.\\.(/|$)"
+          }
+        ]
+      }
+    },
+    "repoPathList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/repoPath"
+      },
+      "uniqueItems": true
+    }
+  }
+}

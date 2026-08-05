@@ -37,7 +37,7 @@ export class RushDelivery {
   /**
    * Returns a simple marker proving the Dagger module is callable.
    */
-  @func()
+  @func({ cache: "session" })
   ping(): string {
     return "rush-delivery ready";
   }
@@ -45,7 +45,7 @@ export class RushDelivery {
   /**
    * Runs the framework's local typecheck and unit tests.
    */
-  @func()
+  @func({ cache: "never" })
   async selfCheck(
     @argument({
       defaultPath: ".",
@@ -59,7 +59,7 @@ export class RushDelivery {
   /**
    * Computes the canonical CI plan JSON for detect/package/deploy handoff.
    */
-  @func()
+  @func({ cache: "never" })
   async detect(
     repo: Directory,
     eventName: string = "push",
@@ -67,7 +67,9 @@ export class RushDelivery {
     prBaseSha: string = "",
     deployTagPrefix: string = "deploy/prod",
   ): Promise<string> {
-    await assertMetadataContract(repo);
+    await assertMetadataContract(repo, {
+      validate_application_image_provider_metadata: false,
+    });
 
     return detectCiPlan(
       repo,
@@ -81,7 +83,7 @@ export class RushDelivery {
   /**
    * Validates and normalizes a release target selection for future planning work.
    */
-  @func()
+  @func({ cache: "session" })
   describeReleaseTargets(releaseTargetsJson: string = "[]"): string {
     const normalizedTargets = parseReleaseTargets(releaseTargetsJson);
 
@@ -95,14 +97,16 @@ export class RushDelivery {
   /**
    * Runs the generic Rush build stage for deploy targets selected by ci-plan.json.
    */
-  @func()
+  @func({ cache: "never" })
   async buildDeployTargets(
     repo: Directory,
     ciPlanFile: File,
     deployEnvFile?: File,
     dryRun: boolean = false,
   ): Promise<Directory> {
-    await assertMetadataContract(repo);
+    await assertMetadataContract(repo, {
+      validate_application_image_provider_metadata: false,
+    });
 
     return buildDeployTargets(repo, ciPlanFile, deployEnvFile, dryRun);
   }
@@ -110,7 +114,7 @@ export class RushDelivery {
   /**
    * Materializes deploy package artifacts for deploy targets selected by ci-plan.json.
    */
-  @func()
+  @func({ cache: "never" })
   async packageDeployTargets(
     repo: Directory,
     ciPlanFile: File,
@@ -121,7 +125,9 @@ export class RushDelivery {
     deployEnvFile?: File,
     applicationImageProvider: string = "off",
   ): Promise<Directory> {
-    await assertMetadataContract(repo);
+    await assertMetadataContract(repo, {
+      validate_application_image_provider_metadata: false,
+    });
 
     return packageDeployTargets(
       repo,
@@ -138,7 +144,7 @@ export class RushDelivery {
   /**
    * Runs build and package as separate stages while exporting the final packaged workspace once.
    */
-  @func()
+  @func({ cache: "never" })
   async buildAndPackageDeployTargets(
     repo: Directory,
     ciPlanFile: File,
@@ -149,7 +155,9 @@ export class RushDelivery {
     sourceRepositoryUrl: string = "",
     applicationImageProvider: string = "off",
   ): Promise<Directory> {
-    await assertMetadataContract(repo);
+    await assertMetadataContract(repo, {
+      validate_application_image_provider_metadata: false,
+    });
 
     return buildAndPackageDeployTargets(
       repo,
@@ -166,7 +174,7 @@ export class RushDelivery {
   /**
    * Executes the release plan in wave order, applying generic target runtime handling in parallel within each wave.
    */
-  @func()
+  @func({ cache: "never" })
   async deployRelease(
     repo: Directory,
     gitSha: string,
@@ -181,7 +189,9 @@ export class RushDelivery {
     dockerSocket?: Socket,
     runtimeFiles?: Directory,
   ): Promise<string> {
-    await assertMetadataContract(repo);
+    await assertMetadataContract(repo, {
+      validate_application_image_provider_metadata: false,
+    });
 
     return deployRelease(
       repo,
@@ -204,7 +214,7 @@ export class RushDelivery {
   /**
    * Validates cross-file Dagger metadata contracts before running release stages.
    */
-  @func()
+  @func({ cache: "session" })
   async validateMetadataContract(repo: Directory): Promise<string> {
     return formatMetadataContractValidationResult(
       await validateMetadataContractForRepo(repo),
@@ -214,7 +224,7 @@ export class RushDelivery {
   /**
    * Runs the deploy-oriented workflow as one Dagger composition: detect, build, package, then deploy.
    */
-  @func()
+  @func({ cache: "never" })
   async workflow(
     gitSha: string,
     eventName: string = "push",
@@ -279,7 +289,7 @@ export class RushDelivery {
   /**
    * Runs Dagger-owned pull-request validation for affected Rush projects.
    */
-  @func()
+  @func({ cache: "never" })
   async validate(
     eventName: string = "pull_request",
     prBaseSha: string = "",
@@ -322,7 +332,7 @@ export class RushDelivery {
   /**
    * Runs the package release/versioning flow from release metadata.
    */
-  @func()
+  @func({ cache: "never" })
   async releasePackages(
     gitSha: string = "",
     dryRun: boolean = true,

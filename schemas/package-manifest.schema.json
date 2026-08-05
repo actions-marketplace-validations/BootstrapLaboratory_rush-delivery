@@ -11,6 +11,19 @@
     },
     "artifacts": {
       "type": "object",
+      "patternProperties": {
+        "^(?:\\.{1,2}|(?![A-Za-z0-9@._-]+$).*)$": {
+          "not": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "oci_image"
+              }
+            }
+          }
+        }
+      },
       "additionalProperties": {
         "oneOf": [
           {
@@ -44,8 +57,7 @@
           "minLength": 1
         },
         "path": {
-          "type": "string",
-          "pattern": "^\\.dagger/runtime/evidence/[^/]+/.+$"
+          "$ref": "#/$defs/evidencePath"
         },
         "subject_digest": {
           "$ref": "#/$defs/digest"
@@ -67,6 +79,10 @@
           "$ref": "#/$defs/repositoryPath"
         }
       }
+    },
+    "evidencePath": {
+      "type": "string",
+      "pattern": "^(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\)\\.dagger/runtime/evidence/(?!\\.{1,2}(?:/|$))[A-Za-z0-9@._-]+/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
     },
     "image": {
       "type": "string",
@@ -162,10 +178,10 @@
       "additionalProperties": false,
       "properties": {
         "provenance": {
-          "$ref": "#/$defs/evidenceDocument"
+          "$ref": "#/$defs/provenanceEvidenceDocument"
         },
         "sbom": {
-          "$ref": "#/$defs/evidenceDocument"
+          "$ref": "#/$defs/sbomEvidenceDocument"
         },
         "scan": {
           "$ref": "#/$defs/scanEvidence"
@@ -181,7 +197,22 @@
     },
     "repositoryPath": {
       "type": "string",
-      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\).+$"
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\)(?!.*\\/$).+$"
+    },
+    "provenanceEvidenceDocument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceDocument"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "format": {
+              "const": "slsa-provenance-v1"
+            }
+          }
+        }
+      ]
     },
     "scanEvidence": {
       "type": "object",
@@ -192,8 +223,7 @@
           "$ref": "#/$defs/digest"
         },
         "path": {
-          "type": "string",
-          "pattern": "^\\.dagger/runtime/evidence/[^/]+/.+$"
+          "$ref": "#/$defs/evidencePath"
         },
         "policy": {
           "type": "array",
@@ -227,6 +257,21 @@
           "const": true
         }
       }
+    },
+    "sbomEvidenceDocument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceDocument"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "format": {
+              "const": "spdx-json"
+            }
+          }
+        }
+      ]
     },
     "sourceRevision": {
       "type": "string",

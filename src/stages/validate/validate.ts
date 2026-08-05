@@ -197,6 +197,7 @@ export async function validate(input: ValidateInput): Promise<string> {
     require_rush_cache_metadata: requiresRushCacheProviderMetadata({
       rushCacheProvider,
     }),
+    validate_application_image_provider_metadata: false,
   });
 
   const rushOptions = {

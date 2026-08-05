@@ -68,6 +68,21 @@ test("fails when deploy targets are malformed", () => {
   );
 });
 
+test("stably deduplicates target arrays before a target can run twice", () => {
+  const ciPlan = parseCiPlan(`{
+    "mode": "release",
+    "pr_base_sha": "",
+    "affected_projects_by_deploy_target": {},
+    "validate_targets": ["lint", "test", "lint"],
+    "deploy_targets": ["server", "webapp", "server"],
+    "release_targets": ["npm", "container", "npm"]
+  }`);
+
+  assert.deepEqual(ciPlan.validate_targets, ["lint", "test"]);
+  assert.deepEqual(ciPlan.deploy_targets, ["server", "webapp"]);
+  assert.deepEqual(ciPlan.release_targets, ["npm", "container"]);
+});
+
 test("fails when mode is unsupported", () => {
   assert.throws(
     () =>

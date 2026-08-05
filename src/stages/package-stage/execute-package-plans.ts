@@ -1,21 +1,31 @@
 import type { Container, Directory } from "@dagger.io/dagger";
 
+import type { ApplicationImageProviderActivation } from "../../application-images/activation.ts";
+import { formatApplicationImageCredentialCapability } from "../../application-images/credential-capability.ts";
+import { preflightApplicationImageProvider } from "../../application-images/cosign.ts";
+import { collectApplicationImageCredentialNames } from "../../application-images/environment-boundary.ts";
 import { loadApplicationImageProviders } from "../../application-images/load-providers.ts";
 import { parseApplicationImageProvider } from "../../application-images/options.ts";
-import { packageApplicationImage } from "../../application-images/package-image.ts";
+import {
+  finalizeApplicationImage,
+  planApplicationImage,
+  prepareApplicationImage,
+  type PackageApplicationImageResult,
+  type PreparedApplicationImage,
+} from "../../application-images/package-image.ts";
+import type { ResolvedApplicationImageProvider } from "../../application-images/resolve-provider.ts";
 import { resolveApplicationImageProvider } from "../../application-images/resolve-provider.ts";
 import type { PackageManifestArtifact } from "../../model/package-manifest.ts";
 import { logSubsection } from "../../logging/sections.ts";
+import { canonicalizeFrameworkRuntime } from "../../runtime/framework-runtime.ts";
 import { RUSH_WORKDIR } from "../../rush/container.ts";
 import type { PackageActionPlan } from "./package-action-plan.ts";
-import {
-  createPackageManifest,
-  formatPackageManifest,
-} from "./package-manifest.ts";
 import { assertPackageValidation } from "./package-validation.ts";
-import { collectOciPackageResults } from "./oci-package-results.ts";
-
-const PACKAGE_MANIFEST_PATH = ".dagger/runtime/package-manifest.json";
+import { writePackageRuntimeMetadata } from "./package-runtime-metadata.ts";
+import {
+  executeOciPackageBatch,
+  OCI_PUBLICATION_BOUNDARY_MESSAGE,
+} from "./oci-package-results.ts";
 
 export type NamedPackageActionPlan = {
   plan: PackageActionPlan;
@@ -23,6 +33,7 @@ export type NamedPackageActionPlan = {
 };
 
 export type ExecutePackagePlansOptions = {
+  applicationImageProviderActivation?: ApplicationImageProviderActivation;
   applicationImageProvider?: string;
   dryRun?: boolean;
   gitSha?: string;
@@ -53,21 +64,37 @@ export async function executePackagePlans(
     } => "oci" in entry.plan,
   );
   const dryRun = options.dryRun ?? false;
-  const providerName = parseApplicationImageProvider(
-    options.applicationImageProvider ?? "off",
-  );
-  const providers =
-    ociPlans.length > 0 && providerName !== "off"
-      ? await loadApplicationImageProviders(sourceRepo)
-      : undefined;
-  const provider = resolveApplicationImageProvider(
-    providerName,
-    providers,
-    options.hostEnv ?? {},
-    dryRun,
-  );
+  let provider: ResolvedApplicationImageProvider | undefined;
+  let credentialCapability: string | undefined;
 
-  if (ociPlans.length > 0 && !dryRun && provider.name === "off") {
+  if (ociPlans.length > 0) {
+    const providerName =
+      options.applicationImageProviderActivation?.name ??
+      parseApplicationImageProvider(options.applicationImageProvider ?? "off");
+    const providers =
+      options.applicationImageProviderActivation?.providers ??
+      (providerName === "off"
+        ? undefined
+        : await loadApplicationImageProviders(sourceRepo));
+    const protectedCredentials =
+      options.applicationImageProviderActivation?.protectedCredentials ??
+      (providers === undefined
+        ? []
+        : collectApplicationImageCredentialNames(providers));
+
+    if (providerName !== "off") {
+      credentialCapability =
+        formatApplicationImageCredentialCapability(protectedCredentials);
+    }
+    provider = resolveApplicationImageProvider(
+      providerName,
+      providers,
+      options.hostEnv ?? {},
+      dryRun,
+    );
+  }
+
+  if (provider !== undefined && !dryRun && provider.name === "off") {
     throw new Error(
       "Live OCI image packaging requires applicationImageProvider to select a configured provider.",
     );
@@ -94,30 +121,64 @@ export async function executePackagePlans(
     }
   }
 
-  let packagedRepo = nextContainer.directory(RUSH_WORKDIR);
-  const artifacts: Record<string, PackageManifestArtifact> = {};
+  if (ociPlans.length > 0 && !dryRun) {
+    nextContainer = await nextContainer.sync();
+  }
+
+  let packagedRepo = await canonicalizeFrameworkRuntime(
+    sourceRepo,
+    nextContainer.directory(RUSH_WORKDIR),
+  );
+  const artifacts = new Map<string, PackageManifestArtifact>();
 
   for (const { plan, target } of packagePlans) {
     if (!("oci" in plan)) {
-      artifacts[target] = plan.artifact;
+      artifacts.set(target, plan.artifact);
     }
   }
 
-  const ociResults = await collectOciPackageResults(
-    ociPlans.map(({ plan, target }) => ({
-      run: () =>
-        packageApplicationImage(packagedRepo, target, plan.oci, {
+  if (provider === undefined) {
+    return {
+      container: nextContainer,
+      repo: writePackageRuntimeMetadata(
+        packagedRepo,
+        packagePlans,
+        artifacts,
+        credentialCapability,
+      ),
+    };
+  }
+
+  const ociResults = dryRun
+    ? ociPlans.map(({ plan, target }) => ({
+        result: planApplicationImage(target, plan.oci, {
           dryRun,
           gitSha: options.gitSha ?? "",
           provider,
           sourceRepositoryUrl: options.sourceRepositoryUrl,
         }),
-      target,
-    })),
-  );
+        target,
+      }))
+    : await executeOciPackageBatch<
+        PreparedApplicationImage,
+        PackageApplicationImageResult
+      >(
+        ociPlans.map(({ plan, target }) => ({
+          finalize: (prepared: PreparedApplicationImage) =>
+            finalizeApplicationImage(prepared, provider),
+          prepare: () =>
+            prepareApplicationImage(packagedRepo, target, plan.oci, {
+              gitSha: options.gitSha ?? "",
+              sourceRepositoryUrl: options.sourceRepositoryUrl,
+            }),
+          target,
+        })),
+        () => preflightApplicationImageProvider(provider),
+        () => console.log(OCI_PUBLICATION_BOUNDARY_MESSAGE),
+      );
 
   for (const { result, target } of ociResults) {
-    artifacts[target] = result.artifact;
+    artifacts.set(target, result.artifact);
     for (const evidenceFile of result.evidenceFiles) {
       packagedRepo = packagedRepo.withFile(
         evidenceFile.path,
@@ -126,15 +187,13 @@ export async function executePackagePlans(
     }
   }
 
-  const orderedArtifacts = Object.fromEntries(
-    packagePlans.map(({ target }) => [target, artifacts[target]]),
-  );
-
   return {
     container: nextContainer,
-    repo: packagedRepo.withNewFile(
-      PACKAGE_MANIFEST_PATH,
-      formatPackageManifest(createPackageManifest(orderedArtifacts)),
+    repo: writePackageRuntimeMetadata(
+      packagedRepo,
+      packagePlans,
+      artifacts,
+      credentialCapability,
     ),
   };
 }

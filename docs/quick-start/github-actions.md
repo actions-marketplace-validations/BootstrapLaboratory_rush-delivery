@@ -33,7 +33,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
         with:
           entrypoint: validate
           toolchain-image-provider: github
@@ -63,13 +63,13 @@ jobs:
     steps:
       - id: auth
         name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Rush Delivery
-        uses: BootstrapLaboratory/rush-delivery@v0.8.0
+        uses: BootstrapLaboratory/rush-delivery@v0.8.1
         with:
           dry-run: "false"
           force-targets-json: ${{ inputs.force_targets_json || '[]' }}
@@ -80,16 +80,10 @@ jobs:
           toolchain-image-policy: lazy
           rush-cache-provider: github
           rush-cache-policy: lazy
-          application-image-provider: release
           release-targets-json: '["npm"]'
           release-env: |
             NPM_TOKEN=${{ secrets.NPM_TOKEN }}
           deploy-env: |
-            OCI_USERNAME=${{ secrets.OCI_USERNAME }}
-            OCI_TOKEN=${{ secrets.OCI_TOKEN }}
-            OCI_SIGNING_KEY=${{ secrets.OCI_SIGNING_KEY }}
-            OCI_SIGNING_PASSWORD=${{ secrets.OCI_SIGNING_PASSWORD }}
-            OCI_SIGNING_PUBLIC_KEY=${{ vars.OCI_SIGNING_PUBLIC_KEY }}
             GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
             GCP_ARTIFACT_REGISTRY_REPOSITORY=${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}
           runtime-file-map: |
@@ -99,12 +93,16 @@ jobs:
 Next, see [CI Using Command Line](ci-cli.md) if you want to call the module
 directly from a custom CI script.
 
-The `application-image-provider` line is needed only when a selected package
-target uses `artifact.kind: oci_image`. Existing directory/archive projects can
-omit it and keep the default `off`. OCI image builds use Dagger directly and do
-not require the action's Docker socket input. See
-[OCI application images](../oci-application-images.md) for provider metadata,
-Cosign credentials, and digest-only deploy behavior.
+This is a filesystem-first release baseline. It omits the application-image
+provider and needs no OCI registry or Cosign credentials. Existing
+directory/archive projects keep the default `off` without adding
+`.dagger/application-images` metadata. To add an OCI target, follow the
+[OCI application images tutorial](../tutorial/oci-application-images/README.md)
+and set `docker-socket: ""` in OCI-only Action jobs. Use the
+[production guide](../oci-application-images.md),
+[registry recipes](../oci-registry-recipes.md), and
+[troubleshooting guide](../oci-application-image-troubleshooting.md) before a
+live release.
 
 ## Package Release
 
@@ -134,7 +132,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
         with:
           entrypoint: release-packages
           dry-run: "false"

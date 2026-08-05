@@ -22,7 +22,8 @@ environment, then executes the script.
 For an OCI package target, Rush Delivery mounts only that target's verified
 evidence and passes `ARTIFACT_IMAGE_REFERENCE`, `ARTIFACT_IMAGE_DIGEST`,
 `ARTIFACT_IMAGE_REPOSITORY`, `ARTIFACT_IMAGE_PLATFORMS_JSON`, and
-`ARTIFACT_SOURCE_REVISION`. `ARTIFACT_PATH` is absent. A Cloud Run, Swarm, or
+`ARTIFACT_SOURCE_REVISION`. The evidence mount is available through
+`ARTIFACT_EVIDENCE_DIR`; `ARTIFACT_PATH` is absent. A Cloud Run, Swarm, or
 Kubernetes script should send the digest reference directly to its platform and
 rely on the platform identity for registry pulls.
 
@@ -37,6 +38,11 @@ output and Cloudflare deploy scripts.
 
 Use a narrow workspace. It keeps deploy containers smaller and avoids
 accidentally depending on unrelated files.
+
+Even `workspace.mode: full` excludes the internal
+`.dagger/runtime/evidence` tree. OCI deploy scripts receive only their own
+validated evidence at `ARTIFACT_EVIDENCE_DIR` and must not request the internal
+tree through workspace metadata.
 
 ## Runtime Install Commands
 
@@ -67,6 +73,9 @@ three add variables to the runtime container. If they produce the same output
 name with different values, Rush Delivery fails instead of choosing one
 silently.
 
+Do not declare `ARTIFACT_*`, `GIT_SHA`, or `DRY_RUN`; Rush Delivery owns those
+runtime names.
+
 The backend uses static env to point cloud SDKs at the mounted credentials file:
 
 ```yaml
@@ -88,7 +97,7 @@ Dry-runs should show what would happen, not accidentally deploy.
 
 ## Runtime Files
 
-Runtime files are late-bound deploy-only files. The example maps the Google
+Runtime files are late-bound deploy-platform files. The example maps the Google
 auth file in GitHub Actions:
 
 ```yaml
@@ -104,7 +113,8 @@ file_mounts:
 ```
 
 Runtime files are not source, cache inputs, package artifacts, or toolchain
-image inputs.
+image inputs. They are not an OCI credential channel: registry tokens and
+Cosign key material remain Package-only environment values.
 
 ## Checklist
 
@@ -115,7 +125,8 @@ image inputs.
 - Use `map_env` when the runtime variable name should differ from the source
   variable name.
 - Use `dry_run_defaults` for harmless dry-run values.
-- Use runtime files for credentials and other deploy-only files.
+- Use runtime files for deploy-platform credentials and other deploy-only
+  files, never OCI registry tokens or Cosign key material.
 - For OCI targets, deploy `ARTIFACT_IMAGE_REFERENCE` unchanged and do not ask
   for Package registry or signing credentials.
 

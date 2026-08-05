@@ -174,7 +174,7 @@ inputs:
     required: false
     default: ""
   docker-socket:
-    description: Docker socket path. Set empty to omit.
+    description: Legacy deploy-script compatibility socket. OCI image packaging does not require it; set empty for OCI-only jobs.
     required: false
     default: /var/run/docker.sock
   extra-args:
@@ -251,7 +251,7 @@ runs:
 
     - id: dagger
       name: Run Rush Delivery
-      uses: dagger/dagger-for-github@v8.4.1
+      uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
       env:
         DAGGER_NO_NAG: ${{ inputs.dagger-no-nag }}
       with:

@@ -2,13 +2,25 @@ import type { Directory } from "@dagger.io/dagger";
 
 import { resolvePassThroughEnvironment } from "../../env/pass-through.ts";
 import type { HostEnv } from "../../model/env.ts";
+import type { PackageTargetDefinition } from "../../model/package-target.ts";
+import {
+  assertNoApplicationImageCredentialProjections,
+  collectPackageBuildCredentialProjectionIssues,
+  type ProtectedApplicationImageCredential,
+} from "../../application-images/environment-boundary.ts";
 import { loadPackageTargetDefinition } from "../package-stage/load-package-metadata.ts";
 import { packageTargetDefinitionPath } from "../package-stage/metadata-paths.ts";
 
 type ResolveBuildEnvironmentOptions = {
   dryRun: boolean;
+  protectedApplicationImageCredentials?: ProtectedApplicationImageCredential[];
   requirePackageTargets: boolean;
   stage: string;
+};
+
+export type NamedPackageTargetDefinition = {
+  definition: PackageTargetDefinition;
+  target: string;
 };
 
 function assignBuildEnvValue(
@@ -34,7 +46,7 @@ export async function resolvePackageBuildEnvironment(
   hostEnv: HostEnv,
   options: ResolveBuildEnvironmentOptions,
 ): Promise<Record<string, string>> {
-  const envVars: Record<string, string> = {};
+  const definitions: NamedPackageTargetDefinition[] = [];
 
   for (const target of targets) {
     if (!(await repo.exists(packageTargetDefinitionPath(target)))) {
@@ -47,7 +59,39 @@ export async function resolvePackageBuildEnvironment(
       continue;
     }
 
-    const definition = await loadPackageTargetDefinition(repo, target);
+    definitions.push({
+      definition: await loadPackageTargetDefinition(repo, target),
+      target,
+    });
+  }
+
+  return resolvePackageBuildEnvironmentFromDefinitions(
+    definitions,
+    hostEnv,
+    options,
+  );
+}
+
+export function resolvePackageBuildEnvironmentFromDefinitions(
+  definitions: NamedPackageTargetDefinition[],
+  hostEnv: HostEnv,
+  options: ResolveBuildEnvironmentOptions,
+): Record<string, string> {
+  const envVars: Record<string, string> = {};
+  const protectedCredentials =
+    options.protectedApplicationImageCredentials ?? [];
+
+  assertNoApplicationImageCredentialProjections(
+    definitions.flatMap(({ definition, target }) =>
+      collectPackageBuildCredentialProjectionIssues(
+        target,
+        definition.build,
+        protectedCredentials,
+      ),
+    ),
+  );
+
+  for (const { definition, target } of definitions) {
     const targetEnv = resolvePassThroughEnvironment({
       context: "package target build",
       dryRun: options.dryRun,

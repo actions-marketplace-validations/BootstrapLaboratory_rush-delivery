@@ -26,6 +26,12 @@ dependencies. Backend services often fit this shape.
 Use `directory` when the target already builds to a deployable directory.
 Static sites and frontend assets often fit this shape.
 
+Use `oci_image` when a deployment platform consumes a container image. Define
+one build context, Dockerfile, image name, platform, and scan policy in the
+package target. Add `.dagger/application-images/providers.yaml` only when a
+named provider is needed for planned or live OCI publication; filesystem-only
+projects omit it.
+
 ## Choose Deploy Scripts
 
 Rush Delivery is provider-neutral. A deploy script can call:
@@ -47,12 +53,15 @@ Runtime files are for deploy-only file inputs:
 
 - cloud credentials
 - kubeconfig
-- signing keys
 - service account JSON
-- generated certificates
+- generated deployment certificates
 
 Do not commit those files. Prepare them in CI and pass them with
 `runtime-file-map`.
+
+Do not use runtime files for OCI registry tokens, Cosign private keys, signing
+passwords, or Cosign public keys. Those are Package-only environment values
+whose names come from application-image provider metadata.
 
 ## Choose Validation Depth
 
@@ -94,6 +103,13 @@ Credential files in source:
 - Use runtime files instead.
 - Mount them only into targets that need them.
 
+OCI credentials in build or deploy metadata:
+
+- Keep every application-image provider credential name out of package build
+  and deploy runtime env declarations.
+- Supply those values only through workflow/deploy environment input; Rush
+  Delivery converts them to Package-only Dagger secrets.
+
 Deploy scripts depending on the whole repo:
 
 - Prefer narrow runtime workspaces.
@@ -112,10 +128,12 @@ Package release mixed into deploy metadata:
 - Rush commands cover validation and build.
 - `.dagger/package` defines deploy artifacts and any build-time env allowlists.
 - `.dagger/deploy` defines deploy ordering and runtime behavior.
+- `.dagger/application-images` defines registry/Cosign settings only when OCI
+  application artifacts are adopted.
 - `.dagger/release` defines npm package release behavior when the repository
   publishes packages.
 - `.dagger/validate` defines only orchestration-heavy checks.
-- Provider metadata is configured.
+- Only selected provider adapters have matching metadata and CI permissions.
 - PR and release workflows use different permissions and policies.
 - Local dry-runs work before live deployment.
 
@@ -123,4 +141,10 @@ Next: [NPM Package Release Baseline](12-npm-package-release-baseline.md).
 
 For editor validation, point metadata files at exact published schema versions
 such as
-`https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/deploy-target.schema.json`.
+`https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/deploy-target.schema.json`.
+
+For an OCI project shape, continue with the
+[OCI application images tutorial](oci-application-images/README.md),
+[production guide](../oci-application-images.md),
+[registry recipes](../oci-registry-recipes.md), and
+[troubleshooting guide](../oci-application-image-troubleshooting.md).

@@ -196,11 +196,21 @@ export async function workflow(input: WorkflowInput): Promise<string> {
     require_rush_cache_metadata: requiresRushCacheProviderMetadata({
       rushCacheProvider,
     }),
+    validate_application_image_provider_metadata: false,
   });
   const releaseTargets = selectWorkflowReleaseTargets(
     releaseTargetsJson,
     metadataResult.release_targets,
   );
+  const npmReleaseDefinition = releaseTargets.includes("npm")
+    ? await loadOptionalNpmReleaseMetadata(sourceRepo)
+    : undefined;
+
+  if (releaseTargets.includes("npm") && npmReleaseDefinition === undefined) {
+    throw new Error(
+      'Workflow release target "npm" requires .dagger/release/npm.yaml.',
+    );
+  }
 
   console.log(formatMetadataContractValidationResult(metadataResult));
 
@@ -228,6 +238,7 @@ export async function workflow(input: WorkflowInput): Promise<string> {
       buildHostEnv: deployHostEnv,
       gitSha,
       hostEnv: sourceHostEnv,
+      npmReleaseDefinition,
       releaseTargets,
       skipDeployPlanning: !deployMetadataExists,
       sourceRepositoryUrl:
@@ -283,17 +294,10 @@ export async function workflow(input: WorkflowInput): Promise<string> {
     return startDeploy();
   }
 
-  const npmReleaseDefinition = await loadOptionalNpmReleaseMetadata(sourceRepo);
-  if (npmReleaseDefinition === undefined) {
-    throw new Error(
-      'Workflow release target "npm" requires .dagger/release/npm.yaml.',
-    );
-  }
-
   const deployPromise = startDeploy();
   const releasePromise = executeNpmPackageRelease(
     container,
-    npmReleaseDefinition,
+    npmReleaseDefinition!,
     sourcePlan,
     releaseHostEnv,
     dryRun,

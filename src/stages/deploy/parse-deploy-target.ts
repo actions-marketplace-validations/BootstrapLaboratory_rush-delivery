@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 
+import { assertNoFrameworkOwnedDeployEnvironment } from "../../application-images/environment-boundary.ts";
 import { assertKnownKeys } from "../../metadata/parse-utils.ts";
 import type {
   DeployRuntimeSpec,
@@ -8,6 +9,10 @@ import type {
   FileMountSpec,
 } from "../../model/deploy-target.ts";
 import { RUNTIME_FILES_MOUNT_ROOT } from "../../model/deploy-target.ts";
+import {
+  assertFileMountTargetDoesNotCollideWithFrameworkEvidence,
+  assertRuntimeWorkspaceDoesNotSelectFrameworkEvidence,
+} from "./runtime-workspace.ts";
 
 const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
@@ -87,6 +92,13 @@ function parseContainedRelativePath(
 
 function parseRepoRelativePath(rawValue: unknown, name: string): string {
   return parseContainedRelativePath(rawValue, name, "repository");
+}
+
+function parseFileMountTarget(rawValue: unknown): string {
+  const target = parseRequiredString(rawValue, "file mount target");
+
+  assertFileMountTargetDoesNotCollideWithFrameworkEvidence(target);
+  return target;
 }
 
 function parseRepoRelativePathArray(
@@ -201,9 +213,8 @@ function parseFileMountSpecs(rawValue: unknown, name: string): FileMountSpec[] {
         rawEntry.source_var,
         "file mount source_var",
       );
-      const target = parseRequiredString(
+      const target = parseFileMountTarget(
         "target" in rawEntry ? rawEntry.target : undefined,
-        "file mount target",
       );
 
       if (!ENV_NAME_PATTERN.test(sourceVar)) {
@@ -227,7 +238,7 @@ function parseFileMountSpecs(rawValue: unknown, name: string): FileMountSpec[] {
     );
     const target =
       "target" in rawEntry
-        ? parseRequiredString(rawEntry.target, "file mount target")
+        ? parseFileMountTarget(rawEntry.target)
         : `${RUNTIME_FILES_MOUNT_ROOT}/${source}`;
 
     normalizedSpecs.push({
@@ -267,7 +278,7 @@ function parseWorkspace(rawValue: unknown): DeployWorkspaceSpec {
     throw new Error('Deploy target runtime workspace mode must be "full".');
   }
 
-  return {
+  const workspace: DeployWorkspaceSpec = {
     dirs: parseRepoRelativePathArray(
       "dirs" in rawValue ? rawValue.dirs : undefined,
       "Deploy target runtime workspace dirs",
@@ -280,6 +291,9 @@ function parseWorkspace(rawValue: unknown): DeployWorkspaceSpec {
     ),
     ...(mode === "full" ? { mode } : {}),
   };
+
+  assertRuntimeWorkspaceDoesNotSelectFrameworkEvidence(workspace);
+  return workspace;
 }
 
 function parseRuntime(rawValue: unknown): DeployRuntimeSpec {
@@ -372,7 +386,7 @@ export function parseDeployTarget(
     "Deploy target file",
   );
 
-  return {
+  const definition: DeployTargetDefinition = {
     deploy_script: parseRequiredString(
       "deploy_script" in parsedValue ? parsedValue.deploy_script : undefined,
       "Deploy target deploy_script",
@@ -385,4 +399,8 @@ export function parseDeployTarget(
       "runtime" in parsedValue ? parsedValue.runtime : undefined,
     ),
   };
+
+  assertNoFrameworkOwnedDeployEnvironment(definition.name, definition.runtime);
+
+  return definition;
 }

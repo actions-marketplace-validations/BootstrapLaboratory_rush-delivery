@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseDeployTarget } from "../src/stages/deploy/parse-deploy-target.ts";
+import { CURRENT_FRAMEWORK_DEPLOY_ENVIRONMENT_NAMES } from "../src/application-images/environment-boundary.ts";
 
 test("parses deploy target runtime metadata", () => {
   const definition = parseDeployTarget(`
@@ -151,6 +152,41 @@ runtime:
   );
 });
 
+test("fails when runtime workspace explicitly selects framework evidence", () => {
+  assert.throws(
+    () =>
+      parseDeployTarget(`
+name: server
+deploy_script: deploy/cloudrun/scripts/deploy-server.sh
+
+runtime:
+  image: node:24-bookworm-slim
+  workspace:
+    dirs:
+      - .dagger/runtime/evidence/server
+`),
+    /consume the current target's verified evidence through ARTIFACT_EVIDENCE_DIR/,
+  );
+});
+
+test("allows ordinary .dagger metadata in a partial workspace", () => {
+  const definition = parseDeployTarget(`
+name: server
+deploy_script: deploy/cloudrun/scripts/deploy-server.sh
+
+runtime:
+  image: node:24-bookworm-slim
+  workspace:
+    dirs:
+      - .dagger
+`);
+
+  assert.deepStrictEqual(definition.runtime.workspace, {
+    dirs: [".dagger"],
+    files: [],
+  });
+});
+
 test("fails when file mount source_var is invalid", () => {
   assert.throws(
     () =>
@@ -216,6 +252,55 @@ runtime:
   ]);
 });
 
+test("rejects both file-mount kinds at framework evidence destinations", () => {
+  const entries = [
+    [
+      "source: credential.json",
+      "target: /workspace/.dagger/runtime/evidence/server/scan.json",
+    ],
+    [
+      "source_var: CREDENTIAL_PATH",
+      "target: .dagger/runtime/evidence/server/sbom.spdx.json",
+    ],
+    ["source: credential.json", "target: /workspace/.dagger"],
+  ];
+
+  for (const entry of entries) {
+    assert.throws(
+      () =>
+        parseDeployTarget(`
+name: server
+deploy_script: deploy/server.sh
+runtime:
+  image: node:24-bookworm-slim
+  file_mounts:
+    - ${entry[0]}
+      ${entry[1]}
+`),
+      /collides with Rush Delivery evidence/,
+    );
+  }
+});
+
+test("preserves non-colliding legacy non-normalized file-mount targets", () => {
+  for (const target of [
+    "/tmp\\credential.json",
+    "/tmp//credential.json",
+    "/tmp/../credential.json",
+  ]) {
+    const definition = parseDeployTarget(`
+name: server
+deploy_script: deploy/server.sh
+runtime:
+  image: node:24-bookworm-slim
+  file_mounts:
+    - source: credential.json
+      target: ${JSON.stringify(target)}
+`);
+    assert.equal(definition.runtime.file_mounts[0].target, target);
+  }
+});
+
 test("fails when runtime file mount source escapes the bundle", () => {
   assert.throws(
     () =>
@@ -248,4 +333,58 @@ runtime:
 `),
     /must define exactly one of source or source_var/,
   );
+});
+
+test("rejects framework-owned names from every Deploy output channel", () => {
+  const names = [
+    ...CURRENT_FRAMEWORK_DEPLOY_ENVIRONMENT_NAMES,
+    "ARTIFACT_FUTURE_NAME",
+  ];
+
+  for (const name of names) {
+    const runtimeFragments = [
+      `pass_env: [${name}]`,
+      ["map_env:", `  ${name}: SAFE_SOURCE`].join("\n"),
+      ["env:", `  ${name}: value`].join("\n"),
+      ["dry_run_defaults:", `  ${name}: value`].join("\n"),
+      `required_host_env: [${name}]`,
+      [
+        "file_mounts:",
+        `  - source_var: ${name}`,
+        "    target: /run/value",
+      ].join("\n"),
+    ];
+
+    for (const fragment of runtimeFragments) {
+      assert.throws(
+        () =>
+          parseDeployTarget(`
+name: server
+deploy_script: deploy/server.sh
+runtime:
+  image: node:24-bookworm-slim
+${fragment
+  .split("\n")
+  .map((line) => `  ${line}`)
+  .join("\n")}
+`),
+        new RegExp(`${name}.+reserved for Rush Delivery`),
+      );
+    }
+  }
+});
+
+test("allows a framework-owned name only as a map_env source", () => {
+  const definition = parseDeployTarget(`
+name: server
+deploy_script: deploy/server.sh
+runtime:
+  image: node:24-bookworm-slim
+  map_env:
+    PROJECT_GIT_SHA: GIT_SHA
+`);
+
+  assert.deepEqual(definition.runtime.map_env, {
+    PROJECT_GIT_SHA: "GIT_SHA",
+  });
 });

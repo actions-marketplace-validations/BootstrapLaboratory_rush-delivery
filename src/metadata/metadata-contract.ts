@@ -1,7 +1,17 @@
 import path from "node:path";
 
+import { dockerfilePathInsideBuildContext } from "../application-images/docker-build-context.ts";
 import { applicationImageProvidersPath } from "../application-images/metadata-paths.ts";
 import { parseApplicationImageProviders } from "../application-images/parse-providers.ts";
+import {
+  collectApplicationImageCredentialNames,
+  collectDeployRuntimeCredentialProjectionIssues,
+  collectNpmReleaseCredentialProjectionIssues,
+  collectPackageBuildCredentialProjectionIssues,
+  formatApplicationImageCredentialProjectionIssue,
+  type ProtectedApplicationImageCredential,
+} from "../application-images/environment-boundary.ts";
+import type { ApplicationImageProvidersDefinition } from "../model/application-image.ts";
 import type { DeployRuntimeSpec } from "../model/deploy-target.ts";
 import type { EnvPassthroughSpec } from "../model/env.ts";
 import type {
@@ -60,13 +70,14 @@ export type MetadataContractValidationOptions = {
   require_application_image_provider_metadata?: boolean;
   require_deploy_metadata?: boolean;
   require_rush_cache_metadata?: boolean;
+  validate_application_image_provider_metadata?: boolean;
 };
 
 async function validateApplicationImageProviderMetadata(
   repository: MetadataContractRepository,
   issues: string[],
   required: boolean,
-): Promise<void> {
+): Promise<ApplicationImageProvidersDefinition | undefined> {
   const exists = await repository.exists(applicationImageProvidersPath, "file");
 
   if (!exists) {
@@ -75,10 +86,10 @@ async function validateApplicationImageProviderMetadata(
         `Application image provider metadata file "${applicationImageProvidersPath}" must exist.`,
       );
     }
-    return;
+    return undefined;
   }
 
-  await readParsed(
+  return readParsed(
     repository,
     applicationImageProvidersPath,
     "Application image provider metadata file",
@@ -90,7 +101,7 @@ async function validateApplicationImageProviderMetadata(
 function formatIssueList(issues: string[]): string {
   return [
     "Dagger metadata contract validation failed:",
-    ...issues.map((issue) => `- ${issue}`),
+    ...[...issues].sort().map((issue) => `- ${issue}`),
   ].join("\n");
 }
 
@@ -267,6 +278,7 @@ async function validateRushCacheMetadata(
 async function validateNpmReleaseMetadata(
   repository: MetadataContractRepository,
   issues: string[],
+  protectedCredentials: ProtectedApplicationImageCredential[],
 ): Promise<NpmReleaseDefinition | undefined> {
   if (!(await repository.exists(npmReleaseMetadataPath, "file"))) {
     return undefined;
@@ -284,6 +296,13 @@ async function validateNpmReleaseMetadata(
     return undefined;
   }
 
+  issues.push(
+    ...collectNpmReleaseCredentialProjectionIssues(
+      definition,
+      protectedCredentials,
+    ).map(formatApplicationImageCredentialProjectionIssue),
+  );
+
   if (definition.auth.kind === "token") {
     await fileExists(
       repository,
@@ -299,6 +318,7 @@ async function validateNpmReleaseMetadata(
 async function validateReleaseMetadata(
   repository: MetadataContractRepository,
   issues: string[],
+  protectedCredentials: ProtectedApplicationImageCredential[],
 ): Promise<string[]> {
   const releaseTargets = await listYamlTargets(
     repository,
@@ -314,7 +334,11 @@ async function validateReleaseMetadata(
     }
   }
 
-  const npmRelease = await validateNpmReleaseMetadata(repository, issues);
+  const npmRelease = await validateNpmReleaseMetadata(
+    repository,
+    issues,
+    protectedCredentials,
+  );
 
   return npmRelease === undefined ? [] : ["npm"];
 }
@@ -347,6 +371,16 @@ function validatePackageArtifact(
       `Package target "${target}" OCI dockerfile`,
       issues,
     );
+    try {
+      dockerfilePathInsideBuildContext(
+        definition.artifact.context,
+        definition.artifact.dockerfile,
+      );
+    } catch {
+      issues.push(
+        `Package target "${target}" OCI dockerfile must stay inside its build context.`,
+      );
+    }
     if (definition.artifact.scan.ignore_file !== undefined) {
       validateRepoRelativePath(
         definition.artifact.scan.ignore_file,
@@ -490,6 +524,7 @@ async function validateDeployTarget(
   target: string,
   rushProjects: Map<string, RushProjectDefinition>,
   issues: string[],
+  protectedCredentials: ProtectedApplicationImageCredential[],
 ): Promise<void> {
   const deployPath = targetDefinitionPath(target);
 
@@ -535,6 +570,13 @@ async function validateDeployTarget(
     issues,
   );
   validateDeployRuntime(target, definition.runtime, issues);
+  issues.push(
+    ...collectDeployRuntimeCredentialProjectionIssues(
+      target,
+      definition.runtime,
+      protectedCredentials,
+    ).map(formatApplicationImageCredentialProjectionIssue),
+  );
 }
 
 async function validatePackageTarget(
@@ -542,6 +584,7 @@ async function validatePackageTarget(
   target: string,
   rushProjects: Map<string, RushProjectDefinition>,
   issues: string[],
+  protectedCredentials: ProtectedApplicationImageCredential[],
 ): Promise<void> {
   const packagePath = packageTargetDefinitionPath(target);
 
@@ -581,6 +624,13 @@ async function validatePackageTarget(
     `Package target "${target}" build env`,
     definition.build,
     issues,
+  );
+  issues.push(
+    ...collectPackageBuildCredentialProjectionIssues(
+      target,
+      definition.build,
+      protectedCredentials,
+    ).map(formatApplicationImageCredentialProjectionIssue),
   );
 }
 
@@ -641,16 +691,28 @@ export async function validateMetadataContractRepository(
   const requireDeployMetadata = options.require_deploy_metadata ?? true;
   const requireApplicationImageProviderMetadata =
     options.require_application_image_provider_metadata ?? false;
+  const validateApplicationImageProviderMetadataFile =
+    options.validate_application_image_provider_metadata ?? true;
   const requireRushCacheMetadata = options.require_rush_cache_metadata ?? true;
   const issues: string[] = [];
   const rushProjects = await loadRushProjects(repository, issues);
-  await validateApplicationImageProviderMetadata(
+  const applicationImageProviders = validateApplicationImageProviderMetadataFile
+    ? await validateApplicationImageProviderMetadata(
+        repository,
+        issues,
+        requireApplicationImageProviderMetadata,
+      )
+    : undefined;
+  const protectedApplicationImageCredentials =
+    applicationImageProviders === undefined
+      ? []
+      : collectApplicationImageCredentialNames(applicationImageProviders);
+  await validateRushCacheMetadata(repository, issues, requireRushCacheMetadata);
+  const releaseTargets = await validateReleaseMetadata(
     repository,
     issues,
-    requireApplicationImageProviderMetadata,
+    protectedApplicationImageCredentials,
   );
-  await validateRushCacheMetadata(repository, issues, requireRushCacheMetadata);
-  const releaseTargets = await validateReleaseMetadata(repository, issues);
 
   if (!requireDeployMetadata) {
     if (issues.length > 0) {
@@ -721,8 +783,20 @@ export async function validateMetadataContractRepository(
 
   await Promise.all(
     deployTargets.flatMap((target) => [
-      validateDeployTarget(repository, target, rushProjects, issues),
-      validatePackageTarget(repository, target, rushProjects, issues),
+      validateDeployTarget(
+        repository,
+        target,
+        rushProjects,
+        issues,
+        protectedApplicationImageCredentials,
+      ),
+      validatePackageTarget(
+        repository,
+        target,
+        rushProjects,
+        issues,
+        protectedApplicationImageCredentials,
+      ),
     ]),
   );
   await Promise.all(

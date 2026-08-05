@@ -14,7 +14,9 @@ export function resolveService(
   mesh: ServiceMesh,
   target: string,
 ): ResolvedService {
-  const service = mesh.services[target];
+  const service = Object.hasOwn(mesh.services, target)
+    ? mesh.services[target]
+    : undefined;
 
   if (!service) {
     throw new Error(`Unknown release target "${target}" in services mesh.`);

@@ -1,4 +1,5 @@
 import type { GitSourcePlan, SourceMode, SourcePlan } from "../model/source.ts";
+import { normalizeCredentialFreeRepositoryLocator } from "./repository-locator.ts";
 
 export const DEFAULT_DEPLOY_TAG_PREFIX = "deploy/prod";
 export const DEFAULT_LOCAL_COPY_CLEANUP_PATHS = [
@@ -122,23 +123,10 @@ function parseRepositoryUrl(value: string | undefined): string {
     "Git source repository URL",
   );
 
-  try {
-    const parsedUrl = new URL(repositoryUrl);
-
-    if (parsedUrl.username.length > 0 || parsedUrl.password.length > 0) {
-      throw new Error(
-        "Git source repository URL must not embed credentials; use authTokenEnv instead.",
-      );
-    }
-  } catch (error) {
-    if (error instanceof TypeError) {
-      return repositoryUrl;
-    }
-
-    throw error;
-  }
-
-  return repositoryUrl;
+  return normalizeCredentialFreeRepositoryLocator(
+    repositoryUrl,
+    "Git source repository URL",
+  );
 }
 
 function parseAuthTokenEnv(value: string | undefined): string | undefined {

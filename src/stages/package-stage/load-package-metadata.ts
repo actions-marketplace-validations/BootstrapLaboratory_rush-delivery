@@ -1,4 +1,4 @@
-import { Directory } from "@dagger.io/dagger";
+import type { Directory } from "@dagger.io/dagger";
 
 import type { PackageTargetDefinition } from "../../model/package-target.ts";
 import { packageTargetDefinitionPath } from "./metadata-paths.ts";

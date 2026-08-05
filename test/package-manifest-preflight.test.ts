@@ -128,16 +128,38 @@ test("preserves legacy filesystem preflight behavior", () => {
   );
 });
 
+test("rejects inherited object keys when the selected artifact is absent", () => {
+  assert.throws(
+    () =>
+      assertPackageManifestDeployPreflight(
+        ["constructor"],
+        { artifacts: {} },
+        "legacy-short-sha",
+        false,
+      ),
+    /does not define artifact for target "constructor"/,
+  );
+});
+
 test("verifies every local OCI evidence document before deploy", async () => {
   const contents = '{"verified":true}\n';
+  const paths: string[] = [];
 
   await assert.doesNotReject(() =>
     assertPackageManifestEvidenceIntegrity(
       ["image"],
       publishedManifest(contents),
-      async () => contents,
+      async (path) => {
+        paths.push(path);
+        return contents;
+      },
     ),
   );
+  assert.deepStrictEqual(paths, [
+    ".dagger/runtime/evidence/image/provenance.json",
+    ".dagger/runtime/evidence/image/sbom.spdx.json",
+    ".dagger/runtime/evidence/image/scan.json",
+  ]);
 });
 
 test("rejects tampered OCI evidence before deploy", async () => {
@@ -148,6 +170,152 @@ test("rejects tampered OCI evidence before deploy", async () => {
         publishedManifest('{"verified":true}\n'),
         async () => '{"tampered":true}\n',
       ),
-    /evidence digest.*does not match/,
+    /evidence hash.*does not match manifest digest/,
+  );
+});
+
+test("reports missing evidence by target, kind, and path", async () => {
+  const contents = '{"verified":true}\n';
+
+  await assert.rejects(
+    () =>
+      assertPackageManifestEvidenceIntegrity(
+        ["image"],
+        publishedManifest(contents),
+        async (path) => {
+          if (path.endsWith("scan.json")) {
+            throw new Error("not found");
+          }
+
+          return contents;
+        },
+      ),
+    /scan evidence file for target "image" is missing or unreadable at "\.dagger\/runtime\/evidence\/image\/scan\.json"/,
+  );
+});
+
+test("filesystem artifacts in a mixed manifest do not read OCI evidence", async () => {
+  const contents = '{"verified":true}\n';
+  const manifest = publishedManifest(contents);
+  manifest.artifacts.filesystem = {
+    deploy_path: "apps/filesystem/dist",
+    kind: "directory",
+    path: "apps/filesystem/dist",
+  };
+  const paths: string[] = [];
+
+  await assertPackageManifestEvidenceIntegrity(
+    ["filesystem", "image"],
+    manifest,
+    async (path) => {
+      paths.push(path);
+      return contents;
+    },
+  );
+
+  assert.equal(paths.length, 3);
+  assert.ok(paths.every((path) => path.includes("/evidence/image/")));
+});
+
+test("validates manifest trust invariants before reading evidence", async () => {
+  const contents = '{"verified":true}\n';
+  const invalidCases: Array<{
+    expected: RegExp;
+    mutate: (manifest: PackageManifest) => PackageManifest;
+  }> = [
+    {
+      expected:
+        /sbom path must stay inside "\.dagger\/runtime\/evidence\/image\/"/,
+      mutate: (manifest) => {
+        const artifact = manifest.artifacts.image;
+        assert.equal(artifact.kind, "oci_image");
+        assert.equal(artifact.status, "published");
+        artifact.evidence.sbom.path =
+          ".dagger/runtime/evidence/other/sbom.spdx.json";
+        return manifest;
+      },
+    },
+    {
+      expected: /provenance path must stay inside/,
+      mutate: (manifest) => {
+        const artifact = manifest.artifacts.image;
+        assert.equal(artifact.kind, "oci_image");
+        assert.equal(artifact.status, "published");
+        artifact.evidence.provenance.path =
+          ".dagger/runtime/evidence/image/../other/provenance.json";
+        return manifest;
+      },
+    },
+    {
+      expected: /reference must equal repository@digest/,
+      mutate: (manifest) => {
+        const artifact = manifest.artifacts.image;
+        assert.equal(artifact.kind, "oci_image");
+        assert.equal(artifact.status, "published");
+        artifact.reference = `${artifact.repository}:latest`;
+        return manifest;
+      },
+    },
+    {
+      expected: /signature evidence verified must be true/,
+      mutate: (manifest) => {
+        const artifact = manifest.artifacts.image;
+        assert.equal(artifact.kind, "oci_image");
+        assert.equal(artifact.status, "published");
+        (artifact.evidence.signature as { verified: boolean }).verified = false;
+        return manifest;
+      },
+    },
+    {
+      expected: /evidence sbom subject_digest must match the image digest/,
+      mutate: (manifest) => {
+        const artifact = manifest.artifacts.image;
+        assert.equal(artifact.kind, "oci_image");
+        assert.equal(artifact.status, "published");
+        artifact.evidence.sbom.subject_digest = `sha256:${"b".repeat(64)}`;
+        return manifest;
+      },
+    },
+  ];
+
+  for (const { expected, mutate } of invalidCases) {
+    let readCount = 0;
+    const manifest = mutate(structuredClone(publishedManifest(contents)));
+
+    await assert.rejects(
+      () =>
+        assertPackageManifestEvidenceIntegrity(
+          ["image"],
+          manifest,
+          async () => {
+            readCount += 1;
+            return contents;
+          },
+        ),
+      expected,
+    );
+    assert.equal(readCount, 0);
+  }
+});
+
+test("rejects unsafe OCI target keys before resolving evidence paths", () => {
+  const manifest = publishedManifest('{"verified":true}\n');
+  const artifact = manifest.artifacts.image;
+  const unsafeManifest = {
+    artifacts: {
+      "..": artifact,
+    },
+    schema_version: "rush-delivery-package-manifest/v2",
+  } as PackageManifest;
+
+  assert.throws(
+    () =>
+      assertPackageManifestDeployPreflight(
+        [".."],
+        unsafeManifest,
+        gitSha,
+        false,
+      ),
+    /target "\.\." must be a safe evidence path segment/,
   );
 });

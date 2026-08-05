@@ -62,11 +62,16 @@ Policies:
 `applicationImageProvider=off` preserves filesystem-only workflows and supports
 credential-free OCI dry runs. A live selected OCI package target must name an
 `oci_registry` provider from `.dagger/application-images/providers.yaml`.
+When no selected package target is OCI, planning ignores the application-image
+provider input, provider metadata file, and provider credentials entirely.
 
 The adapter is registry-neutral. Metadata supplies a registry authority,
 repository prefix, and the names of environment variables containing registry
 and key-backed Cosign credentials. Selected values come from `workflow-env`
-plus `deploy-env` and are converted to Dagger secrets before Package starts.
+plus `deploy-env`. The four sensitive values and derived Docker configuration
+become Dagger secrets; the globally unique `username_env` resolves to Dagger's
+required non-secret registry username. All five names must be globally unique
+across declared providers so a secret role cannot alias that plain channel.
 Provider metadata and dry-run output never contain credential values.
 
 Application images are distinct from toolchain images and Rush cache images.
@@ -82,9 +87,12 @@ tooling it needs through deploy target metadata.
 
 The framework only passes allowlisted data into each target runtime.
 
-Deploy-only files should be passed through `runtimeFiles` and mounted from
-target metadata. This keeps credentials out of source acquisition, Rush cache,
-package artifacts, toolchain image hashes, logs, and generated manifests.
+Deploy-platform files should be passed through `runtimeFiles` and mounted from
+target metadata. This keeps those credentials out of source acquisition, Rush
+cache, package artifacts, toolchain image hashes, logs, and generated
+manifests. OCI registry tokens and Cosign key material are not runtime files;
+they are Package-only environment values selected by application-image
+provider metadata.
 
 ## CI Provider Responsibilities
 
@@ -122,3 +130,9 @@ The GitHub Action wrapper in this repository is the first CI adapter. It
 prepares GitHub-specific defaults and then calls the same Dagger `workflow`,
 `validate`, or `release-packages` entrypoints as raw CLI usage. For `workflow`,
 it supports `workflow-env`, `deploy-env`, and `release-env` inputs.
+
+To adopt application images, work through the
+[OCI application images tutorial](tutorial/oci-application-images/README.md),
+then use the [production guide](oci-application-images.md),
+[registry recipes](oci-registry-recipes.md), and
+[troubleshooting guide](oci-application-image-troubleshooting.md).

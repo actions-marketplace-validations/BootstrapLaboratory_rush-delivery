@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
+import { assertSafeApplicationImageTarget } from "../../application-images/evidence-target.ts";
 import { assertKnownKeys } from "../../metadata/parse-utils.ts";
 import type {
   PackageArtifactDefinition,
@@ -375,16 +376,23 @@ export function parsePackageTarget(
     "Package target file",
   );
 
+  const artifact = parsePackageArtifact(
+    "artifact" in parsedValue ? parsedValue.artifact : undefined,
+  );
+  const name = parseRequiredString(
+    "name" in parsedValue ? parsedValue.name : undefined,
+    "Package target name",
+  );
+
+  if (artifact.kind === "oci_image") {
+    assertSafeApplicationImageTarget(name);
+  }
+
   return {
-    artifact: parsePackageArtifact(
-      "artifact" in parsedValue ? parsedValue.artifact : undefined,
-    ),
+    artifact,
     build: parsePackageBuild(
       "build" in parsedValue ? parsedValue.build : undefined,
     ),
-    name: parseRequiredString(
-      "name" in parsedValue ? parsedValue.name : undefined,
-      "Package target name",
-    ),
+    name,
   };
 }

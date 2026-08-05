@@ -11,10 +11,15 @@ export async function selfCheck(moduleSource: Directory): Promise<string> {
   logSection("Rush delivery self-check");
   logSection("Dagger framework tests");
 
+  const sourceWithGeneratedSdk = moduleSource.withDirectory(
+    "sdk",
+    dag.currentModule().generatedContextDirectory().directory("sdk"),
+  );
+
   const container = dag
     .container()
     .from(SELF_CHECK_IMAGE)
-    .withDirectory(WORKDIR, moduleSource)
+    .withDirectory(WORKDIR, sourceWithGeneratedSdk)
     .withWorkdir(WORKDIR)
     .withExec(["bash", "-lc", SELF_CHECK_INSTALL_COMMAND])
     .withExec(["yarn", "install", "--frozen-lockfile"], { expand: false })

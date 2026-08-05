@@ -138,6 +138,22 @@ test("rejects embedded credentials in repository URLs", () => {
       }),
     /must not embed credentials/,
   );
+
+  for (const repositoryUrl of [
+    "https://github.com/BeltOrg/beltapp.git?token=secret",
+    "https://github.com/BeltOrg/beltapp.git#secret",
+    "x-access-token:secret@github.com/BeltOrg/beltapp.git",
+  ]) {
+    assert.throws(
+      () =>
+        buildSourcePlan({
+          commitSha,
+          mode: "git",
+          repositoryUrl,
+        }),
+      /must not embed credentials|must be an absolute/,
+    );
+  }
 });
 
 test("rejects unsafe refs and token env names", () => {

@@ -1,7 +1,12 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createPlannedApplicationImageArtifact } from "../src/application-images/planned-artifact.ts";
+import {
+  createPlannedApplicationImageArtifact,
+  normalizeApplicationImageSourceUrl,
+} from "../src/application-images/planned-artifact.ts";
+import { assertSafeApplicationImageTarget } from "../src/application-images/evidence-target.ts";
+import { isolateApplicationImagePreparationCoordinates } from "../src/application-images/preparation-boundary.ts";
 import type { OciRegistryProviderDefinition } from "../src/model/application-image.ts";
 import type { OciImagePackagePlan } from "../src/stages/package-stage/package-action-plan.ts";
 import { formatPackageManifest } from "../src/stages/package-stage/package-manifest.ts";
@@ -60,4 +65,77 @@ test("planned OCI artifacts require a full source revision", () => {
     () => createPlannedApplicationImageArtifact(plan, "short"),
     /full 40-character Git commit SHA/,
   );
+});
+
+test("legacy single-image preparation receives no provider capability", () => {
+  const providerSecretHandle = { sentinel: "must-not-cross-prepare-boundary" };
+  const isolated = isolateApplicationImagePreparationCoordinates({
+    dryRun: false,
+    gitSha,
+    provider: {
+      dockerConfig: providerSecretHandle,
+      name: "release",
+      registryToken: providerSecretHandle,
+      signingKey: providerSecretHandle,
+      signingPassword: providerSecretHandle,
+      verificationKey: providerSecretHandle,
+    } as never,
+    sourceRepositoryUrl: "https://github.com/example/project.git",
+  });
+
+  assert.deepEqual(isolated, {
+    gitSha,
+    sourceRepositoryUrl: "https://github.com/example/project.git",
+  });
+  assert.equal(
+    Object.values(isolated).some(
+      (value) => (value as unknown) === providerSecretHandle,
+    ),
+    false,
+  );
+  assert.equal("provider" in isolated, false);
+  assert.equal("dryRun" in isolated, false);
+});
+
+test("unsafe OCI target path segments fail before image planning or preparation", () => {
+  for (const target of [".", "..", "nested/image"]) {
+    assert.throws(
+      () => assertSafeApplicationImageTarget(target),
+      /cannot be used as an evidence directory name/,
+    );
+  }
+});
+
+test("OCI provenance source locators cannot carry credential-like URL channels", () => {
+  assert.equal(
+    normalizeApplicationImageSourceUrl(
+      "https://github.com/BootstrapLaboratory/rush-delivery.git",
+    ),
+    "https://github.com/BootstrapLaboratory/rush-delivery.git",
+  );
+  assert.equal(
+    normalizeApplicationImageSourceUrl(
+      "git@github.com:BootstrapLaboratory/rush-delivery.git",
+    ),
+    "git@github.com:BootstrapLaboratory/rush-delivery.git",
+  );
+
+  const sentinel = "SENTINEL_SOURCE_TOKEN_3d479f";
+  for (const unsafe of [
+    `https://${sentinel}@github.com/example/repo.git`,
+    `https://github.com/example/repo.git?token=${sentinel}`,
+    `https://github.com/example/repo.git#${sentinel}`,
+    `x-access-token:${sentinel}@github.com/example/repo.git`,
+  ]) {
+    let message = "";
+
+    assert.throws(
+      () => normalizeApplicationImageSourceUrl(unsafe),
+      (error) => {
+        message = error instanceof Error ? error.message : String(error);
+        return true;
+      },
+    );
+    assert.equal(message.includes(sentinel), false);
+  }
 });

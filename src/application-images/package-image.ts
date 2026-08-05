@@ -13,19 +13,36 @@ import type {
   PublishedOciImagePackageManifestArtifact,
 } from "../model/package-manifest.ts";
 import type { VulnerabilitySeverity } from "../model/package-target.ts";
+import { withFreshExecutionCache } from "../execution/cache-buster.ts";
+import { dockerfilePathInsideBuildContext } from "./docker-build-context.ts";
 import type { OciImagePackagePlan } from "../stages/package-stage/package-action-plan.ts";
 import {
-  buildApplicationImageRepository,
-  buildApplicationImageTagReference,
-  normalizePublishedImageReference,
-} from "./reference.ts";
-import type { ResolvedApplicationImageProvider } from "./resolve-provider.ts";
+  OciPackageOperationError,
+  type OciPackageFinalization,
+} from "../stages/package-stage/oci-package-results.ts";
+import {
+  CosignPublicationError,
+  COSIGN_IMAGE,
+  COSIGN_VERSION,
+  preflightApplicationImageProvider,
+  signAttestAndVerifyApplicationImage,
+} from "./cosign.ts";
 import {
   createPlannedApplicationImageArtifact,
   normalizeApplicationImageGitSha,
   normalizeApplicationImageSourceUrl,
 } from "./planned-artifact.ts";
+import { assertSafeApplicationImageTarget } from "./evidence-target.ts";
+import {
+  buildApplicationImageRepository,
+  buildApplicationImageTagReference,
+  normalizePublishedImageReference,
+} from "./reference.ts";
+import { isolateApplicationImagePreparationCoordinates } from "./preparation-boundary.ts";
+import type { ResolvedApplicationImageProvider } from "./resolve-provider.ts";
 import { rejectedVulnerabilities, type GrypeReport } from "./scan-policy.ts";
+
+export { COSIGN_IMAGE, COSIGN_VERSION };
 
 export const SYFT_IMAGE =
   "anchore/syft@sha256:1288ea4c8b38767b4e620c1e312c8cb26b6e887a99b4f07ab6cd19fc6f225026";
@@ -33,11 +50,6 @@ export const SYFT_VERSION = "1.50.0";
 export const GRYPE_IMAGE =
   "anchore/grype@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db";
 export const GRYPE_VERSION = "0.116.1";
-export const COSIGN_IMAGE =
-  "ghcr.io/sigstore/cosign/cosign@sha256:d91bc4e7e95e8d2f549c747a72dc174f90579e410a1695f57f686674f84ce849";
-export const COSIGN_VERSION = "3.1.2";
-
-const TARGET_NAME_PATTERN = /^[A-Za-z0-9@._-]+$/;
 
 export type ApplicationImageEvidenceFile = {
   file: File;
@@ -58,6 +70,25 @@ export type PackageApplicationImageOptions = {
   sourceRepositoryUrl?: string;
 };
 
+export type PrepareApplicationImageOptions = {
+  gitSha: string;
+  sourceRepositoryUrl?: string;
+};
+
+export type PreparedApplicationImage = {
+  context: string;
+  dockerfile: string;
+  gitSha: string;
+  image: string;
+  platform: string;
+  preparedSubject: Container;
+  sbom: File;
+  scan: File;
+  scanPolicy: VulnerabilitySeverity[];
+  sourceRepositoryUrl: string;
+  target: string;
+};
+
 type SpdxReport = {
   SPDXID?: string;
   creationInfo?: unknown;
@@ -66,14 +97,6 @@ type SpdxReport = {
   name?: string;
   spdxVersion?: string;
 };
-
-function validateTarget(target: string): void {
-  if (!TARGET_NAME_PATTERN.test(target)) {
-    throw new Error(
-      `OCI image package target "${target}" cannot be used as an evidence directory name.`,
-    );
-  }
-}
 
 async function sha256File(file: File): Promise<string> {
   const contents = await file.contents();
@@ -87,9 +110,13 @@ function buildImageContainer(
   sourceRepositoryUrl: string,
 ): Container {
   const context = plan.context === "." ? repo : repo.directory(plan.context);
+  const dockerfile = dockerfilePathInsideBuildContext(
+    plan.context,
+    plan.dockerfile,
+  );
   let image = context
     .dockerBuild({
-      dockerfile: plan.dockerfile,
+      dockerfile,
       platform: plan.platform as Platform,
     })
     .withLabel("org.opencontainers.image.revision", gitSha);
@@ -167,6 +194,8 @@ async function scanImage(
       dag.cacheVolume(`rush-delivery-grype-${GRYPE_VERSION}`),
     );
 
+  container = withFreshExecutionCache(container, "grype-scan");
+
   if (ignoreFile !== undefined) {
     container = container.withFile("/config/grype.yaml", repo.file(ignoreFile));
     args.push("--config", "/config/grype.yaml");
@@ -187,41 +216,59 @@ async function scanImage(
   return reportFile;
 }
 
+function evidenceFailureStage(index: number, error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+
+  if (index === 0) {
+    return message.startsWith("Syft did not produce")
+      ? "SPDX SBOM validation"
+      : "Syft SBOM generation";
+  }
+
+  if (message.startsWith("Grype produced invalid scanner output")) {
+    return "Grype scanner output validation";
+  }
+
+  if (message.startsWith("OCI image vulnerability policy rejected")) {
+    return "Grype vulnerability policy";
+  }
+
+  return "Grype scan execution";
+}
+
 function formatProvenance(
-  target: string,
-  plan: OciImagePackagePlan,
-  gitSha: string,
-  sourceRepositoryUrl: string,
+  prepared: PreparedApplicationImage,
   imageDigest: string,
 ): string {
   return `${JSON.stringify(
     {
       buildDefinition: {
         buildType:
-          "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.8.0",
+          "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.8.1",
         externalParameters: {
-          context: plan.context,
-          dockerfile: plan.dockerfile,
-          image: plan.image,
-          package_target: target,
-          platform: plan.platform,
+          context: prepared.context,
+          dockerfile: prepared.dockerfile,
+          image: prepared.image,
+          package_target: prepared.target,
+          platform: prepared.platform,
         },
         internalParameters: {
           package_manifest_contract: "rush-delivery-package-manifest/v2",
         },
         resolvedDependencies: [
           {
-            digest: { gitCommit: gitSha },
-            uri: sourceRepositoryUrl || "urn:rush-delivery:local-source",
+            digest: { gitCommit: prepared.gitSha },
+            uri:
+              prepared.sourceRepositoryUrl || "urn:rush-delivery:local-source",
           },
         ],
       },
       runDetails: {
         builder: {
-          id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.8.0",
+          id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.8.1",
         },
         metadata: {
-          invocationId: `${target}:${gitSha}:${imageDigest}`,
+          invocationId: `${prepared.target}:${prepared.gitSha}:${imageDigest}`,
         },
       },
     },
@@ -261,88 +308,217 @@ function requireLiveProvider(
   }
 }
 
-async function signAndVerify(
+export function planApplicationImage(
+  target: string,
+  plan: OciImagePackagePlan,
+  options: PackageApplicationImageOptions,
+): PackageApplicationImageResult {
+  assertSafeApplicationImageTarget(target);
+  const gitSha = normalizeApplicationImageGitSha(options.gitSha);
+  normalizeApplicationImageSourceUrl(options.sourceRepositoryUrl);
+
+  return {
+    artifact: createPlannedApplicationImageArtifact(
+      plan,
+      gitSha,
+      options.provider.definition,
+    ),
+    evidenceFiles: [],
+  };
+}
+
+export async function prepareApplicationImage(
+  repo: Directory,
+  target: string,
+  plan: OciImagePackagePlan,
+  options: PrepareApplicationImageOptions,
+): Promise<PreparedApplicationImage> {
+  assertSafeApplicationImageTarget(target);
+  const gitSha = normalizeApplicationImageGitSha(options.gitSha);
+  const sourceRepositoryUrl = normalizeApplicationImageSourceUrl(
+    options.sourceRepositoryUrl,
+  );
+  const preparedSubject = buildImageContainer(
+    repo,
+    plan,
+    gitSha,
+    sourceRepositoryUrl,
+  );
+  let imageTarball: File;
+
+  try {
+    imageTarball = await preparedSubject.asTarball().sync();
+  } catch {
+    throw new OciPackageOperationError("Docker image build");
+  }
+
+  const evidence = await Promise.allSettled([
+    generateSbom(imageTarball),
+    scanImage(repo, imageTarball, plan.scan.fail_on, plan.scan.ignore_file),
+  ]);
+  const failedStages = evidence.flatMap((outcome, index) =>
+    outcome.status === "rejected"
+      ? [evidenceFailureStage(index, outcome.reason)]
+      : [],
+  );
+
+  if (failedStages.length > 0) {
+    throw new OciPackageOperationError(failedStages.join(" and "));
+  }
+
+  const [sbomResult, scanResult] = evidence;
+
+  if (sbomResult.status !== "fulfilled" || scanResult.status !== "fulfilled") {
+    throw new OciPackageOperationError("evidence preparation");
+  }
+
+  return {
+    context: plan.context,
+    dockerfile: plan.dockerfile,
+    gitSha,
+    image: plan.image,
+    platform: plan.platform,
+    preparedSubject,
+    sbom: sbomResult.value,
+    scan: scanResult.value,
+    scanPolicy: plan.scan.fail_on,
+    sourceRepositoryUrl,
+    target,
+  };
+}
+
+export async function finalizeApplicationImage(
+  prepared: PreparedApplicationImage,
   provider: ResolvedApplicationImageProvider,
-  imageReference: string,
-  sbom: File,
-  provenance: File,
-): Promise<void> {
+): Promise<OciPackageFinalization<PackageApplicationImageResult>> {
   requireLiveProvider(provider);
+  const liveRepository = buildApplicationImageRepository(
+    provider.definition,
+    prepared.image,
+  );
+  const tagReference = buildApplicationImageTagReference(
+    liveRepository,
+    prepared.gitSha,
+  );
+  let returnedReference: string;
 
-  const commonAuthArgs = ["--key", "env://COSIGN_PRIVATE_KEY"];
-  const commonVerifyArgs = [
-    "--key",
-    "env://COSIGN_PUBLIC_KEY",
-    "--insecure-ignore-tlog",
-  ];
-  const container = dag
-    .container()
-    .from(COSIGN_IMAGE)
-    .withEnvVariable("DOCKER_CONFIG", "/home/nonroot/.docker")
-    .withMountedSecret(
-      "/home/nonroot/.docker/config.json",
-      provider.dockerConfig,
-      { mode: 0o400, owner: "65532:65532" },
-    )
-    .withSecretVariable("COSIGN_PRIVATE_KEY", provider.signingKey)
-    .withSecretVariable("COSIGN_PASSWORD", provider.signingPassword)
-    .withSecretVariable("COSIGN_PUBLIC_KEY", provider.verificationKey)
-    .withFile("/evidence/sbom.spdx.json", sbom)
-    .withFile("/evidence/provenance.json", provenance)
-    .withExec([
-      "/ko-app/cosign",
-      "sign",
-      "--yes",
-      "--use-signing-config=false",
-      "--tlog-upload=false",
-      ...commonAuthArgs,
-      imageReference,
-    ])
-    .withExec([
-      "/ko-app/cosign",
-      "attest",
-      "--yes",
-      "--use-signing-config=false",
-      "--tlog-upload=false",
-      "--predicate",
-      "/evidence/sbom.spdx.json",
-      "--type",
-      "spdxjson",
-      ...commonAuthArgs,
-      imageReference,
-    ])
-    .withExec([
-      "/ko-app/cosign",
-      "attest",
-      "--yes",
-      "--use-signing-config=false",
-      "--tlog-upload=false",
-      "--predicate",
-      "/evidence/provenance.json",
-      "--type",
-      "slsaprovenance1",
-      ...commonAuthArgs,
-      imageReference,
-    ])
-    .withExec(["/ko-app/cosign", "verify", ...commonVerifyArgs, imageReference])
-    .withExec([
-      "/ko-app/cosign",
-      "verify-attestation",
-      ...commonVerifyArgs,
-      "--type",
-      "spdxjson",
-      imageReference,
-    ])
-    .withExec([
-      "/ko-app/cosign",
-      "verify-attestation",
-      ...commonVerifyArgs,
-      "--type",
-      "slsaprovenance1",
-      imageReference,
-    ]);
+  try {
+    returnedReference = await prepared.preparedSubject
+      .withRegistryAuth(
+        provider.definition.registry,
+        provider.username,
+        provider.registryToken,
+      )
+      .publish(tagReference);
+  } catch {
+    throw new OciPackageOperationError("registry publication");
+  }
 
-  await container.sync();
+  let published: ReturnType<typeof normalizePublishedImageReference>;
+
+  try {
+    published = normalizePublishedImageReference(
+      liveRepository,
+      tagReference,
+      returnedReference,
+    );
+  } catch {
+    throw new OciPackageOperationError(
+      "returned publication reference validation",
+    );
+  }
+
+  let provenance: File;
+
+  try {
+    provenance = dag
+      .directory()
+      .withNewFile(
+        "provenance.json",
+        formatProvenance(prepared, published.digest),
+      )
+      .file("provenance.json");
+  } catch {
+    throw new OciPackageOperationError(
+      "provenance construction",
+      published.reference,
+    );
+  }
+
+  try {
+    await signAttestAndVerifyApplicationImage(
+      provider,
+      published.reference,
+      prepared.sbom,
+      provenance,
+    );
+  } catch (error) {
+    throw new OciPackageOperationError(
+      error instanceof CosignPublicationError
+        ? `Cosign ${error.stage}`
+        : "Cosign signing/attestation/verification",
+      published.reference,
+    );
+  }
+
+  const evidenceDirectory = `.dagger/runtime/evidence/${prepared.target}`;
+  const sbomPath = `${evidenceDirectory}/sbom.spdx.json`;
+  const scanPath = `${evidenceDirectory}/scan.json`;
+  const provenancePath = `${evidenceDirectory}/provenance.json`;
+  let result: PackageApplicationImageResult;
+
+  try {
+    result = {
+      artifact: {
+        digest: published.digest,
+        evidence: {
+          provenance: {
+            digest: await sha256File(provenance),
+            format: "slsa-provenance-v1",
+            path: provenancePath,
+            subject_digest: published.digest,
+          },
+          sbom: {
+            digest: await sha256File(prepared.sbom),
+            format: "spdx-json",
+            path: sbomPath,
+            subject_digest: published.digest,
+          },
+          scan: {
+            digest: await sha256File(prepared.scan),
+            path: scanPath,
+            policy: prepared.scanPolicy,
+            result: "passed",
+            scanner: `grype-${GRYPE_VERSION}`,
+          },
+          signature: {
+            kind: "sigstore",
+            reference: published.reference,
+            verified: true,
+          },
+        },
+        image: prepared.image,
+        kind: "oci_image",
+        platforms: [prepared.platform],
+        reference: published.reference,
+        repository: published.repository,
+        source_revision: prepared.gitSha,
+        status: "published",
+      },
+      evidenceFiles: [
+        { file: provenance, path: provenancePath },
+        { file: prepared.sbom, path: sbomPath },
+        { file: prepared.scan, path: scanPath },
+      ],
+    };
+  } catch {
+    throw new OciPackageOperationError(
+      "evidence finalization",
+      published.reference,
+    );
+  }
+
+  return { publishedReference: published.reference, result };
 }
 
 export async function packageApplicationImage(
@@ -351,120 +527,17 @@ export async function packageApplicationImage(
   plan: OciImagePackagePlan,
   options: PackageApplicationImageOptions,
 ): Promise<PackageApplicationImageResult> {
-  validateTarget(target);
-  const gitSha = normalizeApplicationImageGitSha(options.gitSha);
-  const sourceRepositoryUrl = normalizeApplicationImageSourceUrl(
-    options.sourceRepositoryUrl,
-  );
   if (options.dryRun) {
-    return {
-      artifact: createPlannedApplicationImageArtifact(
-        plan,
-        gitSha,
-        options.provider.definition,
-      ),
-      evidenceFiles: [],
-    };
+    return planApplicationImage(target, plan, options);
   }
 
   requireLiveProvider(options.provider);
-  const liveRepository = buildApplicationImageRepository(
-    options.provider.definition,
-    plan.image,
-  );
-  const tagReference = buildApplicationImageTagReference(
-    liveRepository,
-    gitSha,
-  );
-  const image = buildImageContainer(repo, plan, gitSha, sourceRepositoryUrl);
-  const imageTarball = image.asTarball();
-  const [sbom, scan] = await Promise.all([
-    generateSbom(imageTarball),
-    scanImage(repo, imageTarball, plan.scan.fail_on, plan.scan.ignore_file),
-  ]);
-  const publishedReference = await image
-    .withRegistryAuth(
-      options.provider.definition.registry,
-      options.provider.username,
-      options.provider.registryToken,
-    )
-    .publish(tagReference);
-  const published = normalizePublishedImageReference(
-    liveRepository,
-    tagReference,
-    publishedReference,
-  );
-  const provenanceContents = formatProvenance(
+  await preflightApplicationImageProvider(options.provider);
+  const prepared = await prepareApplicationImage(
+    repo,
     target,
     plan,
-    gitSha,
-    sourceRepositoryUrl,
-    published.digest,
+    isolateApplicationImagePreparationCoordinates(options),
   );
-  const provenance = dag
-    .directory()
-    .withNewFile("provenance.json", provenanceContents)
-    .file("provenance.json");
-
-  try {
-    await signAndVerify(
-      options.provider,
-      published.reference,
-      sbom,
-      provenance,
-    );
-  } catch (error) {
-    throw new Error(
-      `OCI image was published at ${published.reference}, but signing or verification failed; the registry may retain the image and navigation tag: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
-  const evidenceDirectory = `.dagger/runtime/evidence/${target}`;
-  const sbomPath = `${evidenceDirectory}/sbom.spdx.json`;
-  const scanPath = `${evidenceDirectory}/scan.json`;
-  const provenancePath = `${evidenceDirectory}/provenance.json`;
-
-  return {
-    artifact: {
-      digest: published.digest,
-      evidence: {
-        provenance: {
-          digest: await sha256File(provenance),
-          format: "slsa-provenance-v1",
-          path: provenancePath,
-          subject_digest: published.digest,
-        },
-        sbom: {
-          digest: await sha256File(sbom),
-          format: "spdx-json",
-          path: sbomPath,
-          subject_digest: published.digest,
-        },
-        scan: {
-          digest: await sha256File(scan),
-          path: scanPath,
-          policy: plan.scan.fail_on,
-          result: "passed",
-          scanner: `grype-${GRYPE_VERSION}`,
-        },
-        signature: {
-          kind: "sigstore",
-          reference: published.reference,
-          verified: true,
-        },
-      },
-      image: plan.image,
-      kind: "oci_image",
-      platforms: [plan.platform],
-      reference: published.reference,
-      repository: published.repository,
-      source_revision: gitSha,
-      status: "published",
-    },
-    evidenceFiles: [
-      { file: provenance, path: provenancePath },
-      { file: sbom, path: sbomPath },
-      { file: scan, path: scanPath },
-    ],
-  };
+  return (await finalizeApplicationImage(prepared, options.provider)).result;
 }

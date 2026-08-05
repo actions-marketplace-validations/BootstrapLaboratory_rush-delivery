@@ -5,6 +5,11 @@ import type {
 import type { HostEnv } from "../../model/env.ts";
 import { parseEnvFileContents } from "../../env/env-file.ts";
 import { resolvePassThroughEnvironment } from "../../env/pass-through.ts";
+import {
+  assertNoFrameworkOwnedDeployEnvironment,
+  isFrameworkOwnedDeployEnvironmentName,
+} from "../../application-images/environment-boundary.ts";
+import { FRAMEWORK_EVIDENCE_PATH } from "./runtime-workspace.ts";
 
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === "string" && value.length > 0;
@@ -20,6 +25,8 @@ export function resolveSpecEnvironment(
   dryRun: boolean,
   target: string,
 ): Record<string, string> {
+  assertNoFrameworkOwnedDeployEnvironment(target, spec);
+
   const envVars = resolvePassThroughEnvironment({
     context: "target",
     dryRun,
@@ -49,6 +56,8 @@ export function validateRequiredHostEnv(
   dryRun: boolean,
   target: string,
 ): void {
+  assertNoFrameworkOwnedDeployEnvironment(target, spec);
+
   if (dryRun) {
     return;
   }
@@ -67,6 +76,12 @@ export function getRequiredMountSource(
   name: string,
   target: string,
 ): string {
+  if (isFrameworkOwnedDeployEnvironmentName(name)) {
+    throw new Error(
+      `Deploy target "${target}" file mount source uses framework-owned environment variable "${name}". Rename it; ARTIFACT_*, GIT_SHA, and DRY_RUN are reserved for Rush Delivery.`,
+    );
+  }
+
   const value = hostEnv[name];
 
   if (!isNonEmptyString(value)) {
@@ -76,6 +91,30 @@ export function getRequiredMountSource(
   }
 
   return value;
+}
+
+export function mergeProjectAndFrameworkDeployEnvironment(
+  projectEnv: Record<string, string>,
+  frameworkEnv: Record<string, string>,
+  target: string,
+): Record<string, string> {
+  const collisions = Object.keys(projectEnv)
+    .filter((name) => name in frameworkEnv)
+    .sort();
+
+  if (collisions.length > 0) {
+    throw new Error(
+      [
+        `Deploy target "${target}" cannot overwrite framework-owned environment:`,
+        ...collisions.map((name) => `- ${name}`),
+      ].join("\n"),
+    );
+  }
+
+  return {
+    ...projectEnv,
+    ...frameworkEnv,
+  };
 }
 
 function normalizePathForComparison(value: string): string {
@@ -95,7 +134,12 @@ function normalizeRepoRelativePath(value: string): string {
     normalized = normalized.slice(2);
   }
 
-  return normalized;
+  const rooted = normalized.startsWith("/");
+  const segments = normalized
+    .split("/")
+    .filter((segment) => segment.length > 0 && segment !== ".");
+
+  return `${rooted ? "/" : ""}${segments.join("/")}`;
 }
 
 function isAbsolutePath(value: string): boolean {
@@ -125,6 +169,15 @@ function validateRepoRelativePath(
   if (segments.some((segment) => segment === "..")) {
     throw new Error(
       `File mount source "${name}" for target "${target}" must stay under the checked-out repository.`,
+    );
+  }
+
+  if (
+    normalized === FRAMEWORK_EVIDENCE_PATH ||
+    normalized.startsWith(`${FRAMEWORK_EVIDENCE_PATH}/`)
+  ) {
+    throw new Error(
+      `File mount source "${name}" for target "${target}" selects Rush Delivery evidence. Remove it and consume the current target's verified evidence through ARTIFACT_EVIDENCE_DIR instead.`,
     );
   }
 

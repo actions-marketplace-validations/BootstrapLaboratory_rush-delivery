@@ -23,6 +23,10 @@ function parseStringArray(rawValue: unknown, name: string): string[] {
   });
 }
 
+function parseDistinctStringArray(rawValue: unknown, name: string): string[] {
+  return [...new Set(parseStringArray(rawValue, name))];
+}
+
 function parseAffectedProjectsByDeployTarget(
   rawValue: unknown,
 ): Record<string, string[]> {
@@ -85,17 +89,17 @@ export function normalizeCiPlan(parsedValue: unknown): CiPlan {
         ? parsedValue.affected_projects_by_deploy_target
         : undefined,
     ),
-    deploy_targets: parseStringArray(
+    deploy_targets: parseDistinctStringArray(
       "deploy_targets" in parsedValue ? parsedValue.deploy_targets : undefined,
       "deploy_targets",
     ),
     mode,
     pr_base_sha: prBaseSha,
-    release_targets: parseStringArray(
+    release_targets: parseDistinctStringArray(
       "release_targets" in parsedValue ? parsedValue.release_targets : [],
       "release_targets",
     ),
-    validate_targets: parseStringArray(
+    validate_targets: parseDistinctStringArray(
       "validate_targets" in parsedValue
         ? parsedValue.validate_targets
         : undefined,

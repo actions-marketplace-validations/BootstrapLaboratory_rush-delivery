@@ -4,7 +4,7 @@ export function parseEnvFileContents(
 ): Record<string, string> {
   const envVars: Record<string, string> = {};
 
-  for (const rawLine of contents.split(/\r?\n/)) {
+  for (const [index, rawLine] of contents.split(/\r?\n/).entries()) {
     const line = rawLine.trim();
 
     if (line.length === 0 || line.startsWith("#")) {
@@ -14,7 +14,7 @@ export function parseEnvFileContents(
     const separatorIndex = line.indexOf("=");
     if (separatorIndex === -1) {
       throw new Error(
-        `Invalid ${label} line "${rawLine}". Expected KEY=VALUE format.`,
+        `Invalid ${label} line ${index + 1}. Expected KEY=VALUE format; line contents were redacted.`,
       );
     }
 
@@ -22,7 +22,9 @@ export function parseEnvFileContents(
     const value = line.slice(separatorIndex + 1);
 
     if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
-      throw new Error(`Invalid ${label} key "${key}".`);
+      throw new Error(
+        `Invalid ${label} line ${index + 1}. The environment variable name is invalid; line contents were redacted.`,
+      );
     }
 
     envVars[key] = value;

@@ -42,12 +42,34 @@ function parseGithubRepository(value: string): string {
 }
 
 function parseGithubApiUrl(value: string | undefined): string {
-  const apiUrl =
+  const rawApiUrl =
     value === undefined || value.length === 0
       ? "https://api.github.com"
       : value;
 
-  return apiUrl.replace(/\/+$/u, "");
+  if (/\s|[\u0000-\u001f\u007f]/u.test(rawApiUrl)) {
+    throw new Error("GitHub API URL must be a credential-free HTTPS URL.");
+  }
+
+  let apiUrl: URL;
+
+  try {
+    apiUrl = new URL(rawApiUrl);
+  } catch {
+    throw new Error("GitHub API URL must be a credential-free HTTPS URL.");
+  }
+
+  if (
+    apiUrl.protocol !== "https:" ||
+    apiUrl.username.length > 0 ||
+    apiUrl.password.length > 0 ||
+    apiUrl.search.length > 0 ||
+    apiUrl.hash.length > 0
+  ) {
+    throw new Error("GitHub API URL must be a credential-free HTTPS URL.");
+  }
+
+  return `${apiUrl.origin}${apiUrl.pathname}`.replace(/\/+$/u, "");
 }
 
 function parseGitSha(value: string): string {
@@ -110,7 +132,7 @@ async function assertGithubResponseOk(
   }
 
   throw new Error(
-    `Failed to ${action}: GitHub API returned ${response.status} ${await response.text()}`,
+    `Failed to ${action}: GitHub API returned ${response.status}.`,
   );
 }
 
@@ -162,4 +184,24 @@ export async function updateDeployTagWithGithubApi(
   await assertGithubResponseOk(createResponse, `create ${tagName}`);
 
   return `[deploy-release] created deploy tag ${tagName}\n`;
+}
+
+export async function updateDeployTagWithGithubApiIfConfigured(
+  environment: string,
+  target: string,
+  gitSha: string,
+  hostEnv: Record<string, string>,
+  tokenEnv: string,
+): Promise<string> {
+  if (tokenEnv.length === 0) {
+    return "";
+  }
+
+  return updateDeployTagWithGithubApi(
+    environment,
+    target,
+    gitSha,
+    hostEnv,
+    tokenEnv,
+  );
 }

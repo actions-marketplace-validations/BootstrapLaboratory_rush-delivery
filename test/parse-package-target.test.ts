@@ -91,6 +91,70 @@ artifact:
   });
 });
 
+test("rejects OCI target names that cannot be evidence directory segments", () => {
+  for (const name of [".", "..", "nested/server", "nested\\server"]) {
+    assert.throws(
+      () =>
+        parsePackageTarget(`
+name: ${JSON.stringify(name)}
+artifact:
+  kind: oci_image
+  context: .
+  dockerfile: Dockerfile
+  image: server
+  platform: linux/amd64
+  scan:
+    fail_on: [high]
+`),
+      /cannot be used as an evidence directory name/,
+    );
+  }
+});
+
+test("preserves nested names for filesystem package artifacts", () => {
+  assert.equal(
+    parsePackageTarget(`
+name: nested/server
+artifact:
+  kind: directory
+  path: apps/server/dist
+`).name,
+    "nested/server",
+  );
+});
+
+test("rejects non-normalized OCI repository paths", () => {
+  for (const [field, value] of [
+    ["context", "apps/server/"],
+    ["dockerfile", "apps/server/.."],
+    ["dockerfile", "apps/server/Dockerfile/"],
+    ["ignore_file", ".dagger/application-images/./"],
+  ] as const) {
+    const scanLine =
+      field === "ignore_file" ? `    ignore_file: ${value}\n` : "";
+    const context = field === "context" ? value : "apps/server";
+    const dockerfile =
+      field === "dockerfile" ? value : "apps/server/Dockerfile";
+
+    assert.throws(
+      () =>
+        parsePackageTarget(`
+name: server
+artifact:
+  kind: oci_image
+  context: ${context}
+  dockerfile: ${dockerfile}
+  image: server
+  platform: linux/amd64
+  scan:
+    fail_on: [high]
+${scanLine}`),
+      /normalized repository-relative path/,
+      `${field}=${value} must fail`,
+    );
+  }
+});
+
 test("fails when OCI image Dockerfile is outside its context", () => {
   assert.throws(
     () =>

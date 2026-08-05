@@ -18,13 +18,20 @@ extension surface for validation, packaging, deployment, caches, and toolchains.
   behavior.
 - [Provider adapters](providers.md): source, registry, cache, and CI-provider
   boundaries.
+- [OCI application images tutorial](tutorial/oci-application-images/README.md):
+  runnable path from provider-off planning through signed publication,
+  digest-only deploy, split-stage handoff, and rollback.
 - [OCI application images](oci-application-images.md): build-once image
   publication, verified evidence, and digest-only deploy handoff.
+- [OCI registry recipes](oci-registry-recipes.md): provider metadata,
+  permissions, retention, and cleanup for common registries.
+- [OCI application image troubleshooting](oci-application-image-troubleshooting.md):
+  diagnosis and recovery by release phase.
 - [Development](development.md): maintainer checks, website build notes, and
   generated documentation inputs.
-- [AI architecture](ai/architecture.md): high-level design map for future
+- [AI architecture](../.ai/architecture.md): high-level design map for future
   coding agents.
-- [AI conventions](ai/conventions.md): contribution rules and invariants.
+- [AI conventions](../.ai/conventions.md): contribution rules and invariants.
 
 ## Source Of Truth
 
@@ -34,7 +41,7 @@ contract. These docs explain intent and usage; schemas define file shape.
 Published schemas are available from the documentation site:
 
 - `https://bootstraplaboratory.github.io/rush-delivery/schemas/<schema>.schema.json`
-- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/<schema>.schema.json`
+- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/<schema>.schema.json`
 
 Use exact versioned schema URLs in project metadata editor hints so older
 projects keep the schema contract they were written against. The root

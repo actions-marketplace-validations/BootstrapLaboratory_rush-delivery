@@ -6,6 +6,7 @@ import {
   buildGithubDeployTagUpdateRequests,
   deployTagName,
   updateDeployTagWithGithubApi,
+  updateDeployTagWithGithubApiIfConfigured,
 } from "../src/stages/deploy/deploy-tag.ts";
 
 test("builds deploy tag names from environment and target", () => {
@@ -50,6 +51,41 @@ test("fails when building GitHub deploy tag requests without a full SHA", () => 
       }),
     /Git SHA must be a full 40-character SHA/,
   );
+});
+
+test("accepts a credential-free GitHub Enterprise HTTPS API base", () => {
+  const requests = buildGithubDeployTagUpdateRequests({
+    apiUrl: "https://github.example.com/api/v3/",
+    gitSha: "abcdef1234567890abcdef1234567890abcdef12",
+    repository: "BeltOrg/beltapp",
+    tagName: "deploy/prod/server",
+  });
+
+  assert.equal(
+    requests.update.url,
+    "https://github.example.com/api/v3/repos/BeltOrg/beltapp/git/refs/tags/deploy/prod/server",
+  );
+});
+
+test("rejects unsafe GitHub API bases before sending bearer credentials", () => {
+  for (const apiUrl of [
+    "http://api.github.test",
+    "https://user:password@api.github.test",
+    "https://api.github.test?mirror=attacker",
+    "https://api.github.test/#fragment",
+    "not a URL",
+  ]) {
+    assert.throws(
+      () =>
+        buildGithubDeployTagUpdateRequests({
+          apiUrl,
+          gitSha: "abcdef1234567890abcdef1234567890abcdef12",
+          repository: "BeltOrg/beltapp",
+          tagName: "deploy/prod/server",
+        }),
+      /GitHub API URL must be a credential-free HTTPS URL/,
+    );
+  }
 });
 
 test("creates a missing deploy tag through the GitHub API", async () => {
@@ -99,6 +135,68 @@ test("creates a missing deploy tag through the GitHub API", async () => {
           url: "https://api.github.com/repos/BeltOrg/beltapp/git/refs",
         },
       ],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+  }
+});
+
+test("skips deploy-tag mutation when the caller did not configure that capability", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => {
+    throw new Error("GitHub API must not be called");
+  }) as typeof fetch;
+
+  try {
+    assert.equal(
+      await updateDeployTagWithGithubApiIfConfigured(
+        "prod",
+        "server",
+        "abcdef1234567890abcdef1234567890abcdef12",
+        {},
+        "",
+      ),
+      "",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("does not include a GitHub response body in deploy-tag errors", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLog = console.log;
+  const reflectedToken = "reflected-github-token";
+
+  console.log = () => undefined;
+  globalThis.fetch = (async () =>
+    new Response(`Authorization: Bearer ${reflectedToken}`, {
+      status: 500,
+    })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () =>
+        updateDeployTagWithGithubApi(
+          "prod",
+          "server",
+          "abcdef1234567890abcdef1234567890abcdef12",
+          {
+            GITHUB_REPOSITORY: "BeltOrg/beltapp",
+            GITHUB_TOKEN: reflectedToken,
+          },
+          "GITHUB_TOKEN",
+        ),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).message.includes(reflectedToken), false);
+        assert.equal(
+          (error as Error).message,
+          "Failed to update deploy/prod/server: GitHub API returned 500.",
+        );
+        return true;
+      },
     );
   } finally {
     globalThis.fetch = originalFetch;

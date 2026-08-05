@@ -1,0 +1,126 @@
+name: Released consumer smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v081-consumer-smoke:
+    name: v0.8.1 / ${{ matrix.surface }} / ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        surface:
+          - github-action
+          - remote-module
+        scenario:
+          - filesystem-only
+          - oci-provider-off
+    steps:
+      - name: Checkout exact released fixture source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: v0.8.1
+          path: release-source
+
+      - id: consumer
+        name: Prepare isolated consumer repository
+        env:
+          RELEASE_SMOKE_SCENARIO: ${{ matrix.scenario }}
+          RELEASE_SMOKE_SOURCE: ${{ github.workspace }}/release-source
+        run: |
+          set -euo pipefail
+          consumer_root="${RUNNER_TEMP}/rush-delivery-v081-${RELEASE_SMOKE_SCENARIO}"
+          cp -a \
+            "${RELEASE_SMOKE_SOURCE}/examples/oci-application-image-rush-repo" \
+            "${consumer_root}"
+          if [[ ${RELEASE_SMOKE_SCENARIO} == filesystem-only ]]; then
+            node \
+              "${RELEASE_SMOKE_SOURCE}/test/scripts/build-oci-v081-matrix-fixture.mjs" \
+              filesystem "${consumer_root}"
+          fi
+          git -C "${consumer_root}" init --quiet
+          git -C "${consumer_root}" config user.name rush-delivery-smoke
+          git -C "${consumer_root}" config user.email smoke@invalid.example
+          git -C "${consumer_root}" add --all
+          git -C "${consumer_root}" commit --quiet -m "test: prepare release smoke consumer"
+          printf 'repo=%s\n' "${consumer_root}" >> "${GITHUB_OUTPUT}"
+
+      - id: action-smoke
+        name: Exercise released GitHub Action
+        if: ${{ matrix.surface == 'github-action' }}
+        uses: BootstrapLaboratory/rush-delivery@v0.8.1
+        with:
+          application-image-provider: off
+          docker-socket: ""
+          dry-run: "true"
+          event-name: workflow_dispatch
+          force-targets-json: '["control-plane-api"]'
+          git-sha: 0123456789abcdef0123456789abcdef01234567
+          include-github-env: "false"
+          repo: ${{ steps.consumer.outputs.repo }}
+          rush-cache-provider: off
+          source-mode: local_copy
+          toolchain-image-provider: off
+
+      - name: Verify released GitHub Action result
+        if: ${{ matrix.surface == 'github-action' }}
+        env:
+          RELEASE_SMOKE_OUTPUT: ${{ steps.action-smoke.outputs.output }}
+          RELEASE_SMOKE_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          node -e '
+            const result = JSON.parse(process.env.RELEASE_SMOKE_OUTPUT);
+            const target = result.results?.[0];
+            const isOci = process.env.RELEASE_SMOKE_SCENARIO === "oci-provider-off";
+            if (result.dryRun !== true || result.results?.length !== 1 ||
+                target?.target !== "control-plane-api" ||
+                (isOci ? target.artifactKind !== "oci_image" : typeof target.artifactPath !== "string") ||
+                target.artifactReference !== undefined) {
+              throw new Error("Released GitHub Action returned an unexpected dry-run contract.");
+            }
+          '
+
+      - name: Install pinned Dagger CLI for remote-module smoke
+        if: ${{ matrix.surface == 'remote-module' }}
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: v0.20.7
+
+      - name: Exercise and verify released remote module
+        if: ${{ matrix.surface == 'remote-module' }}
+        env:
+          RELEASE_SMOKE_REPO: ${{ steps.consumer.outputs.repo }}
+          RELEASE_SMOKE_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          result_file="${RUNNER_TEMP}/rush-delivery-v081-module-result.json"
+          dagger \
+            -m github.com/BootstrapLaboratory/rush-delivery@v0.8.1 \
+            --silent call --json workflow \
+            --application-image-provider=off \
+            --dry-run=true \
+            --event-name=workflow_dispatch \
+            --force-targets-json='["control-plane-api"]' \
+            --git-sha=0123456789abcdef0123456789abcdef01234567 \
+            --repo="${RELEASE_SMOKE_REPO}" \
+            --rush-cache-provider=off \
+            --source-mode=local_copy \
+            --toolchain-image-provider=off \
+            > "${result_file}"
+          RELEASE_SMOKE_OUTPUT="$(<"${result_file}")" \
+            node -e '
+              const result = JSON.parse(process.env.RELEASE_SMOKE_OUTPUT);
+              const target = result.results?.[0];
+              const isOci = process.env.RELEASE_SMOKE_SCENARIO === "oci-provider-off";
+              if (result.dryRun !== true || result.results?.length !== 1 ||
+                  target?.target !== "control-plane-api" ||
+                  (isOci ? target.artifactKind !== "oci_image" : typeof target.artifactPath !== "string") ||
+                  target.artifactReference !== undefined) {
+                throw new Error("Released remote module returned an unexpected dry-run contract.");
+              }
+            '

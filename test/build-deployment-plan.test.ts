@@ -84,6 +84,41 @@ services:
   );
 });
 
+test("does not treat inherited object keys as declared services", () => {
+  const mesh = parseServicesMesh(`
+services:
+  server:
+    deploy_after: []
+`);
+
+  assert.throws(
+    () => buildDeploymentPlan(mesh, parseReleaseTargets('["constructor"]')),
+    /Unknown release target "constructor" in services mesh\./,
+  );
+});
+
+test("plans explicitly declared prototype-shaped service names", () => {
+  const mesh = parseServicesMesh(`
+services:
+  constructor:
+    deploy_after: []
+  __proto__:
+    deploy_after:
+      - constructor
+`);
+
+  assert.deepStrictEqual(
+    buildDeploymentPlan(
+      mesh,
+      parseReleaseTargets('["constructor","__proto__"]'),
+    ),
+    {
+      selectedTargets: ["constructor", "__proto__"],
+      waves: [[{ target: "constructor" }], [{ target: "__proto__" }]],
+    },
+  );
+});
+
 test("fails when a selected target depends on an unknown service", () => {
   const mesh = parseServicesMesh(`
 services:
