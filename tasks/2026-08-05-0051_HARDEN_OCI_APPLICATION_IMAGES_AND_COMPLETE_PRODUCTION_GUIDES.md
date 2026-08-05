@@ -480,10 +480,13 @@ behavioral or release gate below.
       and fail if current working-tree docs leaked into the snapshot.
 - [x] Never hand-edit the generated `v0.8.0` documentation, sidebars, or the
       released [`../schemas/v0.8.0`](../schemas/v0.8.0) snapshot.
-- [x] Retain focused regression tests that fail if any corrected defect returns:
-      no-OCI provider activation, credential projection, reserved env
-      collisions, key-mismatch timing, and multi-target side effects. Keep
-      compatibility goldens and already-correct behavior tests passing.
+- [x] Retain focused regression tests for no-OCI provider activation, credential
+      projection, reserved environment collisions, key-mismatch timing, and
+      multi-target side effects. Where a regression was developed with its
+      production fix, use the frozen `v0.8.0` comparison, compatibility goldens,
+      and recorded adversarial review as defect evidence; do not claim literal
+      red-first chronology. Compatibility goldens and already-correct positive
+      behavior must pass.
 - [x] Capture current filesystem-only manifest and deploy-result fixtures as
       compatibility goldens.
 - [x] Add prototype-shaped-name regressions so absent `constructor`/`toString`
@@ -555,11 +558,13 @@ results can be accepted.
 
 ### Phase 0 Exit Gate
 
-- [x] Released docs are frozen from the tag, each corrected defect has a focused
-      retained regression, compatibility/positive tests pass, clean-clone
-      self-check is independent of host-generated SDK state, the live registry
-      harness has bounded and classified failure behavior, and baseline review
-      completed before current root documentation changed.
+- [x] Released docs are frozen from the tag; every identified defect has concrete
+      regression coverage plus either an observed pre-fix failure or the
+      recorded frozen-baseline/adversarial evidence; compatibility and positive
+      tests pass; clean-clone self-check is independent of host-generated SDK
+      state; the live-registry harness has bounded, classified failure behavior;
+      and current root-documentation changes began only after the `v0.8.0`
+      snapshot was generated and verified.
 
 ## Phase 1: Correct Provider Activation And Environment Ownership
 
@@ -717,8 +722,10 @@ results can be accepted.
 - [x] Scanner-integrity tests reject absent/non-array `matches`, missing IDs,
       malformed vulnerability entries, and unsupported severities while
       accepting an explicit empty `matches` array.
-- [ ] The documented empty Grype configuration is accepted by the pinned Grype
-      image in live acceptance. Do not manufacture a database-dependent
+- [x] Validate the documented empty Grype configuration and wire it byte-for-byte
+      to the pinned Grype invocation. The exact merged-candidate GHCR run in
+      Phase 10 must prove that the pinned Grype image accepts it. Do not
+      manufacture a database-dependent
       “narrowly ignored CVE” fixture against Grype's drifting network database.
       If a non-empty exception is ever checked in, require a separate governed
       test with a controlled database snapshot that proves its exact scope and
@@ -1250,8 +1257,7 @@ provider documentation during implementation and link those sources.
 
 ### Upgrade Guide
 
-- [ ] Add a `v0.8.0` to `v0.8.1` upgrade checklist to the production guide and
-      GitHub Release notes.
+- [x] Add a `v0.8.0` to `v0.8.1` upgrade checklist to the production guide.
 - [x] State that filesystem-only consumers need no `.dagger` or credential
       additions for OCI and that a globally supplied named provider no longer
       affects a no-OCI selection. Qualify that metadata which currently shadows
@@ -1542,7 +1548,8 @@ exact merged candidate must then pass every deferred live gate before tagging.
       release candidate. Verify both the single-target and eight-scenario GHCR
       jobs, retained non-secret diagnostics/evidence, independent inventory,
       zero-publication key/preparation failures, bounded partial-publication
-      evidence, and cleanup of every disposable namespace before tagging.
+      evidence, acceptance of the documented empty configuration by the pinned
+      Grype image, and cleanup of every disposable namespace before tagging.
 - [ ] Create annotated tag `v0.8.1` on that exact release commit and verify the
       tag target before pushing it.
 - [ ] Push the `v0.8.1` tag.
