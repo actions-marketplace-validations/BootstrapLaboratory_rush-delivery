@@ -114,6 +114,7 @@ function createOciImageArchive(
   layerPayload: string,
   compression: "gzip" | "zstd",
   historyCommand = "deterministic acceptance fixture",
+  indexReference?: string,
 ): { archive: Buffer; manifestDigest: string } {
   const uncompressedLayer = createTar([
     { contents: Buffer.from(layerPayload, "utf8"), name: "payload.txt" },
@@ -165,6 +166,13 @@ function createOciImageArchive(
           mediaType: "application/vnd.oci.image.manifest.v1+json",
           platform: { architecture: "amd64", os: "linux" },
           size: manifest.length,
+          ...(indexReference
+            ? {
+                annotations: {
+                  "org.opencontainers.image.ref.name": indexReference,
+                },
+              }
+            : {}),
         },
       ],
       mediaType: "application/vnd.oci.image.index.v1+json",
@@ -1424,7 +1432,7 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
   assert.match(source, /RD_OCI_REPOSITORY_PREFIX=%s\\n/);
   assert.match(
     source,
-    /--assert-image-protected-absent[\s\S]{0,160}routing_values_file/,
+    /--assert-image-runtime-protected-absent[\s\S]{0,160}routing_values_file/,
   );
   assert.match(
     source,
@@ -1815,6 +1823,52 @@ test("OCI acceptance verifier enforces the bundle, image, and Deploy contracts w
         compression,
       );
     }
+
+    const routingValue = "example/rush-delivery-routing-sentinel";
+    const routingArchive = createOciImageArchive(
+      "safe image payload\n",
+      "gzip",
+      "deterministic acceptance fixture",
+      `ghcr.io/${routingValue}:acceptance`,
+    );
+    writeFileSync(imageTarball, routingArchive.archive);
+    writeFileSync(
+      protectedValuesFile,
+      `RD_OCI_REPOSITORY_PREFIX=${routingValue}\n`,
+    );
+    const acceptedRoutingEnvelope = spawnSync(
+      process.execPath,
+      [
+        verifierPath,
+        "--assert-image-runtime-protected-absent",
+        imageTarball,
+        protectedValuesFile,
+      ],
+      { encoding: "utf8" },
+    );
+
+    assert.equal(
+      acceptedRoutingEnvelope.status,
+      0,
+      acceptedRoutingEnvelope.stderr,
+    );
+
+    const rejectedRoutingEnvelope = spawnSync(
+      process.execPath,
+      [
+        verifierPath,
+        "--assert-image-protected-absent",
+        imageTarball,
+        protectedValuesFile,
+      ],
+      { encoding: "utf8" },
+    );
+
+    assert.notEqual(rejectedRoutingEnvelope.status, 0);
+    assert.match(
+      `${rejectedRoutingEnvelope.stdout}${rejectedRoutingEnvelope.stderr}`,
+      /image archive contains a credential sentinel/,
+    );
 
     writeFileSync(imageTarball, `${basicAuth}\n`);
     const rejectedCapturedOutput = spawnSync(

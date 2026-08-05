@@ -516,7 +516,7 @@ routing_values_file="${OCI_ACCEPTANCE_TEMP}/public-routing-values.env"
 printf 'RD_OCI_REPOSITORY_PREFIX=%s\n' "${repository_prefix}" >"${routing_values_file}"
 chmod 600 "${routing_values_file}"
 node "${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
-	--assert-image-protected-absent \
+	--assert-image-runtime-protected-absent \
 	"${image_tarball}" \
 	"${routing_values_file}"
 
