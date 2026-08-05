@@ -12,7 +12,7 @@ OCI_V081_MATRIX_PROTECTED_SCAN_TIMEOUT_SECONDS=300
 
 oci_v081_matrix_require_commands() {
 	local command_name
-	for command_name in bash dagger git node realpath sha256sum tar timeout; do
+	for command_name in bash cp dagger git node realpath sha256sum tar timeout; do
 		command -v "${command_name}" >/dev/null 2>&1 || {
 			printf 'v0.8.1 acceptance matrix requires %s\n' "${command_name}" >&2
 			return 1
@@ -80,6 +80,287 @@ oci_v081_matrix_assert_protected_capture() {
 		node "${OCI_V081_MATRIX_VERIFY}" protected-capture \
 		"${inspected_path}" "${protected_values_file}" \
 		"${docker_config_file}" "${allow_username}"
+}
+
+oci_v081_matrix_classify_failure_stage() {
+	local captured_log="$1"
+
+	if grep -Fq 'Dagger metadata contract validation failed:' "${captured_log}"; then
+		printf 'metadata-validation\n'
+	elif grep -Fq 'must contain the expected PEM key' "${captured_log}"; then
+		printf 'credential-shape-preflight\n'
+	elif grep -Fq 'Cosign preflight failed for ' "${captured_log}"; then
+		printf 'cosign-preflight\n'
+	elif grep -Fq 'OCI application image preparation failed:' "${captured_log}"; then
+		printf 'image-preparation\n'
+	elif grep -Fq 'failed during registry publication authentication.' "${captured_log}"; then
+		printf 'registry-publication-authentication\n'
+	elif grep -Fq 'failed during registry publication authorization.' "${captured_log}"; then
+		printf 'registry-publication-authorization\n'
+	elif grep -Fq 'failed during registry publication transport.' "${captured_log}"; then
+		printf 'registry-publication-transport\n'
+	elif grep -Eq 'failed during registry (publication|publish)\.' "${captured_log}"; then
+		printf 'registry-publication\n'
+	elif grep -Eq 'failed during Cosign (sign|attest-|verify-)' "${captured_log}"; then
+		printf 'cosign-publication\n'
+	elif grep -Fq 'OCI application image finalization failed:' "${captured_log}"; then
+		printf 'image-finalization\n'
+	else
+		printf 'package-contract\n'
+	fi
+}
+
+oci_v081_matrix_classify_mutation_state() {
+	local captured_log="$1"
+	local failure_stage="$2"
+	local exit_status="${3:-1}"
+	local publication_boundary_message='[package] OCI publication boundary crossed; ordered finalization is starting.'
+
+	if ((exit_status == 0)); then
+		printf 'completed\n'
+		return 0
+	fi
+	if grep -Fq "${publication_boundary_message}" "${captured_log}"; then
+		printf 'started\n'
+		return 0
+	fi
+	if [[ ${exit_status} == 124 || ${exit_status} == 137 ]]; then
+		printf 'unknown\n'
+		return 0
+	fi
+	case "${failure_stage}" in
+	metadata-validation | credential-shape-preflight | cosign-preflight | image-preparation)
+		printf 'not-started\n'
+		;;
+	registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | cosign-publication | image-finalization)
+		printf 'started\n'
+		;;
+	*)
+		printf 'unknown\n'
+		;;
+	esac
+}
+
+oci_v081_matrix_write_scenario_diagnostic() {
+	local diagnostic_path="$1"
+	local scenario="$2"
+	local outcome="$3"
+	local observed_stage="$4"
+	local mutation_state="$5"
+	local fault_teardown_state="$6"
+	local cleanup_state="$7"
+	local evidence_state="$8"
+	local registry="$9"
+	local repository_prefix="${10}"
+	local targets_csv="${11}"
+
+	case "${scenario}" in
+	malformed-private-pem | malformed-public-pem | wrong-signing-password | invalid-key | mismatched-key | multi-target-success | multi-target-preparation-failure | multi-target-finalization-failure) ;;
+	*) return 2 ;;
+	esac
+	case "${outcome}" in
+	passed | failed) ;;
+	*) return 2 ;;
+	esac
+	case "${observed_stage}" in
+	none | metadata-validation | credential-shape-preflight | cosign-preflight | image-preparation | registry-publication | registry-publication-authentication | registry-publication-authorization | registry-publication-transport | cosign-publication | image-finalization | package-contract | mutation-timeout | protected-output | fault-teardown | registry-cleanup | harness-execution) ;;
+	*) return 2 ;;
+	esac
+	case "${mutation_state}" in
+	not-started | started | completed | unknown) ;;
+	*) return 2 ;;
+	esac
+	case "${fault_teardown_state}" in
+	not-required | succeeded | failed) ;;
+	*) return 2 ;;
+	esac
+	case "${cleanup_state}" in
+	not-required | succeeded | failed) ;;
+	*) return 2 ;;
+	esac
+	case "${evidence_state}" in
+	sanitized | quarantined) ;;
+	*) return 2 ;;
+	esac
+	[[ ${registry} =~ ^[a-z0-9]+([.-][a-z0-9]+)+$ &&
+		${repository_prefix} =~ ^[a-z0-9]+([._/-][a-z0-9]+)*$ ]] || return 2
+	case "${targets_csv}" in
+	control-plane-api | control-plane-api,matrix-worker | control-plane-api,matrix-worker,matrix-later) ;;
+	*) return 2 ;;
+	esac
+	[[ ${diagnostic_path} == /*/scenario-diagnostic.txt &&
+		-d ${diagnostic_path%/*} && ! -e ${diagnostic_path} &&
+		! -L ${diagnostic_path} ]] || return 2
+
+	(
+		umask 077
+		{
+			printf 'schema=rush-delivery-v081-live-scenario-diagnostic/v2\n'
+			printf 'scenario=%s\n' "${scenario}"
+			printf 'outcome=%s\n' "${outcome}"
+			printf 'observed_stage=%s\n' "${observed_stage}"
+			printf 'mutation_state=%s\n' "${mutation_state}"
+			printf 'fault_teardown_state=%s\n' "${fault_teardown_state}"
+			printf 'cleanup_state=%s\n' "${cleanup_state}"
+			printf 'evidence_state=%s\n' "${evidence_state}"
+			printf 'registry=%s\n' "${registry}"
+			printf 'repository_prefix=%s\n' "${repository_prefix}"
+			printf 'targets=%s\n' "${targets_csv}"
+			printf 'source_revision=0123456789abcdef0123456789abcdef01234567\n'
+		} >"${diagnostic_path}"
+		chmod 600 "${diagnostic_path}"
+	)
+}
+
+oci_v081_matrix_write_namespace_record() {
+	local record_path="$1"
+	local scenario="$2"
+	local candidate_commit="$3"
+	local registry="$4"
+	local repository_prefix="$5"
+	local targets_csv="$6"
+
+	case "${scenario}" in
+	malformed-private-pem | malformed-public-pem | wrong-signing-password | invalid-key | mismatched-key | multi-target-success | multi-target-preparation-failure | multi-target-finalization-failure) ;;
+	*) return 2 ;;
+	esac
+	[[ ${candidate_commit} =~ ^[a-f0-9]{40}$ &&
+		${registry} =~ ^[a-z0-9]+([.-][a-z0-9]+)+$ &&
+		${repository_prefix} =~ ^[a-z0-9]+([._/-][a-z0-9]+)*$ ]] || return 2
+	case "${targets_csv}" in
+	control-plane-api | control-plane-api,matrix-worker | control-plane-api,matrix-worker,matrix-later) ;;
+	*) return 2 ;;
+	esac
+	[[ ${record_path} =~ ^/.*/namespace-records/${scenario}-[a-f0-9]{32}\.txt$ &&
+		-d ${record_path%/*} && ! -e ${record_path} &&
+		! -L ${record_path} ]] || return 2
+
+	(
+		umask 077
+		{
+			printf 'schema=rush-delivery-v081-live-namespace/v1\n'
+			printf 'scenario=%s\n' "${scenario}"
+			printf 'candidate_commit=%s\n' "${candidate_commit}"
+			printf 'registry=%s\n' "${registry}"
+			printf 'repository_prefix=%s\n' "${repository_prefix}"
+			printf 'targets=%s\n' "${targets_csv}"
+		} >"${record_path}"
+		chmod 600 "${record_path}"
+	)
+}
+
+oci_v081_matrix_copy_promoted_file() {
+	local source="$1"
+	local destination="$2"
+
+	[[ -f ${source} && ! -L ${source} && ! -e ${destination} &&
+		! -L ${destination} ]] || return 1
+	mkdir -p "${destination%/*}" || return 1
+	cp -- "${source}" "${destination}" || return 1
+	chmod 600 "${destination}"
+}
+
+oci_v081_matrix_publish_sanitized_output() {
+	local work_root="$1"
+	local output_root="$2"
+	local scenario="$3"
+	local outcome="$4"
+	local observed_stage="$5"
+	local mutation_state="$6"
+	local fault_teardown_state="$7"
+	local cleanup_state="$8"
+	local registry="$9"
+	local repository_prefix="${10}"
+	local targets_csv="${11}"
+	local package_capture_safe="${12}"
+	local protected_scan_failed="${13}"
+	local pre_inventory_validated="${14}"
+	local registry_inventory_validated="${15}"
+	local cleanup_validated="${16}"
+	local package_evidence_validated="${17}"
+	local protected_values_file="${18}"
+	local docker_config_file="${19}"
+	local marker="${work_root}/.rush-delivery-v081-live-owned"
+	local artifact_parent="${output_root%/*}"
+	local external_parent="${artifact_parent%/*}"
+	local staging_root
+	local evidence_state=quarantined
+	local promotion_failed=false
+	local relative_path
+	local target
+	local -a promoted_targets=()
+
+	[[ ${work_root} == /* && -d ${work_root} && ! -L ${work_root} &&
+		-f ${marker} && ! -L ${marker} &&
+		$(<"${marker}") == rush-delivery-v081-live-owned &&
+		${output_root} == /* && ! -e ${output_root} && ! -L ${output_root} &&
+		-d ${artifact_parent} && ! -L ${artifact_parent} &&
+		-d ${external_parent} && ! -L ${external_parent} ]] || return 1
+
+	staging_root="$(
+		mktemp -d \
+			"${external_parent}/rush-delivery-v081-live-evidence.${scenario}.XXXXXX"
+	)" || return 1
+	chmod 700 "${staging_root}"
+	printf 'rush-delivery-v081-live-owned\n' \
+		>"${staging_root}/.rush-delivery-v081-live-owned"
+	chmod 600 "${staging_root}/.rush-delivery-v081-live-owned"
+
+	if [[ ${package_capture_safe} == true &&
+		${protected_scan_failed} == false ]]; then
+		evidence_state=sanitized
+		if [[ ${pre_inventory_validated} == true ]]; then
+			oci_v081_matrix_copy_promoted_file \
+				"${work_root}/pre-mutation-inventory.json" \
+				"${staging_root}/pre-mutation-inventory.json" || promotion_failed=true
+		fi
+		if [[ ${registry_inventory_validated} == true ]]; then
+			oci_v081_matrix_copy_promoted_file \
+				"${work_root}/registry-inventory.json" \
+				"${staging_root}/registry-inventory.json" || promotion_failed=true
+		fi
+		if [[ ${cleanup_validated} == true ]]; then
+			oci_v081_matrix_copy_promoted_file \
+				"${work_root}/cleanup-inventory.json" \
+				"${staging_root}/cleanup-inventory.json" || promotion_failed=true
+		fi
+		if [[ ${package_evidence_validated} == true ]]; then
+			oci_v081_matrix_copy_promoted_file \
+				"${work_root}/package-output/.dagger/runtime/package-manifest.json" \
+				"${staging_root}/package-output/.dagger/runtime/package-manifest.json" || promotion_failed=true
+			IFS=',' read -r -a promoted_targets <<<"${targets_csv}"
+			for target in "${promoted_targets[@]}"; do
+				for relative_path in provenance.json sbom.spdx.json scan.json; do
+					oci_v081_matrix_copy_promoted_file \
+						"${work_root}/package-output/.dagger/runtime/evidence/${target}/${relative_path}" \
+						"${staging_root}/package-output/.dagger/runtime/evidence/${target}/${relative_path}" || promotion_failed=true
+				done
+			done
+		fi
+	fi
+	if [[ ${promotion_failed} == true ]]; then
+		find "${staging_root}" -depth -delete
+		return 1
+	fi
+	oci_v081_matrix_write_scenario_diagnostic \
+		"${staging_root}/scenario-diagnostic.txt" \
+		"${scenario}" "${outcome}" "${observed_stage}" \
+		"${mutation_state}" "${fault_teardown_state}" \
+		"${cleanup_state}" "${evidence_state}" "${registry}" \
+		"${repository_prefix}" "${targets_csv}" || {
+		find "${staging_root}" -depth -delete
+		return 1
+	}
+	if ! oci_v081_matrix_assert_protected_capture \
+		"${staging_root}" "${protected_values_file}" \
+		"${docker_config_file}" false; then
+		find "${staging_root}" -depth -delete
+		return 1
+	fi
+	if ! mv -- "${staging_root}" "${output_root}"; then
+		find "${staging_root}" -depth -delete
+		return 1
+	fi
 }
 
 oci_v081_matrix_copy_example() {
@@ -367,7 +648,7 @@ oci_v081_matrix_run_live_package_once() {
 	oci_v081_matrix_run_bounded \
 		"${OCI_V081_MATRIX_LIVE_MUTATION_TIMEOUT_SECONDS}" \
 		env DAGGER_NO_NAG=1 \
-		dagger -m "${module_root}" --silent call \
+		dagger -m "${module_root}" --progress=logs call \
 		build-and-package-deploy-targets \
 		--repo="${fixture}" \
 		--ci-plan-file="${fixture}/ci/oci-plan.json" \
@@ -378,14 +659,41 @@ oci_v081_matrix_run_live_package_once() {
 		--application-image-provider=matrix \
 		export --path="${output_directory}" >"${captured_log}" 2>&1 ||
 		captured_status=$?
-	oci_v081_matrix_assert_protected_capture \
-		"${captured_log}" "${deploy_env_file}" \
-		"${docker_config_file}" true
-	if [[ -e ${output_directory} || -L ${output_directory} ]]; then
-		oci_v081_matrix_assert_protected_capture \
-			"${output_directory}" "${deploy_env_file}" \
-			"${docker_config_file}" false
+	if [[ ${captured_status} == 124 || ${captured_status} == 137 ]]; then
+		OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=mutation-timeout
+	else
+		OCI_V081_MATRIX_LIVE_OBSERVED_STAGE="$(
+			oci_v081_matrix_classify_failure_stage "${captured_log}"
+		)"
 	fi
+	# shellcheck disable=SC2034 # Read by the parent live-scenario EXIT trap.
+	OCI_V081_MATRIX_LIVE_MUTATION_STATE="$(
+		oci_v081_matrix_classify_mutation_state \
+			"${captured_log}" "${OCI_V081_MATRIX_LIVE_OBSERVED_STAGE}" \
+			"${captured_status}"
+	)"
+	if ((captured_status == 0)); then
+		OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=none
+	fi
+	if ! oci_v081_matrix_assert_protected_capture \
+		"${captured_log}" "${deploy_env_file}" \
+		"${docker_config_file}" true; then
+		# Read by the parent runner's EXIT trap before any retained artifact is written.
+		OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+		OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=protected-output
+		return 1
+	fi
+	if [[ -e ${output_directory} || -L ${output_directory} ]]; then
+		if ! oci_v081_matrix_assert_protected_capture \
+			"${output_directory}" "${deploy_env_file}" \
+			"${docker_config_file}" false; then
+			OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+			OCI_V081_MATRIX_LIVE_OBSERVED_STAGE=protected-output
+			return 1
+		fi
+	fi
+	# shellcheck disable=SC2034 # Read by the parent live-scenario EXIT trap.
+	OCI_V081_MATRIX_LIVE_OUTPUT_SAFE=true
 	printf -v "${status_variable}" '%s' "${captured_status}"
 }
 
@@ -431,13 +739,19 @@ oci_v081_matrix_capture_inventory() {
 		"${assertion}" "${registry}" "${repository_prefix}" \
 		"${expected_targets_csv}" "${evidence_file}" \
 		>"${captured_log}" 2>&1 || inventory_status=$?
-	oci_v081_matrix_assert_protected_capture \
+	if ! oci_v081_matrix_assert_protected_capture \
 		"${captured_log}" "${protected_values_file}" \
-		"${docker_config_file}" false
+		"${docker_config_file}" false; then
+		OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+		return 1
+	fi
 	if [[ -e ${evidence_file} || -L ${evidence_file} ]]; then
-		oci_v081_matrix_assert_protected_capture \
+		if ! oci_v081_matrix_assert_protected_capture \
 			"${evidence_file}" "${protected_values_file}" \
-			"${docker_config_file}" false
+			"${docker_config_file}" false; then
+			OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+			return 1
+		fi
 	fi
 	((inventory_status == 0)) || return "${inventory_status}"
 	[[ -s ${evidence_file} ]] || {
@@ -466,9 +780,12 @@ oci_v081_matrix_configure_finalization_fault() {
 		configure-finalization-failure \
 		"${registry}" "${repository_prefix}" "${failed_target}" \
 		>"${captured_log}" 2>&1 || fault_status=$?
-	oci_v081_matrix_assert_protected_capture \
+	if ! oci_v081_matrix_assert_protected_capture \
 		"${captured_log}" "${protected_values_file}" \
-		"${docker_config_file}" false
+		"${docker_config_file}" false; then
+		OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+		return 1
+	fi
 	return "${fault_status}"
 }
 
@@ -488,9 +805,12 @@ oci_v081_matrix_teardown_finalization_fault() {
 		teardown-finalization-failure \
 		"${registry}" "${repository_prefix}" "${failed_target}" \
 		>"${captured_log}" 2>&1 || fault_status=$?
-	oci_v081_matrix_assert_protected_capture \
+	if ! oci_v081_matrix_assert_protected_capture \
 		"${captured_log}" "${protected_values_file}" \
-		"${docker_config_file}" false || return 1
+		"${docker_config_file}" false; then
+		OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+		return 1
+	fi
 	return "${fault_status}"
 }
 
@@ -514,13 +834,20 @@ oci_v081_matrix_cleanup_live_namespace() {
 		"${cleanup_hook}" inspect-and-clean \
 		"${registry}" "${repository_prefix}" "${expected_targets_csv}" \
 		"${cleanup_evidence}" >"${captured_log}" 2>&1 || cleanup_status=$?
-	oci_v081_matrix_assert_protected_capture \
+	if ! oci_v081_matrix_assert_protected_capture \
 		"${captured_log}" "${protected_values_file}" \
-		"${docker_config_file}" false || return 1
+		"${docker_config_file}" false; then
+		OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+		return 1
+	fi
 	if [[ -e ${cleanup_evidence} || -L ${cleanup_evidence} ]]; then
-		oci_v081_matrix_assert_protected_capture \
+		if ! oci_v081_matrix_assert_protected_capture \
 			"${cleanup_evidence}" "${protected_values_file}" \
-			"${docker_config_file}" false || return 1
+			"${docker_config_file}" false; then
+			# shellcheck disable=SC2034 # Read by the parent live-scenario EXIT trap.
+			OCI_V081_MATRIX_LIVE_PROTECTED_SCAN_FAILED=true
+			return 1
+		fi
 	fi
 	((cleanup_status == 0)) || return "${cleanup_status}"
 	[[ -s ${cleanup_evidence} ]] || {
@@ -596,6 +923,10 @@ oci_v081_matrix_expect_prepublication_failure_once() {
 		printf 'v0.8.1 live matrix mutating call exceeded its hard timeout\n' >&2
 		return 1
 	}
+	[[ ${OCI_V081_MATRIX_LIVE_MUTATION_STATE} == not-started ]] || {
+		printf 'v0.8.1 live matrix prepublication scenario crossed the publication boundary\n' >&2
+		return 1
+	}
 	grep -Eq "${expected_pattern}" "${captured_log}" || {
 		printf 'v0.8.1 live matrix failure did not reach the expected prepublication stage\n' >&2
 		return 1
@@ -606,7 +937,7 @@ oci_v081_matrix_expect_prepublication_failure_once() {
 		"${deploy_env_file}" "${docker_config_file}"
 	node "${OCI_V081_MATRIX_VERIFY}" live-failure \
 		"${scenario}" "${captured_log}" "${inventory_evidence}" \
-		"${expected_targets}"
+		"${expected_targets}" "${registry}" "${repository_prefix}"
 }
 
 oci_v081_matrix_run_live_multi_target_success_once() {
@@ -637,7 +968,8 @@ oci_v081_matrix_run_live_multi_target_success_once() {
 		"${targets}" "${inventory_evidence}" "${inventory_log}" \
 		"${deploy_env_file}" "${docker_config_file}"
 	node "${OCI_V081_MATRIX_VERIFY}" live-success \
-		"${output_directory}" "${inventory_evidence}" "${targets}"
+		"${output_directory}" "${inventory_evidence}" "${targets}" \
+		"${registry}" "${repository_prefix}"
 }
 
 oci_v081_matrix_run_live_finalization_failure_once() {
@@ -680,5 +1012,5 @@ oci_v081_matrix_run_live_finalization_failure_once() {
 		"${inventory_log}" "${deploy_env_file}" "${docker_config_file}"
 	node "${OCI_V081_MATRIX_VERIFY}" live-failure \
 		ordered-finalization "${captured_log}" "${inventory_evidence}" \
-		"${targets}"
+		"${targets}" "${registry}" "${repository_prefix}"
 }

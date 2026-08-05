@@ -10,7 +10,7 @@ permissions:
 jobs:
   live-oci:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -35,20 +35,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           OCI_ACCEPTANCE_DIAGNOSTIC_PATH: ${{ runner.temp }}/rush-delivery-oci-acceptance-diagnostic.txt
+          OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH: ${{ runner.temp }}/rush-delivery-oci-acceptance-namespace.txt
         run: bash test/scripts/run-oci-acceptance.sh
+
+      - name: Recover project-controlled GHCR acceptance namespace
+        if: ${{ always() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH: ${{ runner.temp }}/rush-delivery-oci-acceptance-namespace.txt
+        run: |
+          set -euo pipefail
+          if [[ -f ${OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH} && ! -L ${OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH} ]]; then
+            bash test/scripts/cleanup-ghcr-acceptance.sh \
+              --namespace-record "${OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH}"
+          elif [[ -e ${OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH} || -L ${OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH} ]]; then
+            printf 'OCI acceptance recovery rejected an unsafe namespace record\n' >&2
+            exit 1
+          fi
 
       - name: Preserve controlled acceptance diagnostic
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rush-delivery-oci-acceptance-diagnostic
-          path: ${{ runner.temp }}/rush-delivery-oci-acceptance-diagnostic.txt
+          path: |
+            ${{ runner.temp }}/rush-delivery-oci-acceptance-diagnostic.txt
+            ${{ runner.temp }}/rush-delivery-oci-acceptance-namespace.txt
           if-no-files-found: error
           retention-days: 7
 
   v081-live-matrix:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - name: Checkout exact acceptance source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -86,6 +104,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           OCI_V081_MATRIX_CLEANUP_HOOK: ${{ github.workspace }}/test/scripts/cleanup-ghcr-v081-acceptance.sh
+          OCI_V081_MATRIX_CANDIDATE_SHA: ${{ github.sha }}
           OCI_V081_MATRIX_DOCKER_CONFIG_FILE: ${{ runner.temp }}/rush-delivery-v081-matrix-profiles/registry-auth.json
           OCI_V081_MATRIX_EVIDENCE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-evidence
           OCI_V081_MATRIX_FAULT_HOOK: ${{ github.workspace }}/test/scripts/configure-oci-v081-finalization-fault.sh
@@ -107,6 +126,36 @@ jobs:
           done < <(bash test/scripts/run-oci-v081-acceptance-matrix.sh --list-live-scenarios)
           exit "${matrix_status}"
 
+      - name: Recover every registered v0.8.1 GHCR matrix namespace
+        if: ${{ always() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OCI_V081_MATRIX_EVIDENCE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-evidence
+        run: |
+          set -euo pipefail
+          record_root="${OCI_V081_MATRIX_EVIDENCE_ROOT}/namespace-records"
+          recovery_root="${OCI_V081_MATRIX_EVIDENCE_ROOT}/recovery"
+          recovery_status=0
+          if [[ -e ${record_root} || -L ${record_root} ]]; then
+            [[ -d ${record_root} && ! -L ${record_root} ]] || {
+              printf 'v0.8.1 GHCR matrix recovery rejected an unsafe record root\n' >&2
+              exit 1
+            }
+            mkdir -m 700 "${recovery_root}"
+            shopt -s nullglob
+            for record in "${record_root}"/*.txt; do
+              record_name="${record##*/}"
+              evidence="${recovery_root}/${record_name%.txt}.json"
+              if ! timeout --signal=TERM --kill-after=10s 300s \
+                bash test/scripts/cleanup-ghcr-v081-acceptance.sh \
+                  --namespace-record "${record}" "${evidence}"; then
+                printf 'v0.8.1 GHCR matrix recovery failed for a registered namespace\n' >&2
+                recovery_status=1
+              fi
+            done
+          fi
+          exit "${recovery_status}"
+
       - name: Remove protected matrix profiles
         if: ${{ always() }}
         env:
@@ -124,5 +173,6 @@ jobs:
         with:
           name: rush-delivery-v081-live-matrix-evidence
           path: ${{ runner.temp }}/rush-delivery-v081-matrix-evidence
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7

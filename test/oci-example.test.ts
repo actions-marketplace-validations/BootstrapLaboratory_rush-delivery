@@ -638,6 +638,10 @@ test("OCI acceptance is wired to build the public canonical example", async () =
   );
   assert.match(
     acceptance,
+    /dagger --progress=logs call build-and-package-deploy-targets/,
+  );
+  assert.doesNotMatch(
+    acceptance,
     /dagger --silent call build-and-package-deploy-targets/,
   );
   for (const excludedPath of [

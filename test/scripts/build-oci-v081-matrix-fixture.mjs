@@ -21,6 +21,16 @@ const supportedModes = new Set([
   "live-multi-target-finalization-failure",
   "live-single-target",
 ]);
+const syntheticRushProjectIntegrities = new Map([
+  [
+    "matrix-later",
+    "sha512-iJa6tPKt2LgEcayyG26Ur8K8w/vWB6Coqh2x2/2njvBiwneGwn7HQNLFfoeAQlQW+Mfguof6Zzl0tbfrw2DWmA==",
+  ],
+  [
+    "matrix-worker",
+    "sha512-KFc51UzVZl7vMg5JmYgaef1XfpGH5jG3sM0D0yruPGc5AhFDf61XYu3kJOFbLfbM/OjrS69PzUiGPicCX2Sa3Q==",
+  ],
+]);
 
 if (!supportedModes.has(mode) || !fixtureRootArgument) {
   throw new Error(
@@ -93,6 +103,114 @@ async function writeServicesMesh(targets) {
       "",
     ].join("\n"),
   );
+}
+
+async function ensureRushProject(packageName) {
+  const rushConfigurationPath = path.join(fixtureRoot, "rush.json");
+  const rushConfiguration = JSON.parse(
+    await readFile(rushConfigurationPath, "utf8"),
+  );
+
+  if (
+    !rushConfiguration.projects.some(
+      (project) => project.packageName === packageName,
+    )
+  ) {
+    rushConfiguration.projects.push({
+      packageName,
+      projectFolder: `apps/${packageName}`,
+    });
+    await writeFixtureFile(
+      "rush.json",
+      `${JSON.stringify(rushConfiguration, null, 2)}\n`,
+    );
+  }
+
+  await writeFixtureFile(
+    `apps/${packageName}/package.json`,
+    `${JSON.stringify(
+      {
+        name: packageName,
+        private: true,
+        scripts: {
+          build: 'node -e ""',
+          lint: 'node -e ""',
+          test: 'node -e ""',
+          verify: 'node -e ""',
+        },
+        version: "1.0.0",
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+async function addSyntheticRushProjects(packageNames) {
+  for (const packageName of packageNames) {
+    await ensureRushProject(packageName);
+  }
+
+  const lockfilePath = path.join(
+    fixtureRoot,
+    "common/config/rush/pnpm-lock.yaml",
+  );
+  let lockfile = await readFile(lockfilePath, "utf8");
+  const importerAnchor = [
+    "      '@rush-temp/control-plane-api':",
+    "        specifier: file:./projects/control-plane-api.tgz",
+    "        version: file:projects/control-plane-api.tgz",
+  ].join("\n");
+  const packageAnchor = [
+    "  '@rush-temp/control-plane-api@file:projects/control-plane-api.tgz':",
+    "    resolution: {integrity: sha512-tJm1cp+Y6SoKHtclH387sCYuFV81UoDMPIQQMukjE7Z+qml4UzJ6jUjmdQT65rNtYihGPG0GEKGLoEEPx1LYkQ==, tarball: file:projects/control-plane-api.tgz}",
+    "    version: 0.0.0",
+  ].join("\n");
+  const snapshotAnchor =
+    "  '@rush-temp/control-plane-api@file:projects/control-plane-api.tgz': {}";
+  const sortedNames = [...packageNames].sort();
+
+  for (const anchor of [importerAnchor, packageAnchor, snapshotAnchor]) {
+    if (lockfile.split(anchor).length !== 2) {
+      throw new Error(
+        "Canonical Rush lockfile does not match the live matrix fixture contract.",
+      );
+    }
+  }
+  const importerEntries = sortedNames
+    .map((packageName) =>
+      [
+        `      '@rush-temp/${packageName}':`,
+        `        specifier: file:./projects/${packageName}.tgz`,
+        `        version: file:projects/${packageName}.tgz`,
+      ].join("\n"),
+    )
+    .join("\n");
+  const packageEntries = sortedNames
+    .map((packageName) => {
+      const integrity = syntheticRushProjectIntegrities.get(packageName);
+      if (integrity === undefined) {
+        throw new Error("Synthetic Rush project integrity is unavailable.");
+      }
+      return [
+        `  '@rush-temp/${packageName}@file:projects/${packageName}.tgz':`,
+        `    resolution: {integrity: ${integrity}, tarball: file:projects/${packageName}.tgz}`,
+        "    version: 0.0.0",
+      ].join("\n");
+    })
+    .join("\n\n");
+  const snapshotEntries = sortedNames
+    .map(
+      (packageName) =>
+        `  '@rush-temp/${packageName}@file:projects/${packageName}.tgz': {}`,
+    )
+    .join("\n\n");
+
+  lockfile = lockfile
+    .replace(importerAnchor, `${importerAnchor}\n${importerEntries}`)
+    .replace(packageAnchor, `${packageAnchor}\n\n${packageEntries}`)
+    .replace(snapshotAnchor, `${snapshotAnchor}\n\n${snapshotEntries}`);
+  await writeFixtureFile("common/config/rush/pnpm-lock.yaml", lockfile);
 }
 
 async function buildFilesystemFixture() {
@@ -175,6 +293,7 @@ async function writeLiveTarget(target, invalidGrypeConfiguration) {
 
 async function buildLiveMultiTargetFixture(injectPreparationFailure) {
   await removeFixturePath(".dagger/runtime");
+  await addSyntheticRushProjects(["matrix-worker"]);
   await writeLiveTarget("control-plane-api", false);
   await writeLiveTarget("matrix-worker", injectPreparationFailure);
   if (injectPreparationFailure) {
@@ -189,6 +308,7 @@ async function buildLiveMultiTargetFixture(injectPreparationFailure) {
 
 async function buildLiveFinalizationFailureFixture() {
   await removeFixturePath(".dagger/runtime");
+  await addSyntheticRushProjects(["matrix-worker", "matrix-later"]);
   for (const target of ["control-plane-api", "matrix-worker", "matrix-later"]) {
     await writeLiveTarget(target, false);
   }

@@ -5,6 +5,8 @@ import path from "node:path";
 const MAX_PROTECTED_SCAN_FILES = 20_000;
 const MAX_PROTECTED_SCAN_BYTES = 1024 * 1024 * 1024;
 const PROTECTED_PEM_CHUNK_CHARACTERS = 16;
+const FIXED_GIT_SHA = "0123456789abcdef0123456789abcdef01234567";
+const INVENTORY_EVENT_ORDER = "target-list-then-registry-version-id";
 
 const [mode, ...args] = process.argv.slice(2);
 
@@ -333,6 +335,37 @@ async function verifyNamedDryRun(outputDirectory) {
   }
 }
 
+async function verifyPlannedMultiTarget(outputDirectory, targetsCsv) {
+  const targets = parseTargets(targetsCsv);
+  const manifest = await readJson(
+    path.join(outputDirectory, ".dagger/runtime/package-manifest.json"),
+  );
+
+  requireCondition(
+    manifest.schema_version === "rush-delivery-package-manifest/v2" &&
+      JSON.stringify(Object.keys(manifest.artifacts ?? {})) ===
+        JSON.stringify(targets),
+    "Provider-off multi-target smoke has the wrong manifest or target order.",
+  );
+  for (const target of targets) {
+    const artifact = manifest.artifacts[target];
+    requireCondition(
+      artifact?.kind === "oci_image" &&
+        artifact.image === target &&
+        artifact.status === "planned" &&
+        artifact.source_revision === FIXED_GIT_SHA &&
+        JSON.stringify(artifact.platforms) === JSON.stringify(["linux/amd64"]),
+      `Provider-off multi-target smoke has invalid intent for ${target}.`,
+    );
+    for (const forbidden of ["digest", "evidence", "reference", "repository"]) {
+      requireCondition(
+        !(forbidden in artifact),
+        `Provider-off multi-target smoke must not emit ${forbidden}.`,
+      );
+    }
+  }
+}
+
 async function verifyFilesystemPackage(outputDirectory) {
   const manifest = await readJson(
     path.join(outputDirectory, ".dagger/runtime/package-manifest.json"),
@@ -438,8 +471,47 @@ function parseTargets(targetsCsv) {
   return targets;
 }
 
-async function readInventory(inventoryFile, assertion, targets) {
+function expectedInventoryEvent(target, version) {
+  return {
+    created_at: version.created_at,
+    digest: version.digest,
+    operation: version.subject
+      ? "subject-published"
+      : "package-version-present",
+    registry_version_id: version.registry_version_id,
+    subject: version.subject,
+    tags: version.tags,
+    target,
+  };
+}
+
+function inventoryEventLedgerKey(event) {
+  return JSON.stringify({
+    created_at: event.created_at,
+    digest: event.digest,
+    operation: event.operation,
+    registry_version_id: event.registry_version_id,
+    subject: event.subject,
+    tags: event.tags,
+    target: event.target,
+  });
+}
+
+async function readInventory(
+  inventoryFile,
+  assertion,
+  targets,
+  expectedRegistry,
+  expectedRepositoryPrefix,
+) {
   const inventory = await readJson(inventoryFile);
+  requireCondition(
+    typeof expectedRegistry === "string" &&
+      expectedRegistry.length > 0 &&
+      typeof expectedRepositoryPrefix === "string" &&
+      expectedRepositoryPrefix.length > 0,
+    "Registry inventory verification requires expected namespace coordinates.",
+  );
   requireCondition(
     inventory.assertion === assertion,
     "Registry inventory evidence has the wrong assertion kind.",
@@ -455,22 +527,85 @@ async function readInventory(inventoryFile, assertion, targets) {
     "Registry inventory evidence must cover exactly the expected targets.",
   );
   requireCondition(
-    Array.isArray(inventory.events),
-    "Registry inventory evidence must contain an ordered event list.",
+    inventory.event_order === INVENTORY_EVENT_ORDER &&
+      Array.isArray(inventory.events),
+    "Registry inventory evidence must contain a canonical event ledger.",
   );
+  requireCondition(
+    inventory.registry === expectedRegistry &&
+      inventory.repository_prefix === expectedRepositoryPrefix &&
+      JSON.stringify(inventory.targets) === JSON.stringify(targets),
+    "Registry inventory evidence does not bind the expected namespace.",
+  );
+  const expectedEvents = [];
+  for (const target of targets) {
+    const repository = inventory.repositories[target];
+    requireCondition(
+      repository?.inspected === true &&
+        Number.isSafeInteger(repository.package_version_count) &&
+        repository.package_version_count >= 0 &&
+        Array.isArray(repository.versions) &&
+        repository.versions.length === repository.package_version_count &&
+        repository.versions.every(
+          (version) =>
+            version &&
+            typeof version === "object" &&
+            typeof version.created_at === "string" &&
+            Number.isFinite(Date.parse(version.created_at)) &&
+            typeof version.digest === "string" &&
+            /^sha256:[a-f0-9]{64}$/u.test(version.digest) &&
+            Number.isSafeInteger(version.registry_version_id) &&
+            version.registry_version_id > 0 &&
+            typeof version.subject === "boolean" &&
+            Array.isArray(version.tags) &&
+            version.tags.every((tag) => typeof tag === "string") &&
+            version.subject === version.tags.includes(`sha-${FIXED_GIT_SHA}`),
+        ) &&
+        new Set(
+          repository.versions.map((version) => version.registry_version_id),
+        ).size === repository.versions.length &&
+        repository.publication_count ===
+          repository.versions.filter((version) => version.subject).length,
+      `Registry inventory has an incomplete package-version inventory for ${target}.`,
+    );
+    expectedEvents.push(
+      ...repository.versions.map((version) =>
+        expectedInventoryEvent(target, version),
+      ),
+    );
+  }
   for (const [index, event] of inventory.events.entries()) {
     requireCondition(
-      Number.isSafeInteger(event.sequence) &&
-        event.sequence >= 0 &&
-        typeof event.operation === "string" &&
+      event &&
+        typeof event === "object" &&
+        event.sequence === index + 1 &&
+        typeof event.created_at === "string" &&
+        Number.isFinite(Date.parse(event.created_at)) &&
+        typeof event.digest === "string" &&
+        /^sha256:[a-f0-9]{64}$/u.test(event.digest) &&
+        Number.isSafeInteger(event.registry_version_id) &&
+        event.registry_version_id > 0 &&
+        typeof event.subject === "boolean" &&
+        Array.isArray(event.tags) &&
+        event.tags.every((tag) => typeof tag === "string") &&
+        (event.operation === "subject-published" ||
+          event.operation === "package-version-present") &&
         targets.includes(event.target),
       `Registry inventory event ${index} is malformed.`,
     );
   }
-  const sequences = inventory.events.map((event) => event.sequence);
+  const targetOrder = new Map(targets.map((target, index) => [target, index]));
+  // Version IDs only provide a stable per-package tie-breaker here. This
+  // canonical ledger must not be interpreted as cross-package chronology.
+  expectedEvents.sort(
+    (left, right) =>
+      targetOrder.get(left.target) - targetOrder.get(right.target) ||
+      left.registry_version_id - right.registry_version_id,
+  );
   requireCondition(
-    new Set(sequences).size === sequences.length,
-    "Registry inventory event sequence values must be unique.",
+    JSON.stringify(expectedEvents.map(inventoryEventLedgerKey)) ===
+      JSON.stringify(inventory.events.map(inventoryEventLedgerKey)),
+    "Registry inventory event ledger does not exactly match package versions.",
   );
   return inventory;
 }
@@ -478,8 +613,11 @@ async function readInventory(inventoryFile, assertion, targets) {
 function assertZeroInventory(inventory, targets) {
   for (const target of targets) {
     requireCondition(
-      inventory.repositories[target]?.publication_count === 0,
-      `Registry inventory found a publication for ${target}.`,
+      inventory.repositories[target]?.package_version_count === 0 &&
+        inventory.repositories[target]?.publication_count === 0 &&
+        Array.isArray(inventory.repositories[target]?.versions) &&
+        inventory.repositories[target].versions.length === 0,
+      `Registry inventory found package versions for ${target}.`,
     );
   }
   requireCondition(
@@ -488,22 +626,28 @@ function assertZeroInventory(inventory, targets) {
   );
 }
 
-function orderedMutationTargets(inventory) {
-  const seen = new Set();
-  return [...inventory.events]
-    .sort((left, right) => left.sequence - right.sequence)
-    .flatMap((event) => {
-      if (seen.has(event.target)) {
-        return [];
-      }
-      seen.add(event.target);
-      return [event.target];
-    });
+function hasCompleteCosignPackageVersions(repository) {
+  return (
+    repository.versions.filter((version) => version.subject).length === 1 &&
+    repository.versions.filter((version) => !version.subject).length >= 3
+  );
 }
 
-async function verifyLiveSuccess(outputDirectory, inventoryFile, targetsCsv) {
+async function verifyLiveSuccess(
+  outputDirectory,
+  inventoryFile,
+  targetsCsv,
+  expectedRegistry,
+  expectedRepositoryPrefix,
+) {
   const targets = parseTargets(targetsCsv);
-  const inventory = await readInventory(inventoryFile, "success", targets);
+  const inventory = await readInventory(
+    inventoryFile,
+    "success",
+    targets,
+    expectedRegistry,
+    expectedRepositoryPrefix,
+  );
   const manifest = await readJson(
     path.join(outputDirectory, ".dagger/runtime/package-manifest.json"),
   );
@@ -525,6 +669,7 @@ async function verifyLiveSuccess(outputDirectory, inventoryFile, targetsCsv) {
     );
     requireCondition(
       repositoryInventory.publication_count === 1 &&
+        hasCompleteCosignPackageVersions(repositoryInventory) &&
         repositoryInventory.subject_digest === artifact.digest &&
         repositoryInventory.reference === artifact.reference &&
         repositoryInventory.signature_verified === true &&
@@ -555,11 +700,6 @@ async function verifyLiveSuccess(outputDirectory, inventoryFile, targetsCsv) {
       );
     }
   }
-  requireCondition(
-    JSON.stringify(orderedMutationTargets(inventory)) ===
-      JSON.stringify(targets),
-    "Independent registry mutation order does not match selected target order.",
-  );
 }
 
 const LIVE_PREPUBLICATION_FAILURE_PATTERNS = new Map([
@@ -583,7 +723,14 @@ const LIVE_PREPUBLICATION_FAILURE_PATTERNS = new Map([
   ],
 ]);
 
-async function verifyLiveFailure(scenario, logFile, inventoryFile, targetsCsv) {
+async function verifyLiveFailure(
+  scenario,
+  logFile,
+  inventoryFile,
+  targetsCsv,
+  expectedRegistry,
+  expectedRepositoryPrefix,
+) {
   const targets = parseTargets(targetsCsv);
   const log = await readFile(logFile, "utf8");
   const expectedPattern = LIVE_PREPUBLICATION_FAILURE_PATTERNS.get(scenario);
@@ -594,7 +741,13 @@ async function verifyLiveFailure(scenario, logFile, inventoryFile, targetsCsv) {
       `Live ${scenario} did not fail at the required prepublication stage.`,
     );
     assertZeroInventory(
-      await readInventory(inventoryFile, "zero", targets),
+      await readInventory(
+        inventoryFile,
+        "zero",
+        targets,
+        expectedRegistry,
+        expectedRepositoryPrefix,
+      ),
       targets,
     );
     return;
@@ -615,9 +768,12 @@ async function verifyLiveFailure(scenario, logFile, inventoryFile, targetsCsv) {
     inventoryFile,
     "ordered-partial",
     targets,
+    expectedRegistry,
+    expectedRepositoryPrefix,
   );
   requireCondition(
     inventory.repositories[targets[0]].publication_count === 1 &&
+      hasCompleteCosignPackageVersions(inventory.repositories[targets[0]]) &&
       inventory.repositories[targets[0]].signature_verified === true &&
       inventory.repositories[targets[0]].spdx_attestation_verified === true &&
       inventory.repositories[targets[0]].provenance_attestation_verified ===
@@ -633,7 +789,10 @@ async function verifyLiveFailure(scenario, logFile, inventoryFile, targetsCsv) {
   );
   requireCondition(
     inventory.repositories[targets[1]].inspected === true &&
+      inventory.repositories[targets[1]].package_version_count === 1 &&
       inventory.repositories[targets[1]].publication_count === 1 &&
+      inventory.repositories[targets[1]].versions.length === 1 &&
+      inventory.repositories[targets[1]].versions[0].subject === true &&
       inventory.repositories[targets[1]].status === "published-then-failed" &&
       typeof inventory.repositories[targets[1]].subject_digest === "string" &&
       /^sha256:[a-f0-9]{64}$/u.test(
@@ -659,15 +818,12 @@ async function verifyLiveFailure(scenario, logFile, inventoryFile, targetsCsv) {
     "Finalization failure log does not bind the failed target's published reference.",
   );
   requireCondition(
-    inventory.repositories[targets[2]].publication_count === 0 &&
+    inventory.repositories[targets[2]].package_version_count === 0 &&
+      inventory.repositories[targets[2]].publication_count === 0 &&
+      Array.isArray(inventory.repositories[targets[2]].versions) &&
+      inventory.repositories[targets[2]].versions.length === 0 &&
       !inventory.events.some((event) => event.target === targets[2]),
     "Later skipped target was mutated.",
-  );
-  const mutationTargets = orderedMutationTargets(inventory);
-  requireCondition(
-    JSON.stringify(mutationTargets) ===
-      JSON.stringify([targets[0], targets[1]]),
-    "Registry mutations do not prove stable finalization order.",
   );
 }
 
@@ -694,16 +850,28 @@ async function verifyLiveCleanup(
   for (const target of targets) {
     requireCondition(
       evidence.repositories[target]?.inspected === true &&
+        evidence.repositories[target]?.package_absent === true &&
         evidence.repositories[target]?.remaining_publication_count === 0,
       `Live cleanup evidence did not prove ${target} absent.`,
     );
   }
 }
 
-async function verifyLiveZeroInventory(inventoryFile, targetsCsv) {
+async function verifyLiveZeroInventory(
+  inventoryFile,
+  targetsCsv,
+  expectedRegistry,
+  expectedRepositoryPrefix,
+) {
   const targets = parseTargets(targetsCsv);
   assertZeroInventory(
-    await readInventory(inventoryFile, "zero", targets),
+    await readInventory(
+      inventoryFile,
+      "zero",
+      targets,
+      expectedRegistry,
+      expectedRepositoryPrefix,
+    ),
     targets,
   );
 }
@@ -718,6 +886,9 @@ switch (mode) {
   case "named-dry":
     await verifyNamedDryRun(args[0]);
     break;
+  case "planned-multi":
+    await verifyPlannedMultiTarget(args[0], args[1]);
+    break;
   case "filesystem-package":
     await verifyFilesystemPackage(args[0]);
     break;
@@ -731,19 +902,26 @@ switch (mode) {
     await verifyReservedAttack(args[0]);
     break;
   case "live-success":
-    await verifyLiveSuccess(args[0], args[1], args[2]);
+    await verifyLiveSuccess(args[0], args[1], args[2], args[3], args[4]);
     break;
   case "live-failure":
-    await verifyLiveFailure(args[0], args[1], args[2], args[3]);
+    await verifyLiveFailure(
+      args[0],
+      args[1],
+      args[2],
+      args[3],
+      args[4],
+      args[5],
+    );
     break;
   case "live-cleanup":
     await verifyLiveCleanup(args[0], args[1], args[2], args[3]);
     break;
   case "live-zero-inventory":
-    await verifyLiveZeroInventory(args[0], args[1]);
+    await verifyLiveZeroInventory(args[0], args[1], args[2], args[3]);
     break;
   default:
     throw new Error(
-      "Usage: verify-oci-v081-acceptance-matrix.mjs credential-failure-profile|protected-capture|named-dry|filesystem-package|filesystem-deploy|isolation-deploy|reserved-env-attack|live-success|live-failure|live-cleanup|live-zero-inventory ...",
+      "Usage: verify-oci-v081-acceptance-matrix.mjs credential-failure-profile|protected-capture|named-dry|planned-multi|filesystem-package|filesystem-deploy|isolation-deploy|reserved-env-attack|live-success|live-failure|live-cleanup|live-zero-inventory ...",
     );
 }

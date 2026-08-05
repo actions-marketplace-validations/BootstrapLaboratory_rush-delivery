@@ -9,7 +9,7 @@ OCI_V081_GHCR_LAST_PACKAGE_ABSENT=false
 oci_v081_ghcr_require_commands() {
 	local command_name
 
-	for command_name in dagger gh node; do
+	for command_name in cmp cp dagger find gh grep node; do
 		command -v "${command_name}" >/dev/null 2>&1 || {
 			printf 'v0.8.1 GHCR acceptance requires %s\n' "${command_name}" >&2
 			return 1
@@ -19,6 +19,33 @@ oci_v081_ghcr_require_commands() {
 		printf 'v0.8.1 GHCR acceptance requires a single-line GITHUB_TOKEN\n' >&2
 		return 1
 	}
+}
+
+oci_v081_ghcr_confirm_package_absence() {
+	local package_name="$1"
+	local scratch_prefix="$2"
+	local encoded_package
+	local response_file="${scratch_prefix}.absence.response"
+	local error_file="${scratch_prefix}.absence.error"
+	local request_status=0
+
+	encoded_package="$(oci_v081_ghcr_encode_package_name "${package_name}")" || return 1
+	GH_TOKEN="${GITHUB_TOKEN}" GH_HOST=github.com gh api \
+		--hostname github.com \
+		--include \
+		--method GET \
+		--header 'Accept: application/vnd.github+json' \
+		--header 'X-GitHub-Api-Version: 2022-11-28' \
+		"/orgs/${OCI_V081_GHCR_OWNER}/packages/container/${encoded_package}/versions?per_page=1" \
+		>"${response_file}" 2>"${error_file}" || request_status=$?
+	if ((request_status != 0)) &&
+		grep -Eq '^HTTP/[0-9]+([.][0-9]+)?[[:space:]]+404([[:space:]]|$)' \
+			"${response_file}"; then
+		find "${response_file}" "${error_file}" -maxdepth 0 -type f -delete || return 1
+		return 0
+	fi
+	find "${response_file}" "${error_file}" -maxdepth 0 -type f -delete || return 1
+	return 1
 }
 
 oci_v081_ghcr_validate_namespace() {
@@ -95,8 +122,11 @@ oci_v081_ghcr_get_versions() {
 		return 1
 	}
 	encoded_package="$(oci_v081_ghcr_encode_package_name "${package_name}")" || return 1
-	GH_TOKEN="${GITHUB_TOKEN}" gh api \
+	GH_TOKEN="${GITHUB_TOKEN}" GH_HOST=github.com gh api \
+		--hostname github.com \
 		--method GET \
+		--paginate \
+		--slurp \
 		--header 'Accept: application/vnd.github+json' \
 		--header 'X-GitHub-Api-Version: 2022-11-28' \
 		"/orgs/${OCI_V081_GHCR_OWNER}/packages/container/${encoded_package}/versions?per_page=100" \
@@ -108,15 +138,14 @@ oci_v081_ghcr_get_versions() {
 		find "${error_file}" -maxdepth 0 -type f -delete || return 1
 		return 0
 	fi
-	if grep -Eq '(^|[^0-9])404([^0-9]|$)' "${error_file}"; then
+	find "${response_file}" "${error_file}" -maxdepth 0 -type f -delete || return 1
+	if oci_v081_ghcr_confirm_package_absence \
+		"${package_name}" "${output_file}"; then
 		# shellcheck disable=SC2034 # Read by cleanup callers after sourcing.
 		OCI_V081_GHCR_LAST_PACKAGE_ABSENT=true
-		printf '[]\n' >"${response_file}" || return 1
-		mv -- "${response_file}" "${output_file}" || return 1
-		find "${error_file}" -maxdepth 0 -type f -delete || return 1
+		printf '[]\n' >"${output_file}" || return 1
 		return 0
 	fi
-	find "${response_file}" "${error_file}" -maxdepth 0 -type f -delete || return 1
 	printf 'v0.8.1 GHCR inventory request failed\n' >&2
 	return 1
 }
@@ -130,17 +159,21 @@ oci_v081_ghcr_delete_package() {
 	local request_status=0
 
 	encoded_package="$(oci_v081_ghcr_encode_package_name "${package_name}")" || return 1
-	GH_TOKEN="${GITHUB_TOKEN}" gh api \
+	GH_TOKEN="${GITHUB_TOKEN}" GH_HOST=github.com gh api \
+		--hostname github.com \
 		--method DELETE \
 		--header 'Accept: application/vnd.github+json' \
 		--header 'X-GitHub-Api-Version: 2022-11-28' \
 		"/orgs/${OCI_V081_GHCR_OWNER}/packages/container/${encoded_package}" \
 		>"${response_file}" 2>"${error_file}" || request_status=$?
-	if ((request_status == 0)) ||
-		grep -Eq '(^|[^0-9])404([^0-9]|$)' "${error_file}"; then
+	if ((request_status == 0)); then
 		find "${response_file}" "${error_file}" -maxdepth 0 -type f -delete || return 1
 		return 0
 	fi
 	find "${response_file}" "${error_file}" -maxdepth 0 -type f -delete || return 1
+	if oci_v081_ghcr_confirm_package_absence \
+		"${package_name}" "${scratch_directory}/delete"; then
+		return 0
+	fi
 	return 1
 }

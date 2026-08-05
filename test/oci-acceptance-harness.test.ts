@@ -36,6 +36,10 @@ const workflowPath = path.join(
   testDirectory,
   "../.github/workflows/oci-acceptance.yml",
 );
+const daggerSecurityScriptPath = path.join(
+  testDirectory,
+  "scripts/run-dagger-security-engine.sh",
+);
 const canonicalBuildScriptPath = path.join(
   testDirectory,
   "../examples/oci-application-image-rush-repo/apps/control-plane-api/scripts/build.mjs",
@@ -281,23 +285,24 @@ test("OCI acceptance failure classification separates product and transport outc
   writeFileSync(transportLog, "registry request: TLS handshake timeout\n");
 
   try {
-    const product = runLibrary('oci_acceptance_classify_failure "$1" false', [
-      productLog,
-    ]);
+    const product = runLibrary(
+      'oci_acceptance_classify_failure "$1" not-started',
+      [productLog],
+    );
     const preMutationTransport = runLibrary(
-      'oci_acceptance_classify_failure "$1" false',
+      'oci_acceptance_classify_failure "$1" not-started',
       [transportLog],
     );
     const postMutationTransport = runLibrary(
-      'oci_acceptance_classify_failure "$1" true',
+      'oci_acceptance_classify_failure "$1" started',
       [transportLog],
     );
     const preMutationTimeout = runLibrary(
-      'oci_acceptance_classify_failure "$1" false 124',
+      'oci_acceptance_classify_failure "$1" not-started 124',
       [productLog],
     );
     const postMutationTimeout = runLibrary(
-      'oci_acceptance_classify_failure "$1" true 124',
+      'oci_acceptance_classify_failure "$1" unknown 124',
       [productLog],
     );
 
@@ -310,6 +315,144 @@ test("OCI acceptance failure classification separates product and transport outc
     );
     assert.equal(preMutationTimeout.stdout, "operation-timeout\n");
     assert.equal(postMutationTimeout.stdout, "mutation-timeout-ambiguous\n");
+  } finally {
+    await rm(tempDirectory, { force: true, recursive: true });
+  }
+});
+
+test("OCI acceptance derives only allowlisted stages and conservative mutation states", async () => {
+  const tempDirectory = mkdtempSync(
+    path.join(tmpdir(), "rush-delivery-acceptance-stage-"),
+  );
+  const preflightLog = path.join(tempDirectory, "preflight.log");
+  const publicationLog = path.join(tempDirectory, "publication.log");
+  const finalizationLog = path.join(tempDirectory, "finalization.log");
+  const authenticationLog = path.join(tempDirectory, "authentication.log");
+  const authorizationLog = path.join(tempDirectory, "authorization.log");
+  const publicationTransportLog = path.join(
+    tempDirectory,
+    "publication-transport.log",
+  );
+  const unknownLog = path.join(tempDirectory, "unknown.log");
+  writeFileSync(
+    preflightLog,
+    'Application image provider "ghcr" Cosign preflight failed for signing password.\n',
+  );
+  writeFileSync(
+    publicationLog,
+    [
+      "[package] OCI publication boundary crossed; ordered finalization is starting.",
+      'OCI package target "api" failed during registry publication.',
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    finalizationLog,
+    [
+      "[package] OCI publication boundary crossed; ordered finalization is starting.",
+      "OCI application image finalization failed:",
+      'Later target "worker" was not started.',
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    authenticationLog,
+    'OCI package target "api" failed during registry publication authentication.\n',
+  );
+  writeFileSync(
+    authorizationLog,
+    'OCI package target "api" failed during registry publication authorization.\n',
+  );
+  writeFileSync(
+    publicationTransportLog,
+    'OCI package target "api" failed during registry publication transport.\n',
+  );
+  writeFileSync(unknownLog, "unmapped package failure\n");
+
+  try {
+    const preflightStage = runLibrary(
+      'oci_acceptance_classify_failure_stage "$1"',
+      [preflightLog],
+    );
+    const preflightState = runLibrary(
+      'stage="$(oci_acceptance_classify_failure_stage "$1")"; oci_acceptance_detect_mutation_state "$1" 1 "$stage"',
+      [preflightLog],
+    );
+    const publicationStage = runLibrary(
+      'oci_acceptance_classify_failure_stage "$1"',
+      [publicationLog],
+    );
+    const publicationState = runLibrary(
+      'stage="$(oci_acceptance_classify_failure_stage "$1")"; oci_acceptance_detect_mutation_state "$1" 1 "$stage"',
+      [publicationLog],
+    );
+    const unknownState = runLibrary(
+      'stage="$(oci_acceptance_classify_failure_stage "$1")"; oci_acceptance_detect_mutation_state "$1" 1 "$stage"',
+      [unknownLog],
+    );
+    const finalizationStage = runLibrary(
+      'oci_acceptance_classify_failure_stage "$1"',
+      [finalizationLog],
+    );
+    const finalizationState = runLibrary(
+      'stage="$(oci_acceptance_classify_failure_stage "$1")"; oci_acceptance_detect_mutation_state "$1" 1 "$stage"',
+      [finalizationLog],
+    );
+    const timeoutState = runLibrary(
+      'oci_acceptance_detect_mutation_state "$1" 124 package-contract',
+      [unknownLog],
+    );
+    const successfulState = runLibrary(
+      'oci_acceptance_detect_mutation_state "$1" 0 package-contract',
+      [unknownLog],
+    );
+    const authenticationStage = runLibrary(
+      'oci_acceptance_classify_failure_stage "$1"',
+      [authenticationLog],
+    );
+    const authorizationStage = runLibrary(
+      'oci_acceptance_classify_failure_stage "$1"',
+      [authorizationLog],
+    );
+    const publicationTransportStage = runLibrary(
+      'oci_acceptance_classify_failure_stage "$1"',
+      [publicationTransportLog],
+    );
+    const publicationTransportState = runLibrary(
+      'stage="$(oci_acceptance_classify_failure_stage "$1")"; oci_acceptance_detect_mutation_state "$1" 1 "$stage"',
+      [publicationTransportLog],
+    );
+    const publicationTransportClass = runLibrary(
+      'oci_acceptance_classify_failure "$1" started',
+      [publicationTransportLog],
+    );
+
+    assert.equal(preflightStage.stdout, "cosign-preflight\n");
+    assert.equal(preflightState.stdout, "not-started\n");
+    assert.equal(publicationStage.stdout, "registry-publication\n");
+    assert.equal(publicationState.stdout, "started\n");
+    assert.equal(finalizationStage.stdout, "image-finalization\n");
+    assert.equal(finalizationState.stdout, "started\n");
+    assert.equal(
+      authenticationStage.stdout,
+      "registry-publication-authentication\n",
+    );
+    assert.equal(
+      authorizationStage.stdout,
+      "registry-publication-authorization\n",
+    );
+    assert.equal(
+      publicationTransportStage.stdout,
+      "registry-publication-transport\n",
+    );
+    assert.equal(publicationTransportState.stdout, "started\n");
+    assert.equal(
+      publicationTransportClass.stdout,
+      "registry-transport-ambiguous\n",
+    );
+    assert.equal(unknownState.stdout, "unknown\n");
+    assert.equal(timeoutState.stdout, "unknown\n");
+    assert.equal(successfulState.stdout, "completed\n");
   } finally {
     await rm(tempDirectory, { force: true, recursive: true });
   }
@@ -464,11 +607,11 @@ test("OCI acceptance diagnostic artifact contains only its fixed redacted schema
 
   try {
     const written = runLibrary(
-      'oci_acceptance_write_diagnostic "$1" failed verification-contract started succeeded',
+      'oci_acceptance_write_diagnostic "$1" failed verification-contract bundle-verification started succeeded',
       [diagnosticPath],
     );
     const rejected = runLibrary(
-      'oci_acceptance_write_diagnostic "$1" failed "$2" started succeeded',
+      'oci_acceptance_write_diagnostic "$1" failed "$2" bundle-verification started succeeded',
       [diagnosticPath, sentinel],
     );
     const diagnostic = readFileSync(diagnosticPath, "utf8");
@@ -478,9 +621,10 @@ test("OCI acceptance diagnostic artifact contains only its fixed redacted schema
     assert.equal(
       diagnostic,
       [
-        "schema=rush-delivery-oci-acceptance-diagnostic/v1",
+        "schema=rush-delivery-oci-acceptance-diagnostic/v2",
         "outcome=failed",
         "failure_class=verification-contract",
+        "failure_stage=bundle-verification",
         "mutation_state=started",
         "cleanup_state=succeeded",
         "",
@@ -488,6 +632,57 @@ test("OCI acceptance diagnostic artifact contains only its fixed redacted schema
     );
     assert.equal(diagnostic.includes(sentinel), false);
     assert.equal(statSync(diagnosticPath).mode & 0o777, 0o600);
+  } finally {
+    await rm(tempDirectory, { force: true, recursive: true });
+  }
+});
+
+test("OCI acceptance namespace record is fixed, non-secret, and deletion-scoped", async () => {
+  const tempDirectory = mkdtempSync(
+    path.join(tmpdir(), "rush-delivery-acceptance-namespace-record-"),
+  );
+  const recordPath = path.join(
+    tempDirectory,
+    "rush-delivery-oci-acceptance-namespace.txt",
+  );
+  const namespace = `bootstraplaboratory/rush-delivery-acceptance-${"a".repeat(32)}`;
+  const sentinel = `namespace-secret-${process.pid}-${Date.now()}`;
+
+  try {
+    const written = runLibrary(
+      'oci_acceptance_write_namespace_record "$1" ghcr.io "$2" control-plane-api',
+      [recordPath, namespace],
+    );
+    const rejectedPrefix = runLibrary(
+      'oci_acceptance_write_namespace_record "$1" ghcr.io "$2" control-plane-api',
+      [recordPath, `bootstraplaboratory/${sentinel}`],
+    );
+    const rejectedSuffix = runLibrary(
+      'oci_acceptance_write_namespace_record "$1" ghcr.io "$2" second-image',
+      [recordPath, namespace],
+    );
+    const record = readFileSync(recordPath, "utf8");
+
+    assert.equal(written.status, 0, written.stderr);
+    assert.notEqual(rejectedPrefix.status, 0);
+    assert.notEqual(rejectedSuffix.status, 0);
+    assert.equal(
+      record,
+      [
+        "schema=rush-delivery-oci-acceptance-namespace/v1",
+        "registry=ghcr.io",
+        `repository_prefix=${namespace}`,
+        "package_suffix=control-plane-api",
+        "",
+      ].join("\n"),
+    );
+    assert.equal(
+      `${rejectedPrefix.stdout}${rejectedPrefix.stderr}${rejectedSuffix.stdout}${rejectedSuffix.stderr}${record}`.includes(
+        sentinel,
+      ),
+      false,
+    );
+    assert.equal(statSync(recordPath).mode & 0o777, 0o600);
   } finally {
     await rm(tempDirectory, { force: true, recursive: true });
   }
@@ -557,6 +752,116 @@ test("OCI acceptance runner preserves a controlled diagnostic on early failure",
   }
 });
 
+test("OCI acceptance reports temp cleanup failure and cannot turn it into success", async () => {
+  const tempDirectory = mkdtempSync(
+    path.join(tmpdir(), "rush-delivery-acceptance-temp-cleanup-"),
+  );
+  const fakeBin = path.join(tempDirectory, "bin");
+  const fakeFind = path.join(fakeBin, "find");
+  const diagnosticPath = path.join(
+    tempDirectory,
+    "rush-delivery-oci-acceptance-diagnostic.txt",
+  );
+  mkdirSync(fakeBin, { recursive: true });
+  writeFileSync(fakeFind, "#!/usr/bin/env bash\nexit 23\n");
+  chmodSync(fakeFind, 0o700);
+
+  try {
+    const result = spawnSync("bash", [acceptanceScriptPath], {
+      encoding: "utf8",
+      env: {
+        GITHUB_TOKEN: "temp-cleanup-sentinel",
+        OCI_ACCEPTANCE_DIAGNOSTIC_PATH: diagnosticPath,
+        OCI_ACCEPTANCE_PROBE_ATTEMPTS: "6",
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        TMPDIR: tempDirectory,
+      },
+    });
+    const diagnostic = readFileSync(diagnosticPath, "utf8");
+    const source = readFileSync(acceptanceScriptPath, "utf8");
+
+    assert.notEqual(result.status, 0);
+    assert.match(diagnostic, /cleanup_state=failed/);
+    assert.match(
+      source,
+      /if \(\(original_status == 0\)\) && \[\[ \$\{cleanup_failed\} == true \]\]; then\s+original_status=1/,
+    );
+    assert.equal(
+      `${result.stdout}${result.stderr}${diagnostic}`.includes(
+        "temp-cleanup-sentinel",
+      ),
+      false,
+    );
+  } finally {
+    await rm(tempDirectory, { force: true, recursive: true });
+  }
+});
+
+test("OCI acceptance resets setup diagnostics after successful key generation", async () => {
+  const tempDirectory = mkdtempSync(
+    path.join(tmpdir(), "rush-delivery-acceptance-setup-stage-"),
+  );
+  const fakeBin = path.join(tempDirectory, "bin");
+  const fakeCurl = path.join(fakeBin, "curl");
+  const fakeDagger = path.join(fakeBin, "dagger");
+  const fakeTar = path.join(fakeBin, "tar");
+  const diagnosticPath = path.join(
+    tempDirectory,
+    "rush-delivery-oci-acceptance-diagnostic.txt",
+  );
+  mkdirSync(fakeBin, { recursive: true });
+  writeFileSync(fakeCurl, "#!/usr/bin/env bash\nprintf '200'\n");
+  writeFileSync(
+    fakeDagger,
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      'command_text="${*: -1}"',
+      'key_dir="${command_text##* export }"',
+      'mkdir -p "${key_dir}"',
+      'printf "%s\\n" "-----BEGIN ENCRYPTED COSIGN PRIVATE KEY-----" test "-----END ENCRYPTED COSIGN PRIVATE KEY-----" >"${key_dir}/cosign.key"',
+      'printf "%s\\n" "-----BEGIN PUBLIC KEY-----" test "-----END PUBLIC KEY-----" >"${key_dir}/cosign.pub"',
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(fakeTar, "#!/usr/bin/env bash\nexit 41\n");
+  for (const executable of [fakeCurl, fakeDagger, fakeTar]) {
+    chmodSync(executable, 0o700);
+  }
+
+  try {
+    const result = spawnSync("bash", [acceptanceScriptPath], {
+      encoding: "utf8",
+      env: {
+        OCI_ACCEPTANCE_DIAGNOSTIC_PATH: diagnosticPath,
+        OCI_ACCEPTANCE_PROBE_ATTEMPTS: "1",
+        OCI_ACCEPTANCE_REGISTRY: "registry.example",
+        OCI_ACCEPTANCE_REPOSITORY_PREFIX: "acceptance/setup-stage",
+        OCI_ACCEPTANCE_RETENTION_POLICY: "delete-on-exit",
+        OCI_ACCEPTANCE_SIGNING_PASSWORD: "setup-signing-password",
+        OCI_ACCEPTANCE_TOKEN: "setup-registry-token",
+        OCI_ACCEPTANCE_USERNAME: "setup-registry-user",
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        TMPDIR: tempDirectory,
+      },
+    });
+    const diagnostic = readFileSync(diagnosticPath, "utf8");
+
+    assert.notEqual(result.status, 0);
+    assert.match(diagnostic, /failure_class=configuration/);
+    assert.match(diagnostic, /failure_stage=configuration/);
+    assert.doesNotMatch(diagnostic, /failure_stage=key-generation/);
+    assert.equal(
+      `${result.stdout}${result.stderr}${diagnostic}`.includes(
+        "setup-registry-token",
+      ),
+      false,
+    );
+  } finally {
+    await rm(tempDirectory, { force: true, recursive: true });
+  }
+});
+
 test("explicit-registry runner never forwards an ambient GitHub token to cleanup", async () => {
   const tempDirectory = mkdtempSync(
     path.join(tmpdir(), "rush-delivery-acceptance-explicit-cleanup-"),
@@ -586,8 +891,19 @@ test("explicit-registry runner never forwards an ambient GitHub token to cleanup
       '  printf "%s\\n" "-----BEGIN PUBLIC KEY-----" test "-----END PUBLIC KEY-----" >"${key_dir}/cosign.pub"',
       "  exit 0",
       "fi",
-      "if [[ ${FAKE_PUBLICATION_BOUNDARY:-false} == true ]]; then",
+      "if [[ -n ${FAKE_PROTECTED_OUTPUT:-} ]]; then",
       "  printf '%s\\n' '[package] OCI publication boundary crossed; ordered finalization is starting.'",
+      "  printf '%s\\n' 'OCI application image finalization failed:'",
+      "  printf '%s\\n' \"${FAKE_PROTECTED_OUTPUT}\"",
+      "elif [[ ${FAKE_IMAGE_FINALIZATION:-false} == true ]]; then",
+      "  printf '%s\\n' '[package] OCI publication boundary crossed; ordered finalization is starting.'",
+      "  printf '%s\\n' 'OCI application image finalization failed:'",
+      "  printf '%s\\n' 'Later target \"worker\" was not started.'",
+      "elif [[ ${FAKE_PUBLICATION_BOUNDARY:-false} == true ]]; then",
+      "  printf '%s\\n' '[package] OCI publication boundary crossed; ordered finalization is starting.'",
+      "  printf '%s\\n' 'OCI package target \"control-plane-api\" failed during registry publication.'",
+      "else",
+      "  printf '%s\\n' 'OCI application image preparation failed:'",
       "fi",
       "printf '%s\\n' 'connection reset by peer'",
       "exit 19",
@@ -642,7 +958,11 @@ test("explicit-registry runner never forwards an ambient GitHub token to cleanup
       readFileSync(diagnosticPath, "utf8"),
       /mutation_state=not-started/,
     );
-    assert.match(result.stderr, /\[registry-transport\]/);
+    assert.match(
+      readFileSync(diagnosticPath, "utf8"),
+      /failure_stage=image-preparation/,
+    );
+    assert.match(result.stderr, /\[registry-transport\/image-preparation\]/);
     assert.doesNotMatch(result.stderr, /registry-transport-ambiguous/);
 
     const afterBoundary = spawnSync("bash", [acceptanceScriptPath], {
@@ -667,11 +987,68 @@ test("explicit-registry runner never forwards an ambient GitHub token to cleanup
 
     assert.equal(afterBoundary.status, 19, afterBoundary.stderr);
     assert.match(afterBoundaryDiagnostic, /mutation_state=started/);
+    assert.match(afterBoundaryDiagnostic, /failure_stage=registry-publication/);
     assert.match(afterBoundary.stderr, /registry-transport-ambiguous/);
     assert.equal(
       `${afterBoundary.stdout}${afterBoundary.stderr}${afterBoundaryDiagnostic}`.includes(
         ambientGitHubToken,
       ),
+      false,
+    );
+
+    const imageFinalization = spawnSync("bash", [acceptanceScriptPath], {
+      encoding: "utf8",
+      env: {
+        CLEANUP_RECORD: cleanupRecord,
+        FAKE_IMAGE_FINALIZATION: "true",
+        GITHUB_TOKEN: ambientGitHubToken,
+        OCI_ACCEPTANCE_CLEANUP_HOOK: cleanupHook,
+        OCI_ACCEPTANCE_DIAGNOSTIC_PATH: diagnosticPath,
+        OCI_ACCEPTANCE_PROBE_ATTEMPTS: "1",
+        OCI_ACCEPTANCE_REGISTRY: "registry.example",
+        OCI_ACCEPTANCE_REPOSITORY_PREFIX: "acceptance/explicit",
+        OCI_ACCEPTANCE_RETENTION_POLICY: "delete-on-exit",
+        OCI_ACCEPTANCE_SIGNING_PASSWORD: "explicit-signing-password",
+        OCI_ACCEPTANCE_TOKEN: "explicit-registry-token",
+        OCI_ACCEPTANCE_USERNAME: "explicit-registry-user",
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      },
+    });
+    const imageFinalizationDiagnostic = readFileSync(diagnosticPath, "utf8");
+
+    assert.equal(imageFinalization.status, 19, imageFinalization.stderr);
+    assert.match(imageFinalizationDiagnostic, /mutation_state=started/);
+    assert.match(
+      imageFinalizationDiagnostic,
+      /failure_stage=image-finalization/,
+    );
+
+    const protectedOutput = spawnSync("bash", [acceptanceScriptPath], {
+      encoding: "utf8",
+      env: {
+        CLEANUP_RECORD: cleanupRecord,
+        FAKE_PROTECTED_OUTPUT: "explicit-registry-token",
+        GITHUB_TOKEN: ambientGitHubToken,
+        OCI_ACCEPTANCE_CLEANUP_HOOK: cleanupHook,
+        OCI_ACCEPTANCE_DIAGNOSTIC_PATH: diagnosticPath,
+        OCI_ACCEPTANCE_PROBE_ATTEMPTS: "1",
+        OCI_ACCEPTANCE_REGISTRY: "registry.example",
+        OCI_ACCEPTANCE_REPOSITORY_PREFIX: "acceptance/explicit",
+        OCI_ACCEPTANCE_RETENTION_POLICY: "delete-on-exit",
+        OCI_ACCEPTANCE_SIGNING_PASSWORD: "explicit-signing-password",
+        OCI_ACCEPTANCE_TOKEN: "explicit-registry-token",
+        OCI_ACCEPTANCE_USERNAME: "explicit-registry-user",
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      },
+    });
+    const protectedOutputDiagnostic = readFileSync(diagnosticPath, "utf8");
+    const protectedOutputCombined = `${protectedOutput.stdout}${protectedOutput.stderr}${protectedOutputDiagnostic}`;
+
+    assert.notEqual(protectedOutput.status, 0);
+    assert.match(protectedOutputDiagnostic, /mutation_state=started/);
+    assert.match(protectedOutputDiagnostic, /failure_stage=protected-output/);
+    assert.equal(
+      protectedOutputCombined.includes("explicit-registry-token"),
       false,
     );
   } finally {
@@ -748,81 +1125,217 @@ test("OCI acceptance changes only registry coordinates in the canonical provider
   }
 });
 
-test("GHCR acceptance cleanup attempts every registered package suffix", async () => {
+test("GHCR acceptance cleanup is hard-bound, pinned, and readback-verified", async () => {
   const tempDirectory = mkdtempSync(
     path.join(tmpdir(), "rush-delivery-acceptance-ghcr-cleanup-"),
   );
   const fakeBin = path.join(tempDirectory, "bin");
   const fakeGh = path.join(fakeBin, "gh");
-  const recordPath = path.join(tempDirectory, "gh-record");
+  const fakeSleep = path.join(fakeBin, "sleep");
+  const ghRecordPath = path.join(tempDirectory, "gh-record");
+  const ghStatePath = path.join(tempDirectory, "gh-state");
+  const namespaceRecordPath = path.join(
+    tempDirectory,
+    "rush-delivery-oci-acceptance-namespace.txt",
+  );
+  const namespace = `bootstraplaboratory/rush-delivery-acceptance-${"b".repeat(32)}`;
+  const packageEndpoint = `/orgs/bootstraplaboratory/packages/container/rush-delivery-acceptance-${"b".repeat(32)}%2Fcontrol-plane-api`;
   mkdirSync(fakeBin, { recursive: true });
   writeFileSync(
     fakeGh,
     [
       "#!/usr/bin/env bash",
       "set -euo pipefail",
+      'printf "%s\\n" "$*" >>"${GH_RECORD}"',
+      'method="GET"',
+      "for ((index = 1; index <= $#; index += 1)); do",
+      "  if [[ ${!index} == --method ]]; then",
+      "    method_index=$((index + 1))",
+      '    method="${!method_index}"',
+      "  fi",
+      "done",
       'endpoint="${*: -1}"',
-      'printf "%s\\n" "${endpoint}" >>"${GH_RECORD}"',
-      "if [[ ${GH_FAIL_FIRST:-false} == true && ${endpoint} == *first-image ]]; then",
-      "  printf 'HTTP/2 500 Internal Server Error\\n'",
-      "  exit 1",
+      "if [[ ${method} == DELETE ]]; then",
+      "  printf 'HTTP/2 204 No Content\\n'",
+      "  exit 0",
       "fi",
+      'count="$(<"${GH_STATE}")"',
+      "count=$((count + 1))",
+      'printf "%s\\n" "${count}" >"${GH_STATE}"',
+      "if ((count <= ${GH_READBACK_PRESENT_COUNT:-0})); then",
+      "  printf 'HTTP/2 200 OK\\n'",
+      "  exit 0",
+      "fi",
+      "[[ ${endpoint} == *control-plane-api ]] || exit 97",
       "printf 'HTTP/2 404 Not Found\\n'",
       "exit 1",
       "",
     ].join("\n"),
   );
   chmodSync(fakeGh, 0o700);
+  writeFileSync(fakeSleep, "#!/usr/bin/env bash\nexit 0\n");
+  chmodSync(fakeSleep, 0o700);
 
   try {
-    const result = spawnSync("bash", [cleanupScriptPath], {
+    writeFileSync(ghStatePath, "0\n");
+    const stillPresent = spawnSync("bash", [cleanupScriptPath], {
       encoding: "utf8",
       env: {
         GITHUB_TOKEN: "sentinel-github-token",
-        GH_FAIL_FIRST: "true",
-        GH_RECORD: recordPath,
-        OCI_ACCEPTANCE_CLEANUP_PACKAGE_SUFFIXES:
-          "first-image\nsecond/nested-image",
+        GH_READBACK_PRESENT_COUNT: "5",
+        GH_RECORD: ghRecordPath,
+        GH_STATE: ghStatePath,
+        OCI_ACCEPTANCE_CLEANUP_PACKAGE_SUFFIXES: "control-plane-api",
         OCI_ACCEPTANCE_CLEANUP_REGISTRY: "ghcr.io",
-        OCI_ACCEPTANCE_CLEANUP_REPOSITORY_PREFIX:
-          "bootstraplaboratory/acceptance-run",
+        OCI_ACCEPTANCE_CLEANUP_REPOSITORY_PREFIX: namespace,
         PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
       },
     });
-    const recorded = readFileSync(recordPath, "utf8").trim().split("\n");
-    const combined = `${result.stdout}${result.stderr}`;
+    const stillPresentCalls = readFileSync(ghRecordPath, "utf8")
+      .trim()
+      .split("\n");
 
-    assert.notEqual(result.status, 0);
-    assert.deepEqual(recorded, [
-      "/orgs/bootstraplaboratory/packages/container/acceptance-run%2Ffirst-image",
-      "/orgs/bootstraplaboratory/packages/container/acceptance-run%2Fsecond%2Fnested-image",
-    ]);
-    assert.equal(combined.includes("sentinel-github-token"), false);
-    assert.match(combined, /one or more registered package suffixes/);
-
-    writeFileSync(recordPath, "");
-    const alreadyAbsent = spawnSync("bash", [cleanupScriptPath], {
-      encoding: "utf8",
-      env: {
-        GITHUB_TOKEN: "sentinel-github-token",
-        GH_RECORD: recordPath,
-        OCI_ACCEPTANCE_CLEANUP_PACKAGE_SUFFIXES:
-          "first-image\nsecond/nested-image",
-        OCI_ACCEPTANCE_CLEANUP_REGISTRY: "ghcr.io",
-        OCI_ACCEPTANCE_CLEANUP_REPOSITORY_PREFIX:
-          "bootstraplaboratory/acceptance-run",
-        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
-      },
-    });
-
+    assert.notEqual(stillPresent.status, 0);
+    assert.equal(stillPresentCalls.length, 6);
     assert.equal(
-      `${alreadyAbsent.stdout}${alreadyAbsent.stderr}`.includes(
+      stillPresentCalls.filter((call) => call.includes("--method DELETE"))
+        .length,
+      1,
+    );
+    assert.equal(
+      stillPresentCalls.filter((call) => call.includes("--method GET")).length,
+      5,
+    );
+    for (const call of stillPresentCalls) {
+      assert.match(call, /--hostname github\.com/);
+      assert.match(call, /--header Accept: application\/vnd\.github\+json/);
+      assert.match(call, /--header X-GitHub-Api-Version: 2022-11-28/);
+      assert.ok(call.endsWith(packageEndpoint));
+    }
+    assert.equal(
+      `${stillPresent.stdout}${stillPresent.stderr}`.includes(
         "sentinel-github-token",
       ),
       false,
     );
-    assert.equal(alreadyAbsent.status, 0);
-    assert.equal(readFileSync(recordPath, "utf8").trim().split("\n").length, 2);
+    assert.match(stillPresent.stderr, /could not prove.*absent/);
+
+    writeFileSync(ghRecordPath, "");
+    writeFileSync(ghStatePath, "0\n");
+    const eventuallyAbsent = spawnSync("bash", [cleanupScriptPath], {
+      encoding: "utf8",
+      env: {
+        GITHUB_TOKEN: "sentinel-github-token",
+        GH_READBACK_PRESENT_COUNT: "2",
+        GH_RECORD: ghRecordPath,
+        GH_STATE: ghStatePath,
+        OCI_ACCEPTANCE_CLEANUP_PACKAGE_SUFFIXES: "control-plane-api",
+        OCI_ACCEPTANCE_CLEANUP_REGISTRY: "ghcr.io",
+        OCI_ACCEPTANCE_CLEANUP_REPOSITORY_PREFIX: namespace,
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    assert.equal(eventuallyAbsent.status, 0, eventuallyAbsent.stderr);
+    assert.equal(
+      readFileSync(ghRecordPath, "utf8").trim().split("\n").length,
+      4,
+    );
+
+    const callsBeforeRejectedCoordinates = readFileSync(ghRecordPath, "utf8");
+    const rejectedPrefix = spawnSync("bash", [cleanupScriptPath], {
+      encoding: "utf8",
+      env: {
+        GITHUB_TOKEN: "sentinel-github-token",
+        GH_RECORD: ghRecordPath,
+        GH_STATE: ghStatePath,
+        OCI_ACCEPTANCE_CLEANUP_PACKAGE_SUFFIXES: "control-plane-api",
+        OCI_ACCEPTANCE_CLEANUP_REGISTRY: "ghcr.io",
+        OCI_ACCEPTANCE_CLEANUP_REPOSITORY_PREFIX:
+          "bootstraplaboratory/rush-delivery-acceptance",
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      },
+    });
+    const rejectedSuffix = spawnSync("bash", [cleanupScriptPath], {
+      encoding: "utf8",
+      env: {
+        GITHUB_TOKEN: "sentinel-github-token",
+        GH_RECORD: ghRecordPath,
+        GH_STATE: ghStatePath,
+        OCI_ACCEPTANCE_CLEANUP_PACKAGE_SUFFIXES: "second-image",
+        OCI_ACCEPTANCE_CLEANUP_REGISTRY: "ghcr.io",
+        OCI_ACCEPTANCE_CLEANUP_REPOSITORY_PREFIX: namespace,
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+      },
+    });
+    assert.notEqual(rejectedPrefix.status, 0);
+    assert.notEqual(rejectedSuffix.status, 0);
+    assert.equal(
+      readFileSync(ghRecordPath, "utf8"),
+      callsBeforeRejectedCoordinates,
+    );
+
+    writeFileSync(
+      namespaceRecordPath,
+      [
+        "schema=rush-delivery-oci-acceptance-namespace/v1",
+        "registry=ghcr.io",
+        `repository_prefix=${namespace}`,
+        "package_suffix=control-plane-api",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(ghRecordPath, "");
+    writeFileSync(ghStatePath, "0\n");
+    const recovery = spawnSync(
+      "bash",
+      [cleanupScriptPath, "--namespace-record", namespaceRecordPath],
+      {
+        encoding: "utf8",
+        env: {
+          GITHUB_TOKEN: "sentinel-github-token",
+          GH_RECORD: ghRecordPath,
+          GH_STATE: ghStatePath,
+          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        },
+      },
+    );
+    assert.equal(recovery.status, 0, recovery.stderr);
+    assert.equal(
+      readFileSync(ghRecordPath, "utf8").trim().split("\n").length,
+      2,
+    );
+
+    writeFileSync(
+      namespaceRecordPath,
+      readFileSync(namespaceRecordPath, "utf8").replace(
+        namespace,
+        "bootstraplaboratory/rush-delivery",
+      ),
+    );
+    writeFileSync(ghRecordPath, "");
+    const rejectedRecord = spawnSync(
+      "bash",
+      [cleanupScriptPath, "--namespace-record", namespaceRecordPath],
+      {
+        encoding: "utf8",
+        env: {
+          GITHUB_TOKEN: "sentinel-github-token",
+          GH_RECORD: ghRecordPath,
+          GH_STATE: ghStatePath,
+          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        },
+      },
+    );
+    assert.notEqual(rejectedRecord.status, 0);
+    assert.equal(readFileSync(ghRecordPath, "utf8"), "");
+
+    const cleanupSource = readFileSync(cleanupScriptPath, "utf8");
+    assert.match(cleanupSource, /GHCR_ACCEPTANCE_API_HOST=github\.com/);
+    assert.match(cleanupSource, /GHCR_ACCEPTANCE_API_TIMEOUT_SECONDS=30/);
+    assert.match(cleanupSource, /--kill-after=/);
+    assert.match(cleanupSource, /--method DELETE/);
+    assert.match(cleanupSource, /--method GET/);
   } finally {
     await rm(tempDirectory, { force: true, recursive: true });
   }
@@ -831,10 +1344,12 @@ test("GHCR acceptance cleanup attempts every registered package suffix", async (
 test("OCI acceptance never retries mutating calls and independently verifies signed evidence", () => {
   const source = readFileSync(acceptanceScriptPath, "utf8");
   const workflow = readFileSync(workflowPath, "utf8");
+  const daggerSecuritySource = readFileSync(daggerSecurityScriptPath, "utf8");
 
   assert.equal(
-    source.match(/dagger --silent call build-and-package-deploy-targets/g)
-      ?.length,
+    source.match(
+      /dagger --progress=logs call build-and-package-deploy-targets/g,
+    )?.length,
     1,
   );
   assert.equal(
@@ -843,7 +1358,21 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
   );
   assert.match(
     source,
-    /oci_acceptance_run_with_timeout[\s\S]{0,500}dagger --silent call build-and-package-deploy-targets/,
+    /oci_acceptance_run_with_timeout[\s\S]{0,500}dagger --progress=logs call build-and-package-deploy-targets/,
+  );
+  assert.doesNotMatch(
+    source,
+    /dagger --silent call build-and-package-deploy-targets/,
+  );
+  assert.match(daggerSecuritySource, /dagger --progress=logs -c/);
+  assert.match(daggerSecuritySource, /dagger --silent -c/);
+  assert.match(
+    daggerSecuritySource,
+    /with-secret-variable RUSH_DELIVERY_PROGRESS_SECRET/,
+  );
+  assert.match(
+    daggerSecuritySource,
+    /grep -Fq "\$\{DAGGER_PROGRESS_SECRET_SENTINEL\}"/,
   );
   assert.match(
     source,
@@ -887,6 +1416,30 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
   );
   assert.match(
     workflow,
+    /live-oci:\s+runs-on: ubuntu-latest\s+timeout-minutes: 120/,
+  );
+  assert.match(
+    workflow,
+    /OCI_ACCEPTANCE_NAMESPACE_RECORD_PATH: \$\{\{ runner\.temp \}\}\/rush-delivery-oci-acceptance-namespace\.txt/,
+  );
+  assert.match(
+    workflow,
+    /Recover project-controlled GHCR acceptance namespace\s+if: \$\{\{ always\(\) \}\}[\s\S]+cleanup-ghcr-acceptance\.sh[\s\S]+--namespace-record/,
+  );
+  assert.match(
+    workflow,
+    /Recover every registered v0\.8\.1 GHCR matrix namespace\s+if: \$\{\{ always\(\) \}\}[\s\S]+timeout --signal=TERM --kill-after=10s 300s[\s\S]+cleanup-ghcr-v081-acceptance\.sh[\s\S]+--namespace-record/,
+  );
+  assert.match(
+    workflow,
+    /name: rush-delivery-v081-live-matrix-evidence[\s\S]+include-hidden-files: true/,
+  );
+  assert.match(
+    workflow,
+    /path: \|[\s\S]+rush-delivery-oci-acceptance-diagnostic\.txt[\s\S]+rush-delivery-oci-acceptance-namespace\.txt/,
+  );
+  assert.match(
+    workflow,
     /actions\/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6[\s\S]{0,100}node-version: 24\.15\.0/,
   );
   assert.ok(
@@ -899,6 +1452,12 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
   assert.match(
     source,
     /oci_acceptance_node_runtime_ready[\s\S]{0,180}pinned Node\.js 24 with built-in zstd support is required/,
+  );
+  assert.match(source, /oci_acceptance_write_namespace_record/);
+  assert.ok(
+    source.indexOf(
+      'oci_acceptance_classify_failure_stage "${acceptance_log}"',
+    ) < source.indexOf('assert_protected_capture \\\n\t"${acceptance_log}"'),
   );
   assert.doesNotMatch(workflow, /acceptance\.log|deploy\.log|docker-config/);
 });
