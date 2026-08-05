@@ -1,6 +1,6 @@
 # OCI Application-Image Troubleshooting
 
-Use this runbook for Rush Delivery `v0.8.1` OCI Package and digest-only Deploy
+Use this runbook for Rush Delivery `v0.9.0` OCI Package and digest-only Deploy
 failures. The central rule is simple: once registry mutation may have started,
 do not automatically replay the whole workflow. Inspect the subject, navigation
 tag, signatures, and attestations first.
@@ -61,12 +61,12 @@ inspection and cleanup links are in
 | Earlier published target / later target was not started                      | Multi-target finalization             | Follow each canonical earlier/failed reference in stable error order.                                                                                                                                                                                                               | Earlier siblings are external side effects; later listed targets were not started. Inspect each repository independently.                                                                        |
 | Transport interruption during/after publication                              | Publication/finalization              | Check provider audit logs, SHA tag, subject digest, attachment tags, and all package versions.                                                                                                                                                                                      | Outcome is unknown/partial. Never assume the first attempt did nothing and never auto-replay the batch.                                                                                          |
 | Live Deploy requires a published OCI artifact                                | Deploy preflight                      | Inspect manifest `status`; a provider-off or named dry-run manifest is `planned`.                                                                                                                                                                                                   | No Deploy target starts. Produce a new live Package bundle; do not edit status.                                                                                                                  |
-| Frozen credential capability missing or invalid during standalone OCI Deploy | Deploy credential-boundary activation | A `v0.8.1` bundle must contain a valid `.dagger/runtime/application-image-credential-capability.json`; only an older bundle without that file uses `.dagger/application-images/providers.yaml` as a legacy names-only fallback. A present malformed capability always fails closed. | No Deploy target starts and no provider credential value is read. Restore the intact trusted bundle; do not delete the capability or `repository` field to force a weaker path.                  |
+| Frozen credential capability missing or invalid during standalone OCI Deploy | Deploy credential-boundary activation | A `v0.9.0` bundle must contain a valid `.dagger/runtime/application-image-credential-capability.json`; only an older bundle without that file uses `.dagger/application-images/providers.yaml` as a legacy names-only fallback. A present malformed capability always fails closed. | No Deploy target starts and no provider credential value is read. Restore the intact trusted bundle; do not delete the capability or `repository` field to force a weaker path.                  |
 | Provider credential projection rejected during standalone Deploy             | Deploy credential-boundary activation | Inspect the named Deploy target/field and the named credential declaration. The check includes every declared provider, not only the provider that originally published the artifact.                                                                                               | No Deploy target starts and no registry operation occurs. Rename and separately scope the project-owned capability; rebuild the trusted bundle after a metadata change.                          |
 | OCI source revision does not match deploy `gitSha`                           | Deploy preflight                      | Compare manifest SHA with protected release metadata outside the bundle.                                                                                                                                                                                                            | No Deploy target starts. Restore the correct bundle/SHA pair; do not override or truncate SHA.                                                                                                   |
 | Reference must equal repository@digest                                       | Manifest parser/preflight             | Validate the manifest came intact from Package and was not rewritten by CI templating.                                                                                                                                                                                              | No Deploy target starts. Restore the original bundle; do not repair fields by hand.                                                                                                              |
 | Evidence file missing/unreadable or hash mismatch                            | Deploy evidence preflight             | Confirm the whole packaged directory was restored atomically and compare its external archive checksum.                                                                                                                                                                             | No live wave starts. Restore the trusted archive; do not copy one evidence file from another run.                                                                                                |
-| `.dagger`, `.dagger/runtime`, or `.dagger/runtime/evidence` is a symlink     | Common Deploy bundle preflight        | Inspect those exact paths without dereferencing them and compare the complete archive with its protected identity/checksum.                                                                                                                                                         | No dry or live target starts. Do not patch/repack the bundle; rerun the `v0.8.1` Package producer, export its complete result, and register a new archive and protected release record.          |
+| `.dagger`, `.dagger/runtime`, or `.dagger/runtime/evidence` is a symlink     | Common Deploy bundle preflight        | Inspect those exact paths without dereferencing them and compare the complete archive with its protected identity/checksum.                                                                                                                                                         | No dry or live target starts. Do not patch/repack the bundle; rerun the `v0.9.0` Package producer, export its complete result, and register a new archive and protected release record.          |
 | Deploy script cannot see another target's evidence                           | Workspace assembly                    | Confirm it is not depending on `.dagger/runtime/evidence/<other-target>`.                                                                                                                                                                                                           | Intended isolation. Consume only current `ARTIFACT_EVIDENCE_DIR`.                                                                                                                                |
 | Deployment platform cannot pull the digest                                   | Project Deploy/platform               | Confirm platform pull identity, network, repository read scope, and retained digest.                                                                                                                                                                                                | Package already succeeded; a platform rollout may have failed. Fix pull identity and retry Deploy with the same digest.                                                                          |
 | Docker socket missing                                                        | Project Deploy compatibility          | Determine whether the project deploy script invokes Docker; first-class OCI Package does not.                                                                                                                                                                                       | For OCI-only jobs keep the socket disabled. Enable it only for a trusted legacy deploy script that requires host-level daemon authority; never expose it to untrusted checkout code.             |
@@ -76,7 +76,7 @@ inspection and cleanup links are in
 
 ### No OCI selected with a named global input
 
-This is not an error in `v0.8.1`. Selection determines activation. A
+This is not an error in `v0.9.0`. Selection determines activation. A
 directory-only, archive-only, empty, or npm-only execution ignores the unused
 application provider, provider file, and credentials. This permits an existing
 filesystem project to upgrade without adding `.dagger` OCI configuration.
@@ -102,10 +102,11 @@ Check all three literal values:
   `.dagger/application-images/providers.yaml`.
 
 The provider option does not select by `kind`, registry name, environment, or
-CI variable. `repository_prefix` and `registry` also do not interpolate shell
-syntax. Run a named-provider dry run after correction; it validates the planned
-repository without requiring or resolving provider credentials. Do not supply
-the live OCI env file to that diagnostic.
+CI variable. Static `repository_prefix` and `registry` do not interpolate shell
+syntax; use their explicit `_env` alternatives for public deployment routing.
+Run a named-provider dry run after correction; it validates the planned
+repository without resolving provider credentials. Supply only required public
+coordinates to that diagnostic.
 
 ### Repository validation differs from execution
 
@@ -126,6 +127,26 @@ back to provider metadata. Deploy never resolves those credential values and
 performs no registry or Cosign operation. Filesystem artifacts and provider-off
 planned OCI artifacts do not activate this boundary. If a mixed selection
 activates it, every selected Deploy target is checked.
+
+### Missing or malformed public coordinates
+
+A provider must define exactly one of `registry`/`registry_env` and exactly one
+of `repository_prefix`/`repository_prefix_env`. Repository validation can check
+that XOR and static syntax without an env file. A named invocation additionally
+requires each selected public env value to be present and normalized.
+
+Errors intentionally report provider, coordinate role, and environment name but
+not the invalid raw value. Check the selected workflow/deploy profile directly:
+
+- registry is an authority without scheme, userinfo, or path;
+- repository prefix is a lowercase normalized OCI path without tag/digest;
+- workflow/deploy duplicate keys are either absent or exactly equal; and
+- coordinate names do not alias another coordinate, credential capability,
+  `GIT_SHA`, `DRY_RUN`, or `ARTIFACT_*`.
+
+Use a coordinate-only named dry run to diagnose routing. It reads no selected
+provider credential value. Standalone Package reads coordinates only from its
+deploy env file; Deploy never reads them.
 
 ## Credential And Key Problems
 
@@ -246,7 +267,7 @@ upload/manifest request may have begun or inventory completeness is uncertain.
 
 ### Trusted TLS and custom CA
 
-`v0.8.1` exposes no custom-CA, self-signed-certificate, plain-HTTP, or
+`v0.9.0` exposes no custom-CA, self-signed-certificate, plain-HTTP, or
 insecure-registry option for application-image providers. Do not add a CLI flag
 to bypass TLS verification around Rush Delivery. Use a registry endpoint whose
 certificate chain is trusted by both the Dagger engine and pinned Cosign image,
@@ -405,7 +426,7 @@ attacker who can replace the unsigned manifest and evidence together with a
 schema-valid coordinated bundle. The operator must protect producer and consumer
 jobs, store the bundle immutably/access-controlled, record its checksum or
 artifact identity externally, and supply an independent full Git SHA. Signed
-portable manifests and Deploy-time Cosign verification are not `v0.8.1`
+portable manifests and Deploy-time Cosign verification are not `v0.9.0`
 features.
 
 ### Wrong bundle or unavailable digest during rollback

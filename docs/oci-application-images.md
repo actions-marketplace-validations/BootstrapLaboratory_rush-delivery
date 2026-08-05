@@ -1,6 +1,6 @@
 # OCI Application Images
 
-Rush Delivery `v0.8.1` can package a deploy target as a single-platform OCI
+Rush Delivery `v0.9.0` can package a deploy target as a single-platform OCI
 image, publish it, sign and attest the immutable digest, and hand that digest to
 project-owned Deploy code. This page is the production contract and operator
 runbook. Follow the [end-to-end tutorial](tutorial/oci-application-images/README.md)
@@ -11,9 +11,8 @@ incident.
 
 Application images are opt-in. Projects whose selected artifacts are only
 `directory` or `rush_deploy_archive` do not need an application-image provider,
-OCI credentials, or a configuration change. The exception is metadata that
-uses a Rush Delivery-owned Deploy environment name; see
-[Upgrade from v0.8.0](#upgrade-from-v080).
+OCI credentials, or a configuration change. For the complete compatibility
+boundary, see the [v0.8.1 to v0.9.0 upgrade guide](upgrade-v0.9.0.md).
 
 ## Architecture And Trust Boundaries
 
@@ -82,10 +81,10 @@ There are three separate trust claims:
 Declare one artifact in `.dagger/package/targets/<target>.yaml`. The target name
 must agree with the Rush project, services mesh, package filename, and Deploy
 target. The complete constraints are in the immutable
-[`v0.8.1` package-target schema](../schemas/v0.8.1/package-target.schema.json).
+[`v0.9.0` package-target schema](../schemas/v0.9.0/package-target.schema.json).
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
 name: control-plane-api
 artifact:
   kind: oci_image
@@ -107,7 +106,7 @@ artifact:
 | `artifact.context`          | Yes      | Normalized repository-relative directory, or `.` for the repository root.                                                                                                                                                                                                                                                              |
 | `artifact.dockerfile`       | Yes      | Normalized repository-relative file contained by `context`; it cannot be the context directory itself.                                                                                                                                                                                                                                 |
 | `artifact.image`            | Yes      | Lowercase relative repository suffix. It contains no registry, tag, or digest. `/`, `.`, `_`, and `-` are allowed only in normalized name segments.                                                                                                                                                                                    |
-| `artifact.platform`         | Yes      | One normalized OCI platform such as `linux/amd64`. `v0.8.1` supports exactly one platform.                                                                                                                                                                                                                                             |
+| `artifact.platform`         | Yes      | One normalized OCI platform such as `linux/amd64`. `v0.9.0` supports exactly one platform.                                                                                                                                                                                                                                             |
 | `artifact.scan.fail_on`     | Yes      | Non-empty unique list drawn from `critical`, `high`, `medium`, `low`, and `negligible`. This is an exact set, not a threshold.                                                                                                                                                                                                         |
 | `artifact.scan.ignore_file` | No       | Normalized repository-relative path to a Grype YAML configuration. Rush Delivery passes it to Grype with `--config`.                                                                                                                                                                                                                   |
 | `build.pass_env`            | No       | Host names projected unchanged into Rush Build. Active application-provider credential names are forbidden.                                                                                                                                                                                                                            |
@@ -139,10 +138,10 @@ Deploy never consumes that tag.
 Providers live only at `.dagger/application-images/providers.yaml`. They are
 independent of source, toolchain-image, Rush-cache, npm, and deployment-platform
 authentication. See the immutable
-[`v0.8.1` provider schema](../schemas/v0.8.1/application-image-providers.schema.json).
+[`v0.9.0` provider schema](../schemas/v0.9.0/application-image-providers.schema.json).
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   release:
     kind: oci_registry
@@ -155,20 +154,23 @@ providers:
     verification_key_env: RD_OCI_COSIGN_PUBLIC_KEY
 ```
 
-| Field                  | Required | Contract                                                                                                                                                                                               |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `providers.<name>`     | Yes      | Normalized lowercase provider name; `off` is reserved. One named provider is selected for all OCI targets in an invocation.                                                                            |
-| `kind`                 | Yes      | Exactly `oci_registry`.                                                                                                                                                                                |
-| `registry`             | Yes      | Lowercase registry authority with optional port, but no scheme or path. The public contract requires trusted TLS.                                                                                      |
-| `repository_prefix`    | Yes      | Normalized lowercase repository path with no registry, tag, or digest. It is literal metadata; shell and CI variables are not interpolated.                                                            |
-| `username_env`         | Yes      | Globally unique environment name containing the registry username. The value is a framework-owned non-secret string required by Dagger registry authentication and is never projected to project code. |
-| `token_env`            | Yes      | Environment name containing the registry token/password. The selected live value becomes a Dagger secret immediately.                                                                                  |
-| `signing_key_env`      | Yes      | Environment name containing a password-protected Cosign private key. Literal `\n` sequences are decoded.                                                                                               |
-| `signing_password_env` | Yes      | Environment name containing the Cosign private-key password.                                                                                                                                           |
-| `verification_key_env` | Yes      | Environment name containing the matching Cosign public key. Literal `\n` sequences are decoded.                                                                                                        |
+| Field                                         | Required | Contract                                                                                                                                                                                               |
+| --------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `providers.<name>`                            | Yes      | Normalized lowercase provider name; `off` is reserved. One named provider is selected for all OCI targets in an invocation.                                                                            |
+| `kind`                                        | Yes      | Exactly `oci_registry`.                                                                                                                                                                                |
+| `registry` / `registry_env`                   | XOR      | Choose a static lowercase authority or the name of a public Package routing value. Authorities allow an optional port but no scheme/path.                                                              |
+| `repository_prefix` / `repository_prefix_env` | XOR      | Choose a static normalized lowercase repository path or the name of a public Package routing value. Values contain no registry, tag, digest, or interpolation.                                         |
+| `username_env`                                | Yes      | Globally unique environment name containing the registry username. The value is a framework-owned non-secret string required by Dagger registry authentication and is never projected to project code. |
+| `token_env`                                   | Yes      | Environment name containing the registry token/password. The selected live value becomes a Dagger secret immediately.                                                                                  |
+| `signing_key_env`                             | Yes      | Environment name containing a password-protected Cosign private key. Literal `\n` sequences are decoded.                                                                                               |
+| `signing_password_env`                        | Yes      | Environment name containing the Cosign private-key password.                                                                                                                                           |
+| `verification_key_env`                        | Yes      | Environment name containing the matching Cosign public key. Literal `\n` sequences are decoded.                                                                                                        |
 
-All five names must be distinct within a provider and globally unique across
-every declared provider. Validation rejects aliases before reading any value;
+All five credential names must be distinct within a provider and globally
+unique across every declared provider. Public coordinate names must be distinct
+from one another and every application/Rush-cache/toolchain/npm/source
+credential capability, `GIT_SHA`, `DRY_RUN`, and `ARTIFACT_*`. Validation
+rejects aliases before reading any value;
 this prevents a secret role from being reused through Dagger's non-secret
 registry-username channel and keeps diagnostics names-only. Rush Delivery also
 detects a provider name projected into project Build, npm Release, or Deploy
@@ -180,13 +182,13 @@ different name.
 Provider activation follows the selected artifacts, not a global option that
 may be unused.
 
-| Selected package artifacts | Provider option                           | Run         | Result                                                                                                                                                                                                         |
-| -------------------------- | ----------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No OCI artifact            | Any value, including malformed or unknown | Dry or live | Ignore the unused option. Do not load provider metadata or credentials and do not run OCI tools.                                                                                                               |
-| OCI artifact               | `off`                                     | Dry         | Emit relative planned image intent. Do not load provider metadata or credentials.                                                                                                                              |
-| OCI artifact               | Named                                     | Dry         | Load and validate the provider file, selected provider, planned repository, and cross-file protected-name boundary. Do not resolve/use provider credential entries, create provider secrets, or run OCI tools. |
-| OCI artifact               | `off`                                     | Live        | Fail before Rush Build, image build, destination-registry access, or Deploy. Source acquisition may already have run.                                                                                          |
-| OCI artifact               | Named                                     | Live        | Validate provider metadata and cross-file ownership before Build; resolve only the selected provider's five values when live Package starts.                                                                   |
+| Selected package artifacts | Provider option                           | Run         | Result                                                                                                                                                                                                             |
+| -------------------------- | ----------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No OCI artifact            | Any value, including malformed or unknown | Dry or live | Ignore the unused option. Do not load provider metadata or credentials and do not run OCI tools.                                                                                                                   |
+| OCI artifact               | `off`                                     | Dry         | Emit relative planned image intent. Do not load provider metadata or credentials.                                                                                                                                  |
+| OCI artifact               | Named                                     | Dry         | Load and validate the provider file, resolve only required public coordinates, validate the planned repository and cross-file boundary. Do not resolve/use provider credentials, create secrets, or run OCI tools. |
+| OCI artifact               | `off`                                     | Live        | Fail before Rush Build, image build, destination-registry access, or Deploy. Source acquisition may already have run.                                                                                              |
+| OCI artifact               | Named                                     | Live        | Resolve/validate public coordinates and cross-file ownership before Build; resolve only the selected provider's five credential values when live Package starts.                                                   |
 
 Invocation-scoped execution initially validates the repository without parsing
 the provider file, then Detect and package planning decide whether OCI is
@@ -195,6 +197,14 @@ metadata. The explicit `validateMetadataContract` entrypoint is intentionally
 stricter: it validates every provider file that is present and checks all
 provider credential-name collisions across repository metadata, even without a
 particular invocation selection.
+
+For `workflow`, coordinates come from the equal-only merge of `workflowEnvFile`
+and `deployEnvFile`; conflicting duplicates fail. Standalone Package producers
+use only `deployEnvFile`. Package normalizes the coordinates once and threads
+the canonical repository through publication, evidence, manifest, and cleanup.
+Deploy never reloads provider metadata or the current environment to rebuild a
+repository. Follow the
+[environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md).
 
 Standalone `deployRelease` applies the same principle to the supplied manifest.
 After manifest/source preflight succeeds, if no selected artifact is a published
@@ -546,7 +556,7 @@ registry query and no Cosign operation.
 ## Manifest Examples
 
 The exact schema is
-[`package-manifest.schema.json`](../schemas/v0.8.1/package-manifest.schema.json).
+[`package-manifest.schema.json`](../schemas/v0.9.0/package-manifest.schema.json).
 All hashes below are synthetic but full length.
 
 ### Legacy filesystem-only manifest
@@ -692,7 +702,7 @@ A planned OCI dry-run result has `artifactImage` and `artifactKind` but omits
 
 Before the first live publication:
 
-- Pin the Action/module and editor schemas to `v0.8.1`.
+- Pin the Action/module and editor schemas to `v0.9.0`.
 - Validate metadata with `validate-metadata-contract`, then run provider-off and
   named-provider dry runs.
 - Use a trusted-TLS registry whose image, signature, and attestation behavior
@@ -830,15 +840,16 @@ automatic deletion.
 - One explicit platform per target; no multi-platform index.
 - Dockerfile builds have no Rush Delivery metadata for build arguments, build
   secrets, SSH mounts, or Dockerfile `target` selection.
-- Provider coordinates are static literal metadata. There is no per-environment
-  interpolation or custom repository resolver in `v0.8.1`.
+- Provider coordinates support strict static values or environment-selected
+  public values. There is no interpolation, credential-bearing coordinate,
+  arbitrary resolver, or Deploy-time repository reconstruction.
 - Key-backed Cosign only. No keyless/OIDC identity, Rekor upload/inclusion,
   trusted timestamp, or public transparency mode.
 - No public custom-CA or insecure-registry option. The destination must be
   reachable with trusted TLS from Dagger and Cosign.
 - Registry support must include image push, a returned digest, and storage and
   retrieval of Cosign's digest-derived `.sig` and `.att` tag attachments. The
-  OCI 1.1 Referrers API is neither required nor exercised in `v0.8.1`. OCI
+  OCI 1.1 Referrers API is neither required nor exercised in `v0.9.0`. OCI
   conformance alone does not prove the complete Rush Delivery path; test the
   exact service.
 - No framework-owned Cloud Run, Kubernetes, Swarm, or other vendor deployment.
@@ -852,84 +863,15 @@ automatic deletion.
 - The Action's Docker-socket default is retained for legacy project deploy
   scripts. First-class OCI Package operations do not require that socket.
 
-## Upgrade From v0.8.0
+## Upgrade To v0.9.0
 
-`v0.8.1` is a patch hardening release. OCI package/provider field shapes and the
-`rush-delivery-package-manifest/v2` shapes are unchanged. Released `v0.8.0` docs
-and schemas remain immutable.
+Static providers, provider-off/filesystem projects, package-manifest v2, and
+digest-only Deploy remain compatible. Environment-selected coordinates are
+additive and opt-in. The one migration-sensitive area is Action local-copy,
+whose new caller-side policy defaults to bounded exclusions.
 
-Conditional provider selection, capability isolation, offline key preflight,
-reserved/protected-name enforcement, fail-closed scanner parsing, evidence
-isolation, and deterministic multi-target failure reporting are
-security/reliability corrections. They are not evidence that the released
-`v0.8.0` snapshots were rewritten or that publication became transactional.
-
-Filesystem-only consumers:
-
-- Do not add `.dagger/application-images/providers.yaml`, OCI credentials, or an
-  application provider.
-- A globally supplied named provider is ignored when the selected plans contain
-  no OCI artifact, even if the unused provider file/value is invalid.
-- Directory/archive-only manifests and Deploy result fields remain unchanged.
-- Rename any Deploy metadata output/host-file name that is `GIT_SHA`, `DRY_RUN`,
-  or begins with `ARTIFACT_`. Accidental framework-variable shadowing is no
-  longer accepted.
-- Remove userinfo, passwords, query strings, and fragments from any supplied
-  source repository locator; use the explicit Source auth token/username inputs.
-- Retarget any runtime file mount whose normalized destination is the framework
-  evidence path, a descendant, or a parent that could mask it. Non-colliding
-  legacy target spellings remain accepted.
-
-OCI consumers:
-
-1. Update Action and module references to `v0.8.1` and editor hints to
-   `schemas/v0.8.1/...`.
-2. Search every deploy target's `runtime.env`, `pass_env`, `map_env` outputs,
-   `dry_run_defaults`, `required_host_env`, and host-path `source_var` fields for
-   `ARTIFACT_*`, `GIT_SHA`, or `DRY_RUN`; rename project-owned uses.
-3. Give every credential field of every application provider a globally unique
-   env name. In particular, never alias `username_env` to a token, key, or
-   password name: Dagger treats the resolved username as non-secret. Remove all
-   provider names from package Build projections, Deploy projections/mount
-   sources, and composed npm auth. The explicit repository validator reports
-   all present-file collisions before reading values.
-4. For split-stage Deploy, retain the complete packaged repository, including
-   `.dagger/runtime/application-image-credential-capability.json`. Package
-   freezes all declared credential **names** there and standalone Deploy rechecks
-   every selected Deploy projection; it still resolves/uses no provider
-   credential value and performs no registry operation. Older bundles without
-   the handoff use the valid provider file as a compatibility fallback. A
-   supplied aggregate Deploy env file may still be parsed for
-   deployment-platform capabilities.
-5. Check that `.dagger`, `.dagger/runtime`, and, when present,
-   `.dagger/runtime/evidence` are directories rather than symlinks. A retained
-   bundle that aliases any of those paths is not a valid `v0.8.1` Deploy input,
-   even for a dry run. Do not patch, repack, or copy only the manifest/runtime
-   files. Re-run the `v0.8.1` Package producer from the intended source and
-   built output, export its complete returned directory, and create a new
-   archive, external checksum/identity, and protected release record. Treat a
-   live OCI repackage as a new controlled publication attempt and apply the
-   normal partial-side-effect inspection rules.
-6. Ensure private/public keys match and the private key is password-protected.
-   Expect live Package to perform one cryptographic preflight before any
-   application-image build (normal Rush Build and filesystem artifact
-   materialization happen earlier).
-7. Audit Grype configuration and list every severity you intend to reject.
-   Malformed or unknown report data now fails closed.
-8. Change full-workspace Deploy scripts to read only their target evidence from
-   `ARTIFACT_EVIDENCE_DIR`; the generic `.dagger/runtime/evidence` subtree is
-   intentionally filtered. Retarget any `runtime.file_mounts` destination that
-   could replace or mask `/workspace/.dagger/runtime/evidence`.
-9. Run an OCI provider-off dry run, then a named-provider dry run, before a
-   protected live canary. Dry runs do not test credentials or registry write
-   access.
-10. Test multi-target partial-failure inspection and provider cleanup. All
-    preparation now gates publication, but registry finalization remains
-    nontransactional and errors identify earlier published and later skipped
-    targets.
-
-The application provider default remains `off`. The GitHub Action's
-`/var/run/docker.sock` default also remains for legacy Deploy compatibility;
-set `docker-socket: ""` in OCI-only jobs. Keep the default only for trusted
-legacy scripts: daemon access is host-level authority, not an isolated file
-mount.
+Use the complete [v0.8.1 to v0.9.0 upgrade guide](upgrade-v0.9.0.md) for the
+compatibility matrix, local-copy inclusion/`legacy` recovery, canary sequence,
+new metadata fields, and checksummed launcher installation. Use the
+[environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md)
+when adopting dynamic public coordinates.

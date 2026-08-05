@@ -10,11 +10,11 @@ For editor integration in external projects, prefer exact versioned schema
 URLs. For example:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/deploy-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/deploy-target.schema.json
 ```
 
 The root `https://bootstraplaboratory.github.io/rush-delivery/schemas/` URLs
-track the current release. Exact paths such as `/schemas/v0.8.1/...` are the
+track the current release. Exact paths such as `/schemas/v0.9.0/...` are the
 stable contract for projects pinned to that Rush Delivery version.
 
 ## Package Release
@@ -32,7 +32,7 @@ source of truth for package selection, version changes, changelogs, and
 publishable package rules.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/npm-release.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/npm-release.schema.json
 
 kind: npm
 
@@ -258,7 +258,7 @@ inside that context, a relative image name, one explicit `platform`, and a
 scanner policy:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
 name: control-plane-api
 
 artifact:
@@ -289,7 +289,7 @@ Illustrative provider metadata (replace the example registry and namespace with
 an accepted registry recipe):
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   release:
     kind: oci_registry
@@ -309,6 +309,31 @@ private key, password, public key, and derived Docker configuration become
 Dagger secrets; the registry username is a required non-secret Dagger auth
 input. None reach the image build or Deploy runtime. Multiline Cosign PEM values
 may use literal `\n` separators in flat env files.
+
+Registry coordinates may remain static as above or use one public environment
+name per role:
+
+```yaml
+providers:
+  release:
+    kind: oci_registry
+    registry_env: APP_IMAGE_REGISTRY
+    repository_prefix_env: APP_IMAGE_REPOSITORY_PREFIX
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+```
+
+Exactly one of `registry`/`registry_env` and exactly one of
+`repository_prefix`/`repository_prefix_env` is required. Mixed static/dynamic
+definitions are valid. Coordinate values are public Package routing inputs,
+not credentials. Their names must be distinct from one another and every
+repository/invocation credential capability. Workflow resolves them from the
+workflow-plus-deploy overlay; standalone Package entrypoints use
+`deployEnvFile`. Deploy never reloads them. Follow the
+[environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md).
 
 Every credential name declared by every application-image provider is reserved
 from package build and deploy environment projections. This is a cross-file
@@ -358,6 +383,19 @@ keys for repository, username, and token.
 
 Schema:
 [`../schemas/toolchain-image-providers.schema.json`](../schemas/toolchain-image-providers.schema.json)
+
+Project-owned Rush tool metadata is separate and optional at
+`.dagger/toolchains/rush.yaml`. It selects a digest-pinned Node 24 Debian base
+and 1–16 ordered, SHA-256-verified HTTPS downloads installed as fixed
+executables under `/usr/local/bin`. Unknown fields and generic commands are
+rejected. Absence preserves the default Rush toolchain spec and cache identity.
+
+Schema:
+[`../schemas/rush-toolchain.schema.json`](../schemas/rush-toolchain.schema.json)
+
+Use the [project-owned toolchain guide](rush-toolchain.md) and
+[mixed Node/Python tutorial](tutorial/15-mixed-node-python-toolchain.md) rather
+than duplicating schema restrictions in project scripts.
 
 ## Rush Cache
 

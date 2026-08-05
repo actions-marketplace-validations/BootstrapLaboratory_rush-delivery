@@ -5,10 +5,11 @@ available to Dagger and avoids relying on a remote Git ref that does not contain
 your latest changes.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.1
-
-dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
+./rush-delivery-local \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
   --repo=. \
+  -- \
+  workflow \
   --git-sha="$(git rev-parse HEAD)" \
   --event-name=manual \
   --force-targets-json='[]' \
@@ -16,8 +17,7 @@ dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
   --dry-run=true \
   --toolchain-image-provider=off \
   --rush-cache-provider=off \
-  --application-image-provider=off \
-  --source-mode=local_copy
+  --application-image-provider=off
 ```
 
 If the forced selection includes an OCI target, this dry run reports the
@@ -28,23 +28,27 @@ to validate its planned repository.
 For local PR-style validation only:
 
 ```sh
-dagger -m "${RUSH_DELIVERY_MODULE}" call validate \
+./rush-delivery-local \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
   --repo=. \
+  -- \
+  validate \
   --event-name=pull_request \
-  --pr-base-sha="$(git merge-base HEAD origin/main)" \
-  --source-mode=local_copy
+  --pr-base-sha="$(git merge-base HEAD origin/main)"
 ```
 
 For a local package-release dry-run:
 
 ```sh
-dagger -m "${RUSH_DELIVERY_MODULE}" call release-packages \
+./rush-delivery-local \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
   --repo=. \
+  -- \
+  release-packages \
   --git-sha="$(git rev-parse HEAD)" \
   --dry-run=true \
   --toolchain-image-provider=off \
-  --rush-cache-provider=off \
-  --source-mode=local_copy
+  --rush-cache-provider=off
 ```
 
 This reads `.dagger/release/npm.yaml`, runs the release build lifecycle, and
@@ -55,6 +59,13 @@ Avoid live package publishing from a local workstation unless you are
 deliberately testing the release path with disposable packages. Live package
 release expects Git source mode, release env credentials, and a clean CI-style
 source ref.
+
+The launcher applies bounded source exclusions before Dagger uploads the
+worktree. Install and verify the release asset, review defaults, and add narrow
+inclusions through `.dagger/source-import.ignore` by following the
+[bounded local-copy guide](../local-copy-source-imports.md). Direct top-level
+`dagger call ... --source-mode=local_copy` remains the legacy-compatible path,
+but cannot honor repository-controlled pre-import inclusions.
 
 Keep live deploy credentials out of source. If a local live deploy needs files
 such as cloud credentials, pass them through a runtime files directory and refer

@@ -21,6 +21,18 @@ items:
   - title: Providers
     source: ../docs/providers.md
     id: providers
+  - title: Bounded Local-Copy Imports
+    source: ../docs/local-copy-source-imports.md
+    id: local-copy-source-imports
+    description: Bound local worktree transfer before Dagger uploads source.
+  - title: Project-Owned Rush Toolchain
+    source: ../docs/rush-toolchain.md
+    id: rush-toolchain
+    description: Add digest-pinned, checksummed tools to the shared Rush image.
+  - title: Upgrade To v0.9.0
+    source: ../docs/upgrade-v0.9.0.md
+    id: upgrade-v0-9-0
+    description: Upgrade and recover safely from v0.8.1.
   - title: OCI Application Images
     source: ../docs/oci-application-images.md
     id: oci-application-images
@@ -99,6 +111,9 @@ tutorialItems:
   - title: Package Release Workflow
     source: ../docs/tutorial/14-package-release-workflow.md
     id: tutorial/package-release-workflow
+  - title: Mixed Node/Python Toolchain
+    source: ../docs/tutorial/15-mixed-node-python-toolchain.md
+    id: tutorial/mixed-node-python-toolchain
   - title: OCI Application Images
     children:
       - title: Overview
@@ -126,3 +141,6 @@ tutorialItems:
       - title: 7 - Split Stages And Rollback
         source: ../docs/tutorial/oci-application-images/07-split-stages-and-rollback.md
         id: tutorial/oci-application-images/split-stages-and-rollback
+      - title: 8 - Environment Profiles
+        source: ../docs/tutorial/oci-application-images/08-environment-profiles.md
+        id: tutorial/oci-application-images/environment-profiles

@@ -14,7 +14,7 @@ permissions:
   packages: read
 
 steps:
-  - uses: BootstrapLaboratory/rush-delivery@v0.8.1
+  - uses: BootstrapLaboratory/rush-delivery@v0.9.0
     with:
       entrypoint: validate
       toolchain-image-provider: github
@@ -99,7 +99,7 @@ Package release/versioning can be composed into the main trusted workflow when
 the same job should deploy applications and release npm packages:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.8.1
+- uses: BootstrapLaboratory/rush-delivery@v0.9.0
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -127,7 +127,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -148,7 +148,7 @@ images use GitHub Container Registry.
 Pin Rush Delivery to a released tag:
 
 ```yaml
-uses: BootstrapLaboratory/rush-delivery@v0.8.1
+uses: BootstrapLaboratory/rush-delivery@v0.9.0
 ```
 
 Advance the tag intentionally when you want new behavior. Do not use an

@@ -6,7 +6,7 @@ GitHub Actions, split-stage handoff, and rollback. The checked-in
 [canonical example](../../../examples/oci-application-image-rush-repo) is the
 single source for the project files used throughout the tutorial.
 
-Rush Delivery `v0.8.1` keeps OCI application images opt-in. A repository whose
+Rush Delivery `v0.9.0` keeps OCI application images opt-in. A repository whose
 selected package artifacts are only `directory` or `rush_deploy_archive` does
 not need an application-image provider or OCI credentials.
 
@@ -37,11 +37,11 @@ state from another checkout.
 set -euo pipefail
 
 TUTORIAL_PARENT="${TMPDIR:-/tmp}/rush-delivery-oci-tutorial"
-SOURCE_CHECKOUT="${TMPDIR:-/tmp}/rush-delivery-v0.8.1-source"
+SOURCE_CHECKOUT="${TMPDIR:-/tmp}/rush-delivery-v0.9.0-source"
 
 test ! -e "${TUTORIAL_PARENT}"
 test ! -e "${SOURCE_CHECKOUT}"
-git clone --depth=1 --branch=v0.8.1 \
+git clone --depth=1 --branch=v0.9.0 \
   https://github.com/BootstrapLaboratory/rush-delivery.git \
   "${SOURCE_CHECKOUT}"
 mkdir -p "${TUTORIAL_PARENT}"
@@ -56,19 +56,28 @@ git config user.email "rush-delivery-tutorial@example.invalid"
 git add --all
 git commit -m "chore: initialize OCI image tutorial"
 
-export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.8.1"
+export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
 export TUTORIAL_REPOSITORY="${TUTORIAL_PARENT}"
+export RUSH_DELIVERY_LOCAL="${TMPDIR:-/tmp}/rush-delivery-local-v0.9.0"
+
+curl --fail --location \
+  --output "${RUSH_DELIVERY_LOCAL}" \
+  https://github.com/BootstrapLaboratory/rush-delivery/releases/download/v0.9.0/rush-delivery-local
+printf '%s  %s\n' \
+  '802ed18dc3bce89974d64884fe3c7ca64f3e206faa4c8c8eef237757101bd391' \
+  "${RUSH_DELIVERY_LOCAL}" | sha256sum --check --strict
+chmod 0755 "${RUSH_DELIVERY_LOCAL}"
 ```
 
 Sanitized expected output:
 
 ```text
-Cloning into '/tmp/rush-delivery-v0.8.1-source'...
+Cloning into '/tmp/rush-delivery-v0.9.0-source'...
 Initialized empty Git repository in /tmp/rush-delivery-oci-tutorial/.git/
 [main (root-commit) <sha>] chore: initialize OCI image tutorial
 ```
 
-If `git clone` cannot resolve `v0.8.1`, the release has not been published to
+If `git clone` cannot resolve `v0.9.0`, the release has not been published to
 the selected remote. If `git commit` reports no files, confirm that
 `examples/oci-application-image-rush-repo` exists in that tag and that GNU or
 compatible `tar` honored `--strip-components=2`.
@@ -89,6 +98,7 @@ runtime image when adapting the tutorial to a real service.
 5. [Deploy The Digest](05-deploy-the-digest.md)
 6. [GitHub Actions](06-github-actions.md)
 7. [Split Stages And Rollback](07-split-stages-and-rollback.md)
+8. [Environment-Selected Repository Profiles](08-environment-profiles.md)
 
 ## Checkpoint
 

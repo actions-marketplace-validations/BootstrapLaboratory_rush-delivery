@@ -6,7 +6,7 @@ small because Rush and npm already own most package release policy.
 LabKit uses this shape:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/npm-release.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/npm-release.schema.json
 
 kind: npm
 

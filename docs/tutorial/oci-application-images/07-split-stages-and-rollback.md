@@ -33,7 +33,7 @@ Run these commands from the exact committed source revision:
 ```bash
 set -euo pipefail
 
-export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.8.1"
+export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
 export SOURCE_SHA="$(git rev-parse HEAD)"
 test "${#SOURCE_SHA}" -eq 40
 test "$(git status --porcelain)" = ""
@@ -138,7 +138,7 @@ the archive. A checksum file placed beside the archive is convenient for manual
 transport, but it is not the trusted expected checksum: the protected release
 record must store `ARCHIVE_SHA256` independently.
 
-Before archiving, also enforce the `v0.8.1` framework-directory shape:
+Before archiving, also enforce the `v0.9.0` framework-directory shape:
 
 ```bash
 for framework_directory in \
@@ -164,7 +164,7 @@ target execution.
 
 If an older retained bundle fails this gate, do not replace the symlink by hand,
 copy only `.dagger/runtime`, or recompute a checksum over the patched archive.
-Run the `v0.8.1` Package producer again from the intended source and built
+Run the `v0.9.0` Package producer again from the intended source and built
 output, export the complete returned directory, and register a new archive,
 checksum/identity, and source-SHA record. For OCI, this is a new controlled
 Package/publication attempt: inspect and govern registry side effects exactly as
@@ -370,7 +370,7 @@ after checksum verification. Atomic rename prevents Deploy from observing a
 partially restored tree. A checksum failure, filter exception, existing
 destination, missing executable, manifest, frozen credential capability, or
 provider file is a hard stop—do not fall back to unfiltered `tar -x`. Requiring
-the generated capability here ensures a `v0.8.1` restore cannot silently take
+the generated capability here ensures a `v0.9.0` restore cannot silently take
 the legacy provider-file fallback.
 
 ## Verify The Independently Recorded Source SHA
@@ -482,7 +482,7 @@ absent.
 ## Unsigned Bundle Limitation
 
 The package manifest and portable tarball are not themselves signed in
-`v0.8.1`. Their evidence file hashes detect accidental or isolated tampering,
+`v0.9.0`. Their evidence file hashes detect accidental or isolated tampering,
 and an independently protected archive checksum binds the complete bytes. An
 actor able to replace both the artifact and its external protected record can
 coordinate a replacement that these checks cannot detect. Use storage/control

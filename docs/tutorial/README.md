@@ -40,8 +40,10 @@ By the end of the tutorial, a project should have this shape:
 │   ├── package/
 │   ├── release/
 │   ├── rush-cache/
+│   ├── toolchains/
 │   ├── toolchain-images/
-│   └── validate/
+│   ├── validate/
+│   └── source-import.ignore
 └── .github/workflows/
 ```
 
@@ -66,12 +68,13 @@ Delivery project.
 12. [NPM Package Release Baseline](12-npm-package-release-baseline.md)
 13. [Release Metadata](13-release-metadata.md)
 14. [Package Release Workflow](14-package-release-workflow.md)
+15. [Mixed Node/Python Toolchain](15-mixed-node-python-toolchain.md)
 
 For an opt-in, production-oriented OCI image path, continue with the
 [OCI Application Images tutorial](oci-application-images/README.md). It starts
 from a minimal Rush repository and covers credential-free planning, GHCR and
 Cosign bootstrap, digest-only deployment, GitHub Actions, split-stage handoff,
-and rollback.
+rollback, and environment-selected registry profiles.
 
 ## The Deployment Example Repository
 

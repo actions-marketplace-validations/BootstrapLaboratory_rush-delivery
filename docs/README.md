@@ -18,6 +18,12 @@ extension surface for validation, packaging, deployment, caches, and toolchains.
   behavior.
 - [Provider adapters](providers.md): source, registry, cache, and CI-provider
   boundaries.
+- [Bounded local-copy imports](local-copy-source-imports.md): exclude disposable
+  worktree data before Dagger uploads it, with tested inclusion and recovery.
+- [Project-owned Rush toolchain](rush-toolchain.md): safely add digest-pinned,
+  checksummed executables to every Rush lifecycle.
+- [Upgrade to v0.9.0](upgrade-v0.9.0.md): compatibility, canary, and recovery
+  guidance for v0.8.1 users.
 - [OCI application images tutorial](tutorial/oci-application-images/README.md):
   runnable path from provider-off planning through signed publication,
   digest-only deploy, split-stage handoff, and rollback.
@@ -27,6 +33,10 @@ extension surface for validation, packaging, deployment, caches, and toolchains.
   permissions, retention, and cleanup for common registries.
 - [OCI application image troubleshooting](oci-application-image-troubleshooting.md):
   diagnosis and recovery by release phase.
+- [Environment-selected OCI profiles](tutorial/oci-application-images/08-environment-profiles.md):
+  route one provider definition to staging and production repositories.
+- [Mixed Node/Python toolchain](tutorial/15-mixed-node-python-toolchain.md):
+  install and cache a pinned Python package manager before Rush commands.
 - [Development](development.md): maintainer checks, website build notes, and
   generated documentation inputs.
 - [AI architecture](../.ai/architecture.md): high-level design map for future
@@ -41,7 +51,7 @@ contract. These docs explain intent and usage; schemas define file shape.
 Published schemas are available from the documentation site:
 
 - `https://bootstraplaboratory.github.io/rush-delivery/schemas/<schema>.schema.json`
-- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/<schema>.schema.json`
+- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/<schema>.schema.json`
 
 Use exact versioned schema URLs in project metadata editor hints so older
 projects keep the schema contract they were written against. The root

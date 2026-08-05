@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
+providers:
+  release:
+    kind: oci_registry
+    registry_env: APP_IMAGE_REGISTRY
+    repository_prefix_env: APP_IMAGE_REPOSITORY_PREFIX
+    username_env: APP_IMAGE_USERNAME
+    token_env: APP_IMAGE_TOKEN
+    signing_key_env: APP_IMAGE_SIGNING_KEY
+    signing_password_env: APP_IMAGE_SIGNING_PASSWORD
+    verification_key_env: APP_IMAGE_VERIFICATION_KEY

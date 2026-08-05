@@ -1,6 +1,6 @@
 # OCI Registry Recipes
 
-This guide maps the Rush Delivery `v0.8.1` application-image provider contract
+This guide maps the Rush Delivery `v0.9.0` application-image provider contract
 to common registries. Start with the production contract in
 [OCI application images](oci-application-images.md), then complete the
 [tutorial](tutorial/oci-application-images/README.md) with a disposable
@@ -19,7 +19,7 @@ The recipes are deliberately explicit about test status:
 Production workflow dependencies must be immutable. Third-party actions in this
 guide use full 40-character commit SHAs with a release-version comment; update
 the SHA and comment together through reviewed dependency automation. Rush
-Delivery examples use `@v0.8.1` to identify this guide's release contract. In a
+Delivery examples use `@v0.9.0` to identify this guide's release contract. In a
 strict consumer workflow, verify that release tag and replace it with the full
 release commit SHA before merge. GitHub documents that only the full commit SHA
 is immutable and can enforce full-SHA action references in repository or
@@ -50,7 +50,7 @@ The [OCI Distribution Specification](https://github.com/opencontainers/distribut
 defines image push, digest, tag, and deletion APIs. Cosign also documents a
 broad but qualified
 [registry support matrix](https://github.com/sigstore/cosign#registry-support).
-Rush Delivery `v0.8.1` pins Cosign `3.1.2` and passes
+Rush Delivery `v0.9.0` pins Cosign `3.1.2` and passes
 `--new-bundle-format=false` on every registry sign, attest, and verify command.
 That mode stores one digest-derived `.sig` attachment and a shared `.att`
 attachment containing both attestations. It does not use or require the OCI 1.1
@@ -71,7 +71,7 @@ prerequisites.
 Use this shape for a standards-compatible private registry:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   release:
     kind: oci_registry
@@ -107,7 +107,7 @@ provider permits it. Give the deployment platform only subject pull/read access.
 Map credentials without placing values in metadata:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.8.1
+- uses: BootstrapLaboratory/rush-delivery@v0.9.0
   with:
     application-image-provider: release
     docker-socket: ""
@@ -189,7 +189,7 @@ release-gate endpoint, and record the gate result for the exact release
 candidate. Do not infer continuous vendor coverage from unit tests.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   ghcr:
     kind: oci_registry
@@ -218,7 +218,7 @@ permissions:
   packages: write
 
 steps:
-  - uses: BootstrapLaboratory/rush-delivery@v0.8.1
+  - uses: BootstrapLaboratory/rush-delivery@v0.9.0
     with:
       application-image-provider: ghcr
       docker-socket: ""
@@ -294,7 +294,7 @@ unverified automatic deletion workflow.
 continuous live Rush Delivery test is claimed.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   gar:
     kind: oci_registry
@@ -403,7 +403,7 @@ jobs:
           export_environment_variables: false
 
       - name: Publish with Rush Delivery
-        uses: BootstrapLaboratory/rush-delivery@v0.8.1
+        uses: BootstrapLaboratory/rush-delivery@v0.9.0
         with:
           application-image-provider: gar
           docker-socket: ""
@@ -470,7 +470,7 @@ deletion instead of assuming a tag cleanup removed everything.
 continuous live Rush Delivery test is claimed.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   ecr:
     kind: oci_registry
@@ -600,7 +600,7 @@ and rollback subjects plus the digest-derived `.sig` and `.att` image tags. AWS
 documents that lifecycle actions are asynchronous in
 [Creating a lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lp_creation.html).
 ECR's lifecycle behavior for OCI reference artifacts does not describe this
-`v0.8.1` storage mode; Rush Delivery does not publish those reference artifacts.
+`v0.9.0` storage mode; Rush Delivery does not publish those reference artifacts.
 Treat the subject and both tag-addressed Cosign attachments as separately
 retained OCI image content.
 
@@ -615,7 +615,7 @@ afterward. Rush Delivery does not automate deletion.
 documentation; no continuous live Rush Delivery test is claimed.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
 providers:
   dockerhub:
     kind: oci_registry
@@ -655,7 +655,7 @@ repository-scoped organization tokens in
 [Organization access tokens](https://docs.docker.com/enterprise/security/access-tokens/).
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.8.1
+- uses: BootstrapLaboratory/rush-delivery@v0.9.0
   with:
     application-image-provider: dockerhub
     docker-socket: ""

@@ -15,7 +15,7 @@ shape-wise but is deliberately not a production source identity.
 ```bash
 set -euo pipefail
 
-export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.8.1"
+export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
 export TUTORIAL_DRY_SHA="0123456789abcdef0123456789abcdef01234567"
 test "${#TUTORIAL_DRY_SHA}" -eq 40
 ```
@@ -51,16 +51,16 @@ before interpreting a workflow failure as a registry or build problem.
 Provider `off` is the explicit credential-free planning mode:
 
 ```bash
-dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
-  --repo=. \
+"${RUSH_DELIVERY_LOCAL}" \
+  --module="${RUSH_DELIVERY_MODULE}" \
+  --repo=. -- workflow \
   --git-sha="${TUTORIAL_DRY_SHA}" \
   --event-name=workflow_call \
   --force-targets-json='["control-plane-api"]' \
   --dry-run=true \
   --toolchain-image-provider=off \
   --rush-cache-provider=off \
-  --application-image-provider=off \
-  --source-mode=local_copy
+  --application-image-provider=off
 ```
 
 Sanitized expected output contains this package intent and deploy dry-run
