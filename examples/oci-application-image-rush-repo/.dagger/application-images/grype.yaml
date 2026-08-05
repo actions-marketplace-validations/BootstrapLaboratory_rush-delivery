@@ -1,0 +1,4 @@
+# Grype 0.116.1 reads this configuration during OCI packaging. The tutorial
+# starts with no vulnerability suppressions. Govern every future exception with
+# an owner, reason, review/expiry date, and removal follow-up in adjacent comments.
+ignore: []

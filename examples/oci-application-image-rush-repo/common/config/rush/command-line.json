@@ -1,0 +1,28 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/rush/v5/command-line.schema.json",
+  "commands": [
+    {
+      "commandKind": "bulk",
+      "enableParallelism": false,
+      "name": "lint",
+      "summary": "Validate deterministic project output.",
+      "description": "Runs each project's lint script after build."
+    },
+    {
+      "commandKind": "bulk",
+      "enableParallelism": false,
+      "name": "test",
+      "summary": "Test deterministic project output.",
+      "description": "Runs each project's test script after build."
+    },
+    {
+      "commandKind": "bulk",
+      "enableParallelism": false,
+      "name": "verify",
+      "summary": "Verify deterministic project output.",
+      "description": "Runs each project's verify script after build."
+    }
+  ],
+  "parameters": [],
+  "phases": []
+}
