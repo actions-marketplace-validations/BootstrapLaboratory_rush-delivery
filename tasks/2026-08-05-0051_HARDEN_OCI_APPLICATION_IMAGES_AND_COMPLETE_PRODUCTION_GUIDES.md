@@ -1532,6 +1532,77 @@ candidate are the steps that make the newly tracked live workflow available on
 the default branch; they may begin after the pre-merge Phase 9 gate passes. The
 exact merged candidate must then pass every deferred live gate before tagging.
 
+### First Merged-Candidate Attempt And Corrective Gate
+
+The first exact-merged-candidate dispatch on 2026-08-05, GitHub Actions
+[run 30990272963](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/30990272963),
+tested merge commit `a0843f177cbb4916db5fc94ab789d56842b453c6` and
+failed both live jobs. It is diagnostic history, not release evidence, and does
+not satisfy any live completion criterion below.
+
+The retained evidence and logs established the matrix results and exposed two
+independent harness defects:
+
+- the five key-negative scenarios reached their required prepublication
+  failures, independently observed zero package inventory, and completed
+  namespace cleanup;
+- all three multi-target fixtures failed metadata validation because their
+  synthetic `matrix-worker` and `matrix-later` package/deploy targets had no
+  matching Rush projects; and
+- the single-target v1 artifact reported only `product-contract` and
+  `not-started`; the retained GitHub Actions output did not establish the exact
+  GHCR failure stage. A later controlled local non-routable-registry
+  reproduction showed that `dagger --silent` suppressed the publication
+  boundary and could make the v1 classifier report `not-started` after the
+  boundary. That reproduction justified correcting the harness, but it is not
+  retroactive proof that the failed GHCR attempt reached publication. Cleanup
+  completed, and the exact GHCR stage remains unresolved until a corrected
+  exact-candidate rerun passes.
+
+Complete this corrective gate before the next exact-candidate dispatch:
+
+- [x] Give every synthetic multi-target package/deploy target a matching Rush
+      project, deterministic lockfile entry, and executable no-op Rush scripts;
+      exercise both corrected multi-target fixtures through real provider-off
+      Dagger Package planning before any live registry call.
+- [x] Capture mutating Package progress with pinned Dagger `logs` mode, retain
+      only allowlisted stage/mutation diagnostics, and regression-test that the
+      progress mode exposes the controlled marker without exposing a secret
+      sentinel.
+- [x] Treat every paginated GHCR package version, including untagged partial
+      uploads and signature/attestation referrers, as inventory. Zero and
+      skipped-target assertions must require zero total versions. For completed
+      targets, require exactly one subject plus at least three non-subject
+      package versions without assuming legacy `.sig`/`.att` tags, run real
+      Cosign verification for the signature and both attestations, and retain a
+      stable post-verification inventory snapshot. For the injected
+      post-publication fault, require exactly the failed subject and zero
+      non-subject package versions so the evidence proves the hook ran before
+      any Cosign finalization. Serialize the inventory ledger canonically by
+      selected target and package-version ID, and do not treat IDs as a
+      cross-package chronology signal.
+- [x] Keep raw matrix fixtures, logs, and Package output outside the
+      always-uploaded artifact tree. Promote only validated regular JSON/local
+      evidence files after their own protected-value scans and cleanup; retain
+      a validated non-secret disposable-namespace record before mutation.
+- [x] Consume every matrix namespace record in an always-run, bounded recovery
+      sweep; fail the job if absence cannot be re-proven, retain the recovery
+      evidence, and explicitly include the scanned hidden `.dagger` evidence in
+      the uploaded artifact.
+- [x] Bound and narrow the single-target destructive cleanup hook, prove absence
+      with a GitHub-host-pinned readback whose HTTP status line authoritatively
+      reports `404`, classify protected-output failures only after
+      conservatively deriving mutation state, and give EXIT cleanup enough job
+      time to complete.
+- [x] Map untrusted registry errors to fixed authentication, authorization,
+      transport, or generic publication stages without retaining the original
+      exception; document that every stage remains possibly mutating, and sync
+      the canonical troubleshooting update into both generated sites.
+- [ ] Re-run all focused and clean release-candidate gates after these
+      corrections, merge them through normal review, and dispatch the live
+      workflow on that new exact merge commit. Do not reuse the failed run as
+      evidence and do not create the release tag before both live jobs pass.
+
 - [x] Review the complete diff for accidental generated-file edits, secret/key
       material, unrelated scope, and changes to immutable release snapshots.
 - [x] Confirm no private key, password, token, Docker config, real registry
