@@ -9,7 +9,10 @@
     "site:docusaurus:check": "npm --prefix website-docusaurus run check",
     "site:docusaurus:sync-docs": "npm --prefix website-docusaurus run sync-docs",
     "site:docusaurus:sync-static": "npm --prefix website-docusaurus run sync-static",
+    "self-check:clean": "bash test/scripts/run-clean-self-check.sh",
+    "pretest": "npm run site:sync-docs && npm run site:docusaurus:sync-docs",
     "test": "node --test --experimental-strip-types test/*.test.ts",
+    "test:dagger-security-engine": "bash test/scripts/run-dagger-security-engine.sh",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

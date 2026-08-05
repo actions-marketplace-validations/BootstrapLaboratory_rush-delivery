@@ -1,0 +1,128 @@
+name: OCI acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  live-oci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install pinned Node.js runtime
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.15.0
+
+      - name: Install pinned Dagger CLI
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: v0.20.7
+
+      - name: Install pinned project dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Prove security boundaries on the pinned engine
+        run: npm run test:dagger-security-engine
+
+      - name: Run project-controlled GHCR acceptance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OCI_ACCEPTANCE_DIAGNOSTIC_PATH: ${{ runner.temp }}/rush-delivery-oci-acceptance-diagnostic.txt
+        run: bash test/scripts/run-oci-acceptance.sh
+
+      - name: Preserve controlled acceptance diagnostic
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rush-delivery-oci-acceptance-diagnostic
+          path: ${{ runner.temp }}/rush-delivery-oci-acceptance-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  v081-live-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact acceptance source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install pinned Node.js runtime
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.15.0
+
+      - name: Install pinned Dagger CLI
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: v0.20.7
+
+      - name: Install pinned project dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Initialize non-secret matrix evidence root
+        env:
+          OCI_V081_MATRIX_EVIDENCE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-evidence
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "${OCI_V081_MATRIX_EVIDENCE_ROOT}"
+          printf '%s\n' 'rush-delivery-v081-live-matrix-evidence/v1' > "${OCI_V081_MATRIX_EVIDENCE_ROOT}/run-contract.txt"
+          chmod 600 "${OCI_V081_MATRIX_EVIDENCE_ROOT}/run-contract.txt"
+
+      - name: Generate protected scenario-specific Cosign profiles
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
+          OCI_V081_MATRIX_PROFILE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-profiles
+        run: bash test/scripts/prepare-oci-v081-live-profiles.sh "${OCI_V081_MATRIX_PROFILE_ROOT}"
+
+      - name: Run all eight project-controlled GHCR matrix scenarios
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OCI_V081_MATRIX_CLEANUP_HOOK: ${{ github.workspace }}/test/scripts/cleanup-ghcr-v081-acceptance.sh
+          OCI_V081_MATRIX_DOCKER_CONFIG_FILE: ${{ runner.temp }}/rush-delivery-v081-matrix-profiles/registry-auth.json
+          OCI_V081_MATRIX_EVIDENCE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-evidence
+          OCI_V081_MATRIX_FAULT_HOOK: ${{ github.workspace }}/test/scripts/configure-oci-v081-finalization-fault.sh
+          OCI_V081_MATRIX_INVENTORY_HOOK: ${{ github.workspace }}/test/scripts/inventory-ghcr-v081-acceptance.sh
+          OCI_V081_MATRIX_PROFILE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-profiles
+          OCI_V081_MATRIX_REGISTRY: ghcr.io
+          OCI_V081_MATRIX_REPOSITORY_PREFIX: bootstraplaboratory/rush-delivery-v081-acceptance
+        run: |
+          set -euo pipefail
+          matrix_status=0
+          while IFS= read -r scenario; do
+            if ! OCI_V081_MATRIX_DEPLOY_ENV_FILE="${OCI_V081_MATRIX_PROFILE_ROOT}/scenarios/${scenario}.env" \
+              bash test/scripts/run-oci-v081-acceptance-matrix.sh \
+                --run-live-scenario "${scenario}" \
+                "${OCI_V081_MATRIX_EVIDENCE_ROOT}/${scenario}"; then
+              printf 'v0.8.1 GHCR matrix scenario failed: %s\n' "${scenario}" >&2
+              matrix_status=1
+            fi
+          done < <(bash test/scripts/run-oci-v081-acceptance-matrix.sh --list-live-scenarios)
+          exit "${matrix_status}"
+
+      - name: Remove protected matrix profiles
+        if: ${{ always() }}
+        env:
+          OCI_V081_MATRIX_PROFILE_ROOT: ${{ runner.temp }}/rush-delivery-v081-matrix-profiles
+        run: |
+          set -euo pipefail
+          if [[ -e ${OCI_V081_MATRIX_PROFILE_ROOT} || -L ${OCI_V081_MATRIX_PROFILE_ROOT} ]]; then
+            bash test/scripts/prepare-oci-v081-live-profiles.sh \
+              --cleanup "${OCI_V081_MATRIX_PROFILE_ROOT}"
+          fi
+
+      - name: Preserve non-secret v0.8.1 matrix evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rush-delivery-v081-live-matrix-evidence
+          path: ${{ runner.temp }}/rush-delivery-v081-matrix-evidence
+          if-no-files-found: error
+          retention-days: 7
