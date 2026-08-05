@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
 
+env:
+  RELEASE_SMOKE_EXPECTED_SHA: b90f4d7894254c58df35a39f69fe20bbf1004553
+
 jobs:
   v081-consumer-smoke:
     name: v0.8.1 / ${{ matrix.surface }} / ${{ matrix.scenario }}
@@ -48,6 +51,11 @@ jobs:
           git -C "${consumer_root}" config user.email smoke@invalid.example
           git -C "${consumer_root}" add --all
           git -C "${consumer_root}" commit --quiet -m "test: prepare release smoke consumer"
+          actual_release_sha="$(git -C "${RELEASE_SMOKE_SOURCE}" rev-parse HEAD)"
+          if [[ ${actual_release_sha} != "${RELEASE_SMOKE_EXPECTED_SHA}" ]]; then
+            printf 'Released consumer smoke checked out an unexpected v0.8.1 commit\n' >&2
+            exit 1
+          fi
           printf 'repo=%s\n' "${consumer_root}" >> "${GITHUB_OUTPUT}"
 
       - id: action-smoke
@@ -114,7 +122,11 @@ jobs:
             > "${result_file}"
           RELEASE_SMOKE_OUTPUT="$(<"${result_file}")" \
             node -e '
-              const result = JSON.parse(process.env.RELEASE_SMOKE_OUTPUT);
+              const encodedResult = JSON.parse(process.env.RELEASE_SMOKE_OUTPUT);
+              if (typeof encodedResult !== "string") {
+                throw new Error("Released remote module did not return a JSON-encoded String scalar.");
+              }
+              const result = JSON.parse(encodedResult);
               const target = result.results?.[0];
               const isOci = process.env.RELEASE_SMOKE_SCENARIO === "oci-provider-off";
               if (result.dryRun !== true || result.results?.length !== 1 ||

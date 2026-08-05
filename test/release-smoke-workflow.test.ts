@@ -14,6 +14,7 @@ const workflowPath = path.join(
 test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths", async () => {
   const source = await readFile(workflowPath, "utf8");
   const workflow = parseYaml(source) as {
+    env: { RELEASE_SMOKE_EXPECTED_SHA: string };
     jobs: {
       "v081-consumer-smoke": {
         strategy: {
@@ -33,6 +34,9 @@ test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths
     ["filesystem-only", "oci-provider-off"],
   );
   assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.deepEqual(workflow.env, {
+    RELEASE_SMOKE_EXPECTED_SHA: "b90f4d7894254c58df35a39f69fe20bbf1004553",
+  });
 
   assert.match(source, /ref: v0\.8\.1/u);
   assert.match(source, /uses: BootstrapLaboratory\/rush-delivery@v0\.8\.1/u);
@@ -42,6 +46,21 @@ test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths
   );
   assert.match(source, /source-mode: local_copy/u);
   assert.match(source, /--source-mode=local_copy/u);
+  assert.match(
+    source,
+    /actual_release_sha="\$\(git -C "\$\{RELEASE_SMOKE_SOURCE\}" rev-parse HEAD\)"/u,
+  );
+  assert.ok(
+    source.includes(
+      'if [[ ${actual_release_sha} != "${RELEASE_SMOKE_EXPECTED_SHA}" ]]; then',
+    ),
+  );
+  assert.match(
+    source,
+    /const encodedResult = JSON\.parse\(process\.env\.RELEASE_SMOKE_OUTPUT\);/u,
+  );
+  assert.match(source, /typeof encodedResult !== "string"/u);
+  assert.match(source, /const result = JSON\.parse\(encodedResult\);/u);
   assert.match(source, /application-image-provider: off/u);
   assert.match(source, /--application-image-provider=off/u);
   assert.match(source, /docker-socket: ""/u);
