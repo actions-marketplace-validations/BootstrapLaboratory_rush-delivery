@@ -1626,6 +1626,27 @@ one-GiB and 300-second bounds, raises only the file ceiling to 30,000, and
 regression-tests both post-20,000 detection and the new hard ceiling. This run
 remains diagnostic history rather than release evidence.
 
+The corrected branch then passed GitHub Actions
+[run 31006805727](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31006805727)
+on 2026-08-05 at commit
+`855e4ab91fd0228bd301f062a9a00430e2fe5242`. The single-target job
+passed publication, all six Cosign stages, independent verification, evidence
+retention, and cleanup. All eight matrix scenarios passed, including the full
+multi-target success output scan. Its two completed targets each had one
+subject plus three observed non-subject package versions and passed real Cosign
+verification for the signature and both attestations. The injected-finalization
+case independently proved one earlier target complete, the failed target at
+exactly one subject and no Cosign attachments, and the later target untouched.
+The downloaded
+[matrix artifact](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31006805727/artifacts/8931099078)
+contained eight passing sanitized diagnostics, eight pre-mutation inventories,
+eight scenario cleanup proofs, eight independent recovery proofs, and the seven
+allowlisted Package evidence files for the success case, with no symlinks.
+Every namespace record bound the exact candidate commit. A separate authenticated
+GitHub Packages API readback returned `404` for all 13 disposable single-target
+and matrix packages. This is valid correction-branch evidence; the exact merged
+candidate must still repeat both live jobs before tagging.
+
 Complete this corrective gate before the next exact-candidate dispatch:
 
 - [x] Give every synthetic multi-target package/deploy target a matching Rush
@@ -1641,7 +1662,7 @@ Complete this corrective gate before the next exact-candidate dispatch:
       Cosign commands. Keep those files inside the ephemeral Cosign container,
       never export or retain them, and regression-test the pinned Dagger engine's
       rejection of `/dev/null` alongside successful regular-file redirection.
-- [ ] Treat every paginated GHCR package version, including untagged partial
+- [x] Treat every paginated GHCR package version, including untagged partial
       uploads and signature/attestation attachment history, as inventory. Zero and
       skipped-target assertions must require zero total versions. For completed
       targets, explicitly pin Cosign `3.1.2` legacy tag storage on publication
