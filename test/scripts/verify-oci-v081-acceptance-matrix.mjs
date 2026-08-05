@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
+import { assertProtectedScanCapacity } from "./lib/oci-v081-protected-scan-limits.mjs";
 
-const MAX_PROTECTED_SCAN_FILES = 20_000;
-const MAX_PROTECTED_SCAN_BYTES = 1024 * 1024 * 1024;
 const PROTECTED_PEM_CHUNK_CHARACTERS = 16;
 const FIXED_GIT_SHA = "0123456789abcdef0123456789abcdef01234567";
 const INVENTORY_EVENT_ORDER = "target-list-then-registry-version-id";
@@ -211,17 +210,11 @@ async function assertProtectedPathAbsent(inspectedPath, protectedValues) {
     }
 
     inspectedFiles += 1;
-    requireCondition(
-      inspectedFiles <= MAX_PROTECTED_SCAN_FILES,
-      "Live matrix protected-output scan exceeded its file-count bound.",
-    );
+    assertProtectedScanCapacity(inspectedFiles, inspectedBytes);
     if (metadata.isSymbolicLink()) {
       const target = Buffer.from(await readlink(candidate), "utf8");
       inspectedBytes += target.length;
-      requireCondition(
-        inspectedBytes <= MAX_PROTECTED_SCAN_BYTES,
-        "Live matrix protected-output scan exceeded its byte bound.",
-      );
+      assertProtectedScanCapacity(inspectedFiles, inspectedBytes);
       assertProtectedBufferAbsent(target, protectedValues);
       continue;
     }
@@ -230,10 +223,7 @@ async function assertProtectedPathAbsent(inspectedPath, protectedValues) {
       "Live matrix retained output contains an unsupported file type.",
     );
     inspectedBytes += metadata.size;
-    requireCondition(
-      inspectedBytes <= MAX_PROTECTED_SCAN_BYTES,
-      "Live matrix protected-output scan exceeded its byte bound.",
-    );
+    assertProtectedScanCapacity(inspectedFiles, inspectedBytes);
     assertProtectedBufferAbsent(await readFile(candidate), protectedValues);
   }
 }

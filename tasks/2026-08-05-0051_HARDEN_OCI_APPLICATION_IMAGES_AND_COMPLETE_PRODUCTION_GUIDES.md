@@ -1610,6 +1610,22 @@ none is exported or retained. This pre-execution defect does not change the
 intentional registry-compatible legacy `.sig`/shared-`.att` storage contract,
 which still requires exact live verification before release.
 
+The next correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31004570025](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31004570025),
+tested commit `a16528acdce0f33fab4bbd63831d6dfc1ddad378`. The complete
+single-target job passed, including publication, all six Cosign finalization
+stages, independent signature and two-attestation verification, retained
+evidence, and cleanup. Seven of the eight matrix scenarios also passed. The
+multi-target success operation completed and its cleanup succeeded, but the
+harness then quarantined its Package output because the protected-value scanner
+reached its 20,000-file ceiling. No protected value was detected. A provider-off
+reproduction measured 22,426 scannable entries and 100,722,029 regular-file
+bytes; 22,352 entries came from the pinned Rush `5.160.0` bootstrap tree alone.
+The correction therefore continues to scan the entire output, retains the
+one-GiB and 300-second bounds, raises only the file ceiling to 30,000, and
+regression-tests both post-20,000 detection and the new hard ceiling. This run
+remains diagnostic history rather than release evidence.
+
 Complete this corrective gate before the next exact-candidate dispatch:
 
 - [x] Give every synthetic multi-target package/deploy target a matching Rush
@@ -1657,6 +1673,12 @@ Complete this corrective gate before the next exact-candidate dispatch:
       transport, or generic publication stages without retaining the original
       exception; document that every stage remains possibly mutating, and sync
       the canonical troubleshooting update into both generated sites.
+- [x] Calibrate the protected-output file ceiling above the measured pinned Rush
+      bootstrap tree without excluding any output from credential scanning.
+      Retain the one-GiB byte limit and 300-second process timeout, prove a safe
+      tree above the former 20,000-file ceiling is accepted, prove a protected
+      sentinel after that boundary is still rejected without being echoed, and
+      unit-test rejection at the new 30,000-file and one-GiB boundaries.
 - [ ] Re-run all focused and clean release-candidate gates after these
       corrections, merge them through normal review, and dispatch the live
       workflow on that new exact merge commit. Do not reuse the failed run as

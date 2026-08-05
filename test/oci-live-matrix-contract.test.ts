@@ -19,6 +19,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  assertProtectedScanCapacity,
+  MAX_PROTECTED_SCAN_BYTES,
+  MAX_PROTECTED_SCAN_FILES,
+} from "./scripts/lib/oci-v081-protected-scan-limits.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -1318,9 +1323,80 @@ test("live retained-output scanner rejects raw and derived credential canaries w
       ),
       false,
     );
+
+    const oldLimitRegressionRoot = path.join(
+      temporaryRoot,
+      "old-limit-regression",
+    );
+    await mkdir(oldLimitRegressionRoot);
+    for (let offset = 0; offset <= 20_000; offset += 250) {
+      const batch = [];
+      for (
+        let index = offset;
+        index < Math.min(offset + 250, 20_001);
+        index += 1
+      ) {
+        batch.push(
+          writeFile(
+            path.join(
+              oldLimitRegressionRoot,
+              `entry-${String(index).padStart(5, "0")}`,
+            ),
+            "",
+          ),
+        );
+      }
+      await Promise.all(batch);
+    }
+    await execFileAsync(process.execPath, [
+      verifierPath,
+      "protected-capture",
+      oldLimitRegressionRoot,
+      protectedValuesFile,
+      dockerConfigFile,
+      "false",
+    ]);
+
+    const lateCanaryPath = path.join(oldLimitRegressionRoot, "entry-20000");
+    await writeFile(lateCanaryPath, token);
+    const rejectedLateLeak = spawnSync(
+      process.execPath,
+      [
+        verifierPath,
+        "protected-capture",
+        oldLimitRegressionRoot,
+        protectedValuesFile,
+        dockerConfigFile,
+        "false",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.notEqual(rejectedLateLeak.status, 0);
+    assert.equal(
+      `${rejectedLateLeak.stdout}${rejectedLateLeak.stderr}`.includes(token),
+      false,
+    );
+    assert.match(
+      `${rejectedLateLeak.stdout}${rejectedLateLeak.stderr}`,
+      /contains a credential sentinel/u,
+    );
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
+});
+
+test("live retained-output scanner keeps measured file and byte bounds strict", () => {
+  assert.equal(MAX_PROTECTED_SCAN_FILES, 30_000);
+  assert.equal(MAX_PROTECTED_SCAN_BYTES, 1024 * 1024 * 1024);
+  assert.doesNotThrow(() => assertProtectedScanCapacity(22_426, 100_722_029));
+  assert.throws(
+    () => assertProtectedScanCapacity(MAX_PROTECTED_SCAN_FILES + 1, 0),
+    /file-count bound/u,
+  );
+  assert.throws(
+    () => assertProtectedScanCapacity(0, MAX_PROTECTED_SCAN_BYTES + 1),
+    /byte bound/u,
+  );
 });
 
 test("key-failure profiles are independently constrained before live mutation", async () => {
