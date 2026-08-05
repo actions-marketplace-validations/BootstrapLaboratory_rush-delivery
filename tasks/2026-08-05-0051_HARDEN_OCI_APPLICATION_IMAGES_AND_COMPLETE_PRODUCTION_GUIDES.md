@@ -1,7 +1,6 @@
 # Harden OCI Application Images And Complete Production Guides
 
-Status: planned. Do not start implementation until this task is reviewed and
-accepted.
+Status: accepted for implementation.
 
 Baseline: `BootstrapLaboratory/rush-delivery` commit
 `d98d666e17845a5d7089571fe7c8b256484e6a25`, released as `v0.8.0`.
@@ -95,6 +94,14 @@ Deliver a `v0.8.1` release in which:
       kind, signed-bundle contract, or manifest version, stop this patch and
       re-plan that addition for a minor release instead of silently expanding
       `v0.8.1`.
+- [ ] Treat clean-clone self-check repair and live-acceptance registry
+      reliability as internal release-infrastructure prerequisites for this
+      patch. They must not add a Dagger entrypoint/input, GitHub Action input,
+      `.dagger` metadata field, schema shape, or application runtime behavior.
+- [ ] Keep registry coordinates in `v0.8.1` static as defined by the existing
+      provider metadata. A configurable acceptance endpoint is private to the
+      repository test harness and is not an environment-selected provider
+      feature for consumers.
 
 ## Non-Negotiable Architecture
 
@@ -383,11 +390,69 @@ Deliver a `v0.8.1` release in which:
 - [ ] Capture current filesystem-only manifest and deploy-result fixtures as
       compatibility goldens.
 
+### Internal Release-Infrastructure Prerequisites
+
+These repairs make the existing release gates trustworthy. They are not new
+Rush Delivery consumer capabilities and must be complete before implementation
+results can be accepted.
+
+- [ ] Add a clean-clone regression that supplies tracked module source with the
+      ignored generated `sdk/` directory absent, with no prior
+      `dagger develop`, no host `node_modules`, and no cached generated output.
+      Demonstrate the current nested self-check failure before repairing it.
+- [ ] Repair [`../src/self-check/self-check.ts`](../src/self-check/self-check.ts)
+      so `dagger call self-check` deterministically generates or provisions the
+      matching TypeScript SDK inside its isolated execution before typecheck and
+      tests need it. Do not read an untracked host SDK, require a caller to run
+      `dagger develop`, commit generated SDK output, hand-edit generated files,
+      or change the Dagger engine/public module contract.
+- [ ] Keep the generated SDK ephemeral to the self-check execution and prove
+      the repair works for a repository checkout or archive containing tracked
+      files only. A developer's pre-existing `sdk/` directory must
+      neither be required nor able to mask the regression.
+- [ ] Refactor the live OCI acceptance harness so registry endpoint,
+      harness-owned provider coordinates, credentials, and unique namespace can
+      be supplied through test-only script configuration. Do not expose that
+      configuration through the Rush Delivery Dagger API, GitHub Action API,
+      project metadata, schemas, tutorial provider contract, or returned
+      models.
+- [ ] Prototype the live registry topology before relying on it as a gate. Prefer
+      a project-controlled trusted-TLS endpoint with a harness-owned disposable
+      namespace. If an in-engine registry would require unsupported product
+      custom-CA or insecure-registry behavior, use an explicitly configured
+      standards-compatible external endpoint instead of weakening the product
+      contract. Record the chosen endpoint's TLS, capability, retention,
+      redaction, and cleanup guarantees and do not make `ttl.sh` the sole default.
+- [ ] Allocate a cryptographically unique per-run namespace, register cleanup
+      before mutation begins, and preserve the no-host-Docker-socket contract.
+      Generate test Cosign material inside the Dagger/test execution; the live
+      gate must not require a host Docker or Podman CLI, socket, or daemon.
+- [ ] Define bounded retry policy by operation and failure class. Retry only
+      transient transport failures in harness provisioning, readiness,
+      side-effect-free capability probes, and safe immutable reads, with fixed
+      attempt/time limits and sanitized diagnostics. Never retry the complete
+      Package/publish/sign/attest/verify flow automatically; if transport fails
+      after mutation may have started, report the outcome as unknown or partial
+      and enter evidence inspection/cleanup rather than assuming it is safe to
+      publish again.
+- [ ] Give harness setup/readiness/transport failures stable diagnostics that
+      are distinct from Rush Delivery authentication, security-policy,
+      key-preflight, publication, signature, attestation, manifest, and evidence
+      failures. Retry exhaustion must retain the original sanitized failure
+      class and must not turn a product-contract failure into infrastructure
+      flakiness.
+- [ ] Add deterministic harness tests for transient success within the retry
+      bound, retry exhaustion, a non-retryable product failure, an ambiguous
+      post-mutation transport failure, cleanup registration/execution, and
+      secret-sentinel absence from all diagnostics.
+
 ### Phase 0 Exit Gate
 
 - [ ] Released docs are frozen from the tag, each defect reproduction fails for
-      its expected reason, compatibility/positive tests pass, and no current
-      root documentation has been edited yet.
+      its expected reason, compatibility/positive tests pass, clean-clone
+      self-check is independent of host-generated SDK state, the live registry
+      harness has bounded and classified failure behavior, and no current root
+      documentation has been edited yet.
 
 ## Phase 1: Correct Provider Activation And Environment Ownership
 
@@ -917,10 +982,13 @@ pull identity, retention, and cleanup. Verify details against current official
 provider documentation during implementation and link those sources.
 
 - [ ] Add a provider-neutral standards-based OCI registry recipe used by the
-      disposable-registry acceptance test. The live test must use trusted TLS,
-      a cryptographically unique per-run repository namespace, and registry
+      disposable-registry acceptance test. The live test harness must use the
+      Phase 0 project-controlled or explicitly configured trusted-TLS endpoint,
+      allow only a test-only compatible endpoint override, use a
+      cryptographically unique per-run repository namespace, and arrange registry
       expiration/cleanup; a plain local HTTP `registry:2` is not compatible with
-      this release's no-insecure-registry contract.
+      this release's no-insecure-registry contract. Do not document the harness
+      override as consumer provider configuration.
 - [ ] Add a GitHub Container Registry recipe with protected-job permissions and
       a clear choice between the job token and a dedicated least-privilege token.
 - [ ] Add a Google Artifact Registry recipe covering supported username/token
@@ -941,6 +1009,11 @@ provider documentation during implementation and link those sources.
 
 - [ ] Organize troubleshooting by observed error, likely stage, safe first
       diagnostic, possible side effect, resolution, and retry/cleanup action.
+- [ ] Distinguish pre-mutation registry transport/readiness failures from
+      authentication, policy, Package, signing, attestation, verification,
+      manifest, and evidence failures. For an interrupted mutating operation,
+      require inspection and cleanup before a manual retry; never imply that an
+      automatic retry proved the first attempt had no side effect.
 - [ ] Cover no OCI selected with a named global input, provider `off` in live
       OCI, missing provider file, unknown provider, missing env name/value,
       actual-newline versus literal-`\n` corruption, malformed PEM, wrong
@@ -1138,7 +1211,14 @@ provider documentation during implementation and link those sources.
       operations.
 - [ ] Live single-target OCI acceptance against a trusted-TLS disposable
       registry and unique per-run namespace succeeds without a host Docker
-      socket and verifies the digest manifest/evidence.
+      or Podman CLI, socket, or daemon and verifies the digest manifest/evidence.
+      Exercise the selected project-controlled endpoint and the
+      test-harness-only override without changing the public provider contract.
+- [ ] Acceptance-harness fault injection proves transient pre-mutation
+      transport recovery is bounded, exhaustion is classified, product
+      security/evidence failures are never retried as infrastructure failures,
+      and ambiguous post-mutation failures stop for inspection/cleanup without
+      replaying the complete release flow.
 - [ ] Live multi-target acceptance proves the scan-before-publish barrier and
       ordered finalization/error reporting.
 - [ ] Key-preflight acceptance proves invalid/mismatched keys publish nothing.
@@ -1169,10 +1249,14 @@ provider documentation during implementation and link those sources.
 - [ ] Run `trunk check -a -y` and resolve every task-related finding.
 - [ ] Confirm `dagger version` is `v0.20.7`.
 - [ ] Run a Dagger module load plus `dagger call ping` and
-      `dagger call self-check` with the matching engine and generated SDK.
+      `dagger call self-check` with the matching engine. Repeat self-check from
+      tracked clean-clone input with `sdk/` absent and without first
+      running `dagger develop`; the self-check itself must make its matching
+      ephemeral SDK available.
 - [ ] Run [`../test/scripts/run-oci-acceptance.sh`](../test/scripts/run-oci-acceptance.sh)
-      against the canonical example and disposable registry with captured log
-      redaction checks.
+      against the canonical example and selected project-controlled disposable
+      trusted-TLS namespace with captured log-redaction checks; exercise its explicit
+      test-only endpoint override and fault-classification tests separately.
 - [ ] Repeat the release-candidate verification from a clean checkout with no
       developer-only env or cached generated docs masking failures.
 
@@ -1232,9 +1316,16 @@ Do not begin this phase while any earlier checkbox or exit gate is incomplete.
 - [ ] Do not add automatic registry deletion or claim transactional rollback.
 - [ ] Do not add custom-CA or insecure-registry configuration in this patch.
 - [ ] Do not change the GitHub Action Docker-socket compatibility default.
-- [ ] Do not change the Dagger engine or generated SDK unless a separately
-      justified requirement is discovered and the full engine upgrade flow is
-      followed.
+- [ ] Do not change the Dagger engine, generated SDK contract, or tracked SDK
+      policy unless a separately justified requirement is discovered and the
+      full engine upgrade flow is followed. The internal self-check repair may
+      generate or provision the existing matching SDK ephemerally; it must not
+      hand-edit or commit generated output.
+- [ ] Do not add environment-selected provider coordinates, project-owned Rush
+      toolchain metadata, or a repository-configurable source-exclusion API in
+      this patch; each is deferred to
+      [`2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md`](2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md)
+      as a separate minor-release public-contract decision.
 - [ ] Do not edit completed task archives or any released documentation/schema
       snapshot by hand.
 
@@ -1278,6 +1369,10 @@ This task is complete only when all of the following are true:
       actionable.
 - [ ] Every security/integrity guarantee has an automated test and every runnable
       documentation artifact is parsed, linted, or executed.
+- [ ] `dagger call self-check` passes from tracked clean-clone input without a
+      pre-existing generated SDK or a manual `dagger develop`, and live OCI
+      acceptance has a stable project-controlled trusted-TLS endpoint plus
+      bounded, side-effect-safe retry and failure-classification tests.
 - [ ] Root docs, both sites, schemas, provenance, Action/module examples, tag,
       GitHub Release, and live Pages agree on `v0.8.1`.
 - [ ] All `v0.8.0` and older published artifacts remain immutable.
