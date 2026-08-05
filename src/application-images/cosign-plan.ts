@@ -245,7 +245,7 @@ export function buildCosignPublicationCommandPlan(
         ...signingArgs,
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-sign.stdout",
       stage: "sign",
     },
     {
@@ -262,7 +262,7 @@ export function buildCosignPublicationCommandPlan(
         ...signingArgs,
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-attest-spdx.stdout",
       stage: "attest-spdx",
     },
     {
@@ -279,12 +279,12 @@ export function buildCosignPublicationCommandPlan(
         ...signingArgs,
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-attest-provenance.stdout",
       stage: "attest-provenance",
     },
     {
       args: [COSIGN_BINARY, "verify", ...verificationArgs, imageReference],
-      redirectStdout: "/dev/null",
+      redirectStdout: "/tmp/rush-delivery-cosign-verify-signature.stdout",
       stage: "verify-signature",
     },
     {
@@ -296,7 +296,8 @@ export function buildCosignPublicationCommandPlan(
         "spdxjson",
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout:
+        "/tmp/rush-delivery-cosign-verify-spdx-attestation.stdout",
       stage: "verify-spdx-attestation",
     },
     {
@@ -308,7 +309,8 @@ export function buildCosignPublicationCommandPlan(
         "slsaprovenance1",
         imageReference,
       ],
-      redirectStdout: "/dev/null",
+      redirectStdout:
+        "/tmp/rush-delivery-cosign-verify-provenance-attestation.stdout",
       stage: "verify-provenance-attestation",
     },
   ];

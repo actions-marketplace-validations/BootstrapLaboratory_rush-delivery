@@ -1585,10 +1585,30 @@ live path, multi-target success path, and injected-finalization path all stopped
 at the first target's exact `cosign-sign` stage after subject publication. All
 five key-negative scenarios and the multi-target preparation-failure scenario
 passed; every cleanup and the independent recovery sweep succeeded. This is
-diagnostic history, not release evidence. It establishes that Cosign `3.1.2`'s
-default new-bundle write is not a usable GHCR contract for this release, so the
-corrected candidate must explicitly select and verify the registry-compatible
-legacy tag storage before another live proof.
+diagnostic history, not release evidence. It narrowed the failure boundary to
+the framework's first Cosign step, but did not prove that Cosign itself started
+or that GHCR evaluated either bundle-storage mode.
+
+The legacy-storage correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31003076982](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31003076982),
+tested commit `f7c40718dba657db64500f06f68af7f053e438cd`. Its single
+live path, multi-target success path, and injected-finalization path again
+reported the exact `cosign-sign` stage. The five key-negative scenarios and the
+multi-target preparation-failure scenario passed. Cleanup for both jobs and the
+matrix's independent recovery sweep succeeded. This run is also diagnostic
+history rather than release evidence.
+
+A controlled reproduction against the pinned Dagger `v0.20.7` engine then
+proved the shared cause: `redirectStdout: "/dev/null"` fails before Cosign
+executes with
+`Error: open redirect stdout file: cannot resolve path "/dev/null"`. The exact
+pinned Cosign `3.1.2` sign command succeeds without stdout redirection and with a
+writable regular target at `/tmp/rush-delivery-cosign-sign.stdout`. The
+correction assigns all six sign, attest, and verify stages distinct regular
+`/tmp/rush-delivery-cosign-*.stdout` files in the ephemeral Cosign container;
+none is exported or retained. This pre-execution defect does not change the
+intentional registry-compatible legacy `.sig`/shared-`.att` storage contract,
+which still requires exact live verification before release.
 
 Complete this corrective gate before the next exact-candidate dispatch:
 
@@ -1601,6 +1621,10 @@ Complete this corrective gate before the next exact-candidate dispatch:
       Cosign sign, attest, and verify stage), and regression-test that the
       progress mode exposes the controlled marker without exposing a secret
       sentinel.
+- [x] Use a distinct writable regular stdout sink for each of the six registry
+      Cosign commands. Keep those files inside the ephemeral Cosign container,
+      never export or retain them, and regression-test the pinned Dagger engine's
+      rejection of `/dev/null` alongside successful regular-file redirection.
 - [ ] Treat every paginated GHCR package version, including untagged partial
       uploads and signature/attestation attachment history, as inventory. Zero and
       skipped-target assertions must require zero total versions. For completed

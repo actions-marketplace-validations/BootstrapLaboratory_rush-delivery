@@ -474,6 +474,14 @@ run concurrent Package finalization or key rotation for the same digest: the
 shared `.att` attachment is a read/append/write object. Serialize publishers for
 one subject to avoid lost updates or mixed-key verification failures.
 
+For the six registry Cosign commands, Rush Delivery redirects stdout to distinct
+regular files under `/tmp/rush-delivery-cosign-*.stdout` inside the ephemeral
+Cosign container. Dagger `v0.20.7` cannot use `/dev/null` for its
+`redirectStdout` option: it rejects that special path before starting Cosign.
+The temporary stdout files are not exported, retained, or treated as evidence;
+the validated local evidence documents and successful independent verification
+remain the Package contract.
+
 This private-registry-friendly mode proves that the configured key verified the
 digest-bound subject signature and the required attestations during Package. It
 does not prove Rekor inclusion, keyless workload identity, public transparency,

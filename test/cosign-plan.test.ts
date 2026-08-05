@@ -114,19 +114,39 @@ test("classifies only stable single-exec preflight exit codes", () => {
   assert.equal(classifyCosignPreflightExitCode(1), undefined);
 });
 
-test("pins all offline Cosign publication and verification flags", () => {
+test("pins all offline Cosign publication redirects and flags", () => {
   const reference = `registry.example/platform/api@sha256:${"a".repeat(64)}`;
   const plan = buildCosignPublicationCommandPlan(reference);
 
   assert.deepEqual(
-    plan.map(({ stage }) => stage),
+    plan.map(({ redirectStdout, stage }) => ({ redirectStdout, stage })),
     [
-      "sign",
-      "attest-spdx",
-      "attest-provenance",
-      "verify-signature",
-      "verify-spdx-attestation",
-      "verify-provenance-attestation",
+      {
+        redirectStdout: "/tmp/rush-delivery-cosign-sign.stdout",
+        stage: "sign",
+      },
+      {
+        redirectStdout: "/tmp/rush-delivery-cosign-attest-spdx.stdout",
+        stage: "attest-spdx",
+      },
+      {
+        redirectStdout: "/tmp/rush-delivery-cosign-attest-provenance.stdout",
+        stage: "attest-provenance",
+      },
+      {
+        redirectStdout: "/tmp/rush-delivery-cosign-verify-signature.stdout",
+        stage: "verify-signature",
+      },
+      {
+        redirectStdout:
+          "/tmp/rush-delivery-cosign-verify-spdx-attestation.stdout",
+        stage: "verify-spdx-attestation",
+      },
+      {
+        redirectStdout:
+          "/tmp/rush-delivery-cosign-verify-provenance-attestation.stdout",
+        stage: "verify-provenance-attestation",
+      },
     ],
   );
 
@@ -135,14 +155,12 @@ test("pins all offline Cosign publication and verification flags", () => {
     assert.ok(step.args.includes("--use-signing-config=false"));
     assert.ok(step.args.includes("env://COSIGN_PRIVATE_KEY"));
     assert.equal(step.args.at(-1), reference);
-    assert.equal(step.redirectStdout, "/dev/null");
   }
 
   for (const step of plan.slice(3)) {
     assert.ok(step.args.includes("--insecure-ignore-tlog"));
     assert.ok(step.args.includes("env://COSIGN_PUBLIC_KEY"));
     assert.equal(step.args.at(-1), reference);
-    assert.equal(step.redirectStdout, "/dev/null");
   }
 
   for (const step of plan) {
