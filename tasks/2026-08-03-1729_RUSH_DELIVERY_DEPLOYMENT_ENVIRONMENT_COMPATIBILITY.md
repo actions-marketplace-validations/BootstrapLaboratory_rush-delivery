@@ -2,15 +2,17 @@
 
 Status: planned for `v0.9.0`. Do not begin implementation until `v0.8.1` is
 released and verified through
-[`2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md`](2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md).
+[`2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md`](completed/2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md).
 
-Incoming baseline: `BootstrapLaboratory/rush-delivery` tag `v0.8.0`, commit
-`d98d666e17845a5d7089571fe7c8b256484e6a25`.
+Historical customer-requirement baseline: `BootstrapLaboratory/rush-delivery`
+tag `v0.8.0`, commit `d98d666e17845a5d7089571fe7c8b256484e6a25`.
 
-Contract baseline: the exact released `v0.8.1` tag and commit. Working baseline:
-the post-release bookkeeping descendant that archives the completed hardening
-task. Record both commits in Phase 0 before changing code, schemas, or current
-documentation; all compatibility goldens come from the immutable tag.
+Released contract baseline: annotated tag `v0.8.1`, peeled release commit
+`b90f4d7894254c58df35a39f69fe20bbf1004553`. Working baseline: post-release
+bookkeeping commit `50170d07246eee554671f11e70317e2dddafa120`, which includes
+the remote-smoke correction and archives the completed hardening task. All
+compatibility goldens come from the immutable released tag; implementation
+starts from the working baseline.
 
 Target release: `v0.9.0`.
 
@@ -66,6 +68,10 @@ and therefore require a minor release.
       `off` and keep the default Node-only Rush toolchain unchanged.
 - [ ] Preserve every valid `v0.8.1` static `oci_registry` provider without
       migration. Additive environment-backed coordinates are opt-in.
+- [ ] Preserve the signatures, static pre-import ignore decorators, and behavior
+      of the existing top-level `workflow`, `validate`, and `releasePackages`
+      functions. The bounded launcher uses a new additive local-source surface;
+      it does not weaken or silently replace those released entrypoints.
 - [ ] Treat new local-copy defaults as a documented import-boundary behavior
       change. Existing projects that intentionally transfer a matching path must
       be able to retain it through the pre-import inclusion contract; do not
@@ -162,26 +168,40 @@ Preserve this activation table:
       ordered Git-ignore-style patterns: blank lines and `#` comments are ignored,
       ordinary patterns exclude, and a single leading `!` re-includes. UTF-8,
       LF/CRLF, and a final line without a newline are supported.
-- [ ] Publish one host-side `rush-delivery-local` launcher as a checksummed
-      `v0.9.0` release asset and bundle the same implementation with the GitHub
-      Action. It reads the repository file before opening the Dagger session and
-      composes the `repo` argument through Dagger Shell `host.directory` exclude
-      filters. Local and Action parsing/precedence must share one tested library.
+- [ ] Publish one portable Bash 4+ host-side `rush-delivery-local` launcher as a
+      checksummed `v0.9.0` release asset and bundle that byte-identical file with
+      the GitHub Action. Its documented host dependencies are Bash, the pinned
+      Dagger CLI selected by the caller/Action, and standard POSIX file tools; it
+      must not require Node, `jq`, GNU-only `realpath`, or a project install. It
+      reads the repository file before opening the Dagger session and composes
+      the `repo` argument through Dagger Shell `host.directory` exclude filters.
+      Local and Action parsing/precedence therefore use one implementation.
 - [ ] Add Action inputs `source-import-policy` (`bounded` or `legacy`, default
       `bounded`) and `source-import-ignore-file` (default
       `.dagger/source-import.ignore`). They apply only to `local_copy`; Git mode
-      rejects or ignores them exactly as documented. The local launcher exposes
-      equivalent flags.
+      ignores them with one sanitized diagnostic and never reads the ignore
+      file. The local launcher exposes equivalent flags and rejects contradictory
+      combinations rather than silently changing source mode.
 - [ ] Under `bounded`, prepend these ordered defaults before repository patterns:
       `**/node_modules`, `**/.venv`, `**/__pycache__`, `**/.rush`,
       `**/rush-logs`, `.trunk/out`, and `.trunk/logs`. Later repository `!`
       patterns may re-include an intentionally required path. `legacy` preserves
       the `v0.8.1` Directory-import behavior and is the explicit emergency escape.
+- [ ] Add an additive Dagger `localSource(repo)` object with bounded variants of
+      the three source-adapter entrypoints (`workflow`, `validate`, and
+      `releasePackages`). Its `repo` constructor argument has no static ignore
+      decorator because the caller has already constructed the filtered object.
+      Factor shared implementation rather than fork workflow logic. Keep the
+      released top-level entrypoints and their static ignore decorators intact;
+      `legacy` invokes those existing entrypoints, while `bounded` invokes the
+      new object. Required-repo standalone stage entrypoints may receive the
+      composed object directly because they have no released static ignore.
 - [ ] Apply bounded exclusions at Dagger context-transfer time, not only through
       post-import `Directory` filtering. The defect is not fixed if the client
-      still traverses/uploads excluded trees first. Direct raw `dagger call
-      --repo=.` remains the legacy composition; documentation must use the
-      launcher whenever repository-controlled pre-import filtering is required.
+      still traverses/uploads excluded trees first. Direct calls to the existing
+      top-level entrypoints retain their `v0.8.1` static-filter composition;
+      documentation must use the launcher whenever repository-controlled
+      pre-import filtering or re-inclusion is required.
 - [ ] Do not blanket-exclude `.git`. Preserve it for local-copy workflow,
       validation, release, Detect, affected-project calculation, deploy-tag
       lookup, and every entrypoint that requires repository history.
@@ -195,14 +215,28 @@ Preserve this activation table:
       repeated `!`, unsupported escapes, shell/Dagger-expression metacharacters,
       and attempts to remove mandatory contract paths. Pass patterns as data and
       never evaluate them as Bash or Dagger Shell source.
-- [ ] Define mandatory retained paths per entrypoint. At minimum, reject `.git`
-      exclusion for history-dependent entrypoints and preserve the selected
-      `.dagger/runtime`/package evidence plus caller-reincluded split-stage output.
+- [ ] Escape every accepted repository path, ignore-file path, and pattern into
+      a Dagger Shell literal with a round-trip test; never concatenate raw
+      repository text into Dagger Shell. Existing caller-controlled `extra-args`
+      remains an explicitly trusted Action/CLI escape hatch and is tested
+      separately from repository-owned patterns.
+- [ ] Define mandatory retained paths per entrypoint and validate the filtered
+      `Directory` before starting workflow work. At minimum, require `.git` for
+      history-dependent local-copy entrypoints, require Rush configuration and
+      the `.dagger` metadata tree, and preserve existing
+      `.dagger/runtime`/package evidence for split-stage Package input. Reject a
+      filtered result that removed a mandatory path; a caller-reincluded custom
+      split-stage output remains an explicit project responsibility.
 - [ ] Keep Git source mode unchanged because Dagger obtains the committed tree
       and full history through the existing source adapter.
-- [ ] Before implementation, prototype the exact launcher command on Dagger
-      `v0.20.7` and prove pre-import filtering for local CLI and Action. Commit
-      any task amendment that the prototype requires. If both callers cannot be
+- [x] Prototype outcome recorded on 2026-08-05: Dagger `v0.20.7`
+      `host.directory --exclude` honors ordered Git-ignore negation, a filtered
+      object can be passed through a Shell variable to a module function, and
+      pinned `dagger/dagger-for-github` `v8.4.1` supports a Shell script input.
+      The prototype also proved that an existing function-argument ignore
+      decorator re-filters that object, which requires the additive
+      `localSource(repo)` surface above. Phase 2 must still prove actual Action
+      execution and excluded-tree transfer evidence. If both callers cannot be
       supported without an engine upgrade or post-import filtering, stop this
       phase and split the import feature into a separately versioned task rather
       than weakening its acceptance claim.
@@ -222,15 +256,25 @@ Preserve this activation table:
 - [ ] Define `downloads` as an ordered array of typed records with exactly:
       HTTPS `url`, lowercase 64-hex `sha256`, `format` (`raw` or `tar_gz`),
       optional `archive_path` required only for `tar_gz`, absolute `destination`
-      restricted beneath `/usr/local/bin`, and executable `mode` fixed to
-      `0755`. Require at least one record, unique destinations, and no URL query,
-      fragment, userinfo, redirects to non-HTTPS, interpolation, or credentials.
+      restricted to a normalized direct child of `/usr/local/bin`, and
+      executable string `mode` fixed to quoted `"0755"`. Require 1-16 records,
+      unique destinations, and no URL query, fragment, userinfo, redirects to
+      non-HTTPS, interpolation, or credentials.
 - [ ] Implement downloads through framework-owned operations: fetch bytes,
       verify SHA-256 before use, extract only the named normalized archive member
       without links/traversal, and copy it with the declared fixed mode. Do not
       expose generic exec/install steps, shells, interpreter `-c` modes,
       environment maps, package-manager commands, or arbitrary destinations in
       `v0.9.0` metadata.
+- [ ] Pin every framework-owned downloader/verifier/extractor container by
+      immutable digest and include those pins in repository dependency tests.
+      Enforce HTTPS on the initial URL and every redirect at the transfer client;
+      cap redirects, connection/transfer time, compressed bytes, and selected
+      member bytes with documented framework limits; do not claim redirect
+      validation from `dag.http` because Dagger `v0.20.7` does not expose the
+      final redirect URL. Verify the declared byte checksum before
+      extraction/copy, preflight the selected archive member, and keep download
+      bytes out of module-process strings and logs.
 - [ ] Project-owned toolchain construction receives no workflow/deploy host env,
       application-provider values, runtime files, or arbitrary secrets. Existing
       framework-owned toolchain registry authentication remains a separate
@@ -240,6 +284,12 @@ Preserve this activation table:
       ordered download field. Do not hash resolved secrets or environment-specific
       OCI coordinates. Metadata absence continues to produce the exact existing
       `rush-delivery-toolchain-image/v1` normalized spec and hash.
+- [ ] Define the configured-base compatibility floor explicitly: the pinned base
+      must provide Linux/amd64, Bash, Node.js 24, and the Debian package tooling
+      required by the existing Rush image bootstrap. Run fixed capability/version
+      preflight before project downloads and document the supported pinned
+      `node:24-bookworm-slim` pattern. This contract extends the Rush toolchain;
+      it does not turn Rush Delivery into an arbitrary base-image builder.
 - [ ] Include the resulting spec hash in the existing provider cache reference.
 - [ ] When metadata is absent, prove the base image, install commands, normalized
       spec, hash, cache tag/reference, and provider-off execution are identical to
@@ -256,11 +306,11 @@ Preserve this activation table:
 
 ## Phase 0: Rebaseline And Freeze `v0.8.1`
 
-- [ ] Verify the exact `v0.8.1` tag/release commit and the later bookkeeping
+- [x] Verify the exact `v0.8.1` tag/release commit and the later bookkeeping
       commit that archives the hardening task; record both near the top of this
       task. Verify the GitHub Release, Pages output, schemas, Action, and remote
       module from the tag.
-- [ ] Verify the completed hardening task was archived and that `v0.8.1`
+- [x] Verify the completed hardening task was archived and that `v0.8.1`
       clean-clone self-check and trusted-registry acceptance gates pass.
 - [ ] Add `v0.8.1` to the Docusaurus published-version source before modifying
       current docs, and generate frozen documentation only from the immutable tag.
@@ -303,6 +353,12 @@ Preserve this activation table:
       launcher arguments, ignore-file grammar, Action inputs, pattern ordering,
       quoting, mandatory-path checks, output/trace behavior, and error messages.
       Commit any required task amendment before feature code.
+- [ ] Keep the composite Action on the pinned `dagger/dagger-for-github`
+      `v8.4.1` implementation unless a separately justified dependency update is
+      required. For bounded local copy, make `prepare-workflow.sh` emit the
+      launcher's generated Dagger Shell script and pass it through the pinned
+      Action's supported `shell` input; preserve output and trace URL contracts.
+      Git source mode and `legacy` local copy retain the existing `call` path.
 - [ ] Implement one shared parser/composer used by the release-asset local
       launcher and Action wrapper; do not maintain two subtly different pattern
       engines.
@@ -317,6 +373,10 @@ Preserve this activation table:
       traversed or transferred, rather than merely absent from the final container.
 - [ ] Prove `legacy` exactly preserves raw `v0.8.1` local-copy behavior and that
       Git source mode does not consult local-copy patterns.
+- [ ] Prove existing direct top-level `dagger call` invocations retain their
+      released static ignore behavior, and prove bounded re-inclusion survives
+      the new `localSource(repo)` boundary instead of being removed by a second
+      filter.
 
 ### Phase 2 Exit Gate
 
@@ -443,7 +503,7 @@ Preserve this activation table:
 
 - [ ] Validate all new YAML/JSON examples against root and `v0.9.0` schemas and
       parse/lint/execute every complete documented script or command path.
-- [ ] Run `yarn install --frozen-lockfile`, `npm run typecheck`, and `npm test`.
+- [ ] Run `yarn install --frozen-lockfile`, `yarn typecheck`, and `yarn test`.
 - [ ] Run both site sync/check/build pipelines, link validation, `git diff --check`,
       and `trunk check -a -y`.
 - [ ] Confirm Dagger CLI/module engine alignment, then run module load, `ping`,
@@ -467,6 +527,12 @@ Do not begin this phase while an earlier checkbox or exit gate is incomplete.
 - [ ] Build the local launcher release asset reproducibly, publish its SHA-256 in
       the release, and verify the Action-bundled and release-asset implementations
       are generated from or byte-match the same source.
+- [ ] Generalize the released-consumer smoke workflow before the release
+      candidate: make the target ref and expected peeled commit explicit dispatch
+      inputs, fail on a mismatch, and cover the `v0.9.0` Action, remote module,
+      bounded local launcher, and opt-out compatibility paths. Do not require a
+      post-tag source commit merely to hard-code a SHA that was unknowable in the
+      release candidate.
 - [ ] Commit in semantic, reviewable slices; push the implementation branch and
       follow the repository's normal review/merge flow.
 - [ ] Re-run every release-candidate gate on the exact merged release commit.
