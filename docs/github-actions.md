@@ -48,7 +48,7 @@ override the source mode and pass `repo`:
 
 ```yaml
 steps:
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
     with:
       fetch-depth: 0
 
@@ -71,7 +71,7 @@ steps:
   - id: auth
     name: Authenticate to Google Cloud
     if: inputs.force_targets_json != '["webapp"]'
-    uses: google-github-actions/auth@v3
+    uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
     with:
       workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}

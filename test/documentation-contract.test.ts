@@ -569,6 +569,45 @@ test("generic onboarding snippets remain OCI-credential-free and provider-off", 
   }
 });
 
+test("current production snippets pin third-party actions to reviewed commits", async () => {
+  const productionFiles = [
+    ".github/workflows/oci-acceptance.yml",
+    ".github/workflows/pages.yml",
+    ".github/workflows/release-smoke.yml",
+    "README.md",
+    "action.yml",
+    ...(await listFiles("docs", (file) => file.endsWith(".md"))),
+  ];
+  const actionPattern =
+    /^\s*(?:-\s*)?uses:\s*([^@\s]+)@([^\s#]+)(?:\s+#\s*(\S.*))?\s*$/gmu;
+
+  for (const file of productionFiles) {
+    const source = await readRepoFile(file);
+
+    for (const match of source.matchAll(actionPattern)) {
+      const action = match[1];
+      const reference = match[2];
+      const comment = match[3];
+
+      if (action === "BootstrapLaboratory/rush-delivery") {
+        continue;
+      }
+
+      const line = source.slice(0, match.index).split(/\r?\n/u).length;
+      assert.match(
+        reference,
+        /^[a-f0-9]{40}$/u,
+        `${file}:${line} must pin ${action} to a full commit SHA.`,
+      );
+      assert.match(
+        comment ?? "",
+        /^v\d/u,
+        `${file}:${line} must retain a human-readable release comment.`,
+      );
+    }
+  }
+});
+
 test("Action keeps its legacy Docker socket default while OCI-only examples disable it", async () => {
   const action = parseYaml(await readRepoFile("action.yml")) as {
     inputs: Record<string, { default?: string; description?: string }>;
