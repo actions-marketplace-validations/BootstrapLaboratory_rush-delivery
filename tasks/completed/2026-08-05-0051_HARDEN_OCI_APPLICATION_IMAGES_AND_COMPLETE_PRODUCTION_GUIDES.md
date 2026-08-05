@@ -95,7 +95,7 @@ Deliver a `v0.8.1` release in which:
       data and file-mount destinations that can replace framework evidence.
       Document explicit auth inputs and safe retargeting as narrow security
       migrations; preserve every non-colliding legacy file-mount target spelling.
-- [x] Create a complete immutable [`../schemas/v0.8.1`](../schemas/v0.8.1)
+- [x] Create a complete immutable [`../schemas/v0.8.1`](../../schemas/v0.8.1)
       snapshot because deploy-schema validation and exact release alignment
       change, even though the OCI metadata shapes remain the same.
 - [x] If implementation requires a new Dagger input, metadata field, provider
@@ -468,14 +468,14 @@ behavioral or release gate below.
       commands: `yarn install --frozen-lockfile` when dependencies need setup,
       then `npm run typecheck` and `npm test`.
 - [x] Confirm the installed Dagger CLI and
-      [`../dagger.json`](../dagger.json) both use `v0.20.7`; do not upgrade the
+      [`../dagger.json`](../../dagger.json) both use `v0.20.7`; do not upgrade the
       engine for this task unless a separately documented requirement is found.
 - [x] Read and follow
-      [`../.ai/rules/BashModules.md`](../.ai/rules/BashModules.md) before editing
+      [`../.ai/rules/BashModules.md`](../../.ai/rules/BashModules.md) before editing
       the canonical deploy script, OCI acceptance scripts, or the GitHub Action
       shell wrapper.
 - [x] Add `v0.8.0` at the front of `publishedVersions` in
-      [`../website-docusaurus/scripts/sync-versioned-docs.mjs`](../website-docusaurus/scripts/sync-versioned-docs.mjs)
+      [`../website-docusaurus/scripts/sync-versioned-docs.mjs`](../../website-docusaurus/scripts/sync-versioned-docs.mjs)
       before changing any current documentation.
 - [x] Generate the `v0.8.0` versioned documentation and sidebars only through
       `npm --prefix website-docusaurus run sync-versioned-docs`, which must read
@@ -483,7 +483,7 @@ behavioral or release gate below.
 - [x] Compare the generated `v0.8.0` snapshot inputs with `git show v0.8.0:...`
       and fail if current working-tree docs leaked into the snapshot.
 - [x] Never hand-edit the generated `v0.8.0` documentation, sidebars, or the
-      released [`../schemas/v0.8.0`](../schemas/v0.8.0) snapshot.
+      released [`../schemas/v0.8.0`](../../schemas/v0.8.0) snapshot.
 - [x] Retain focused regression tests for no-OCI provider activation, credential
       projection, reserved environment collisions, key-mismatch timing, and
       multi-target side effects. Where a regression was developed with its
@@ -510,7 +510,7 @@ results can be accepted.
       ignored generated `sdk/` directory absent, with no prior
       `dagger develop`, no host `node_modules`, and no cached generated output.
       Demonstrate the current nested self-check failure before repairing it.
-- [x] Repair [`../src/self-check/self-check.ts`](../src/self-check/self-check.ts)
+- [x] Repair [`../src/self-check/self-check.ts`](../../src/self-check/self-check.ts)
       so `dagger call self-check` deterministically generates or provisions the
       matching TypeScript SDK inside its isolated execution before typecheck and
       tests need it. Do not read an untracked host SDK, require a caller to run
@@ -573,7 +573,7 @@ results can be accepted.
 ## Phase 1: Correct Provider Activation And Environment Ownership
 
 - [x] Refactor
-      [`../src/stages/package-stage/execute-package-plans.ts`](../src/stages/package-stage/execute-package-plans.ts)
+      [`../src/stages/package-stage/execute-package-plans.ts`](../../src/stages/package-stage/execute-package-plans.ts)
       so the zero-OCI path returns through the existing filesystem packaging
       contract without creating provider state.
 - [x] Refactor workflow/build-package planning so selected package definitions
@@ -599,13 +599,13 @@ results can be accepted.
 - [x] Add cross-file metadata validation that reports all protected credential
       projections together in stable path/field order.
 - [x] Add schema-representable reserved namespace restrictions to the root
-      [`../schemas/deploy-target.schema.json`](../schemas/deploy-target.schema.json).
+      [`../schemas/deploy-target.schema.json`](../../schemas/deploy-target.schema.json).
 - [x] Add parser enforcement in
-      [`../src/stages/deploy/parse-deploy-target.ts`](../src/stages/deploy/parse-deploy-target.ts)
+      [`../src/stages/deploy/parse-deploy-target.ts`](../../src/stages/deploy/parse-deploy-target.ts)
       and runtime enforcement in
-      [`../src/stages/deploy/runtime-env.ts`](../src/stages/deploy/runtime-env.ts).
+      [`../src/stages/deploy/runtime-env.ts`](../../src/stages/deploy/runtime-env.ts).
 - [x] Fix
-      [`../src/stages/deploy/execute-target.ts`](../src/stages/deploy/execute-target.ts)
+      [`../src/stages/deploy/execute-target.ts`](../../src/stages/deploy/execute-target.ts)
       so metadata environment cannot overwrite framework environment and the
       final map is the single source for dry-run and live execution.
 - [x] Ensure errors remain actionable when more than one target or field is
@@ -746,7 +746,7 @@ results can be accepted.
 ## Phase 3: Enforce Evidence Isolation And Trustworthy Deploy Handoff
 
 - [x] Refactor
-      [`../src/stages/deploy/runtime-workspace.ts`](../src/stages/deploy/runtime-workspace.ts)
+      [`../src/stages/deploy/runtime-workspace.ts`](../../src/stages/deploy/runtime-workspace.ts)
       to remove framework runtime evidence from the generic repository view
       before applying either full or partial workspace metadata.
 - [x] Mount only the current target's evidence from the original trusted
@@ -816,7 +816,7 @@ results can be accepted.
 
 ## Phase 4: Create One Canonical Executable OCI Example
 
-Create [`../examples/oci-application-image-rush-repo`](../examples/oci-application-image-rush-repo)
+Create [`../examples/oci-application-image-rush-repo`](../../examples/oci-application-image-rush-repo)
 as the source for tutorial commands and OCI acceptance tests. Do not teach from
 a private external repository or a test-only fixture.
 
@@ -916,8 +916,8 @@ examples/oci-application-image-rush-repo/
 ## Phase 5: Write The End-To-End Tutorial
 
 Add a dedicated learning path under
-[`../docs/tutorial/oci-application-images`](../docs/tutorial/oci-application-images)
-and link it from [`../docs/tutorial/README.md`](../docs/tutorial/README.md).
+[`../docs/tutorial/oci-application-images`](../../docs/tutorial/oci-application-images)
+and link it from [`../docs/tutorial/README.md`](../../docs/tutorial/README.md).
 
 Create these chapters:
 
@@ -1111,10 +1111,10 @@ checkpoint, and link to the next chapter.
 
 ## Phase 6: Build The Production Guide And Operations References
 
-Expand [`../docs/oci-application-images.md`](../docs/oci-application-images.md)
+Expand [`../docs/oci-application-images.md`](../../docs/oci-application-images.md)
 into the authoritative production contract/runbook. Add
-[`../docs/oci-registry-recipes.md`](../docs/oci-registry-recipes.md) and
-[`../docs/oci-application-image-troubleshooting.md`](../docs/oci-application-image-troubleshooting.md).
+[`../docs/oci-registry-recipes.md`](../../docs/oci-registry-recipes.md) and
+[`../docs/oci-application-image-troubleshooting.md`](../../docs/oci-application-image-troubleshooting.md).
 
 ### Production Contract
 
@@ -1302,18 +1302,18 @@ provider documentation during implementation and link those sources.
 ## Phase 7: Repair Generic Docs, Navigation, And Example Safety
 
 - [x] Remove unconditional `application-image-provider: release` and OCI secret
-      blocks from generic baseline examples in [`../README.md`](../README.md),
-      [`../docs/api.md`](../docs/api.md),
-      [`../docs/entrypoints.md`](../docs/entrypoints.md),
-      [`../docs/workflows.md`](../docs/workflows.md),
-      [`../docs/github-actions.md`](../docs/github-actions.md), both quick starts,
+      blocks from generic baseline examples in [`../README.md`](../../README.md),
+      [`../docs/api.md`](../../docs/api.md),
+      [`../docs/entrypoints.md`](../../docs/entrypoints.md),
+      [`../docs/workflows.md`](../../docs/workflows.md),
+      [`../docs/github-actions.md`](../../docs/github-actions.md), both quick starts,
       tutorial chapter 09, and both website homepages.
 - [x] Make every baseline either omit the application provider or explicitly use
       `off`; introduce a named provider only in a self-contained OCI section that
       already supplied package/provider metadata.
 - [x] Set `docker-socket: ""` in every OCI-only Action example while preserving
       the Action metadata default and its compatibility test.
-- [x] Update [`../action.yml`](../action.yml) so the `docker-socket` description
+- [x] Update [`../action.yml`](../../action.yml) so the `docker-socket` description
       identifies `/var/run/docker.sock` as a legacy deploy-script compatibility
       default and tells OCI-only users to set an empty value.
 - [x] Update the general tutorial metadata tree and adaptation guide to include
@@ -1323,12 +1323,12 @@ provider documentation during implementation and link those sources.
       entrypoints, GitHub Action docs, and both homepages where contextually
       useful.
 - [x] Add the tutorial group and new references to
-      [`../website/docs-tree.yaml`](../website/docs-tree.yaml) and
-      [`../website-docusaurus/docs-tree.yaml`](../website-docusaurus/docs-tree.yaml).
+      [`../website/docs-tree.yaml`](../../website/docs-tree.yaml) and
+      [`../website-docusaurus/docs-tree.yaml`](../../website-docusaurus/docs-tree.yaml).
 - [x] Fix repository-relative AI documentation links in
-      [`../docs/README.md`](../docs/README.md) so they point to
-      [`../.ai/architecture.md`](../.ai/architecture.md) and
-      [`../.ai/conventions.md`](../.ai/conventions.md).
+      [`../docs/README.md`](../../docs/README.md) so they point to
+      [`../.ai/architecture.md`](../../.ai/architecture.md) and
+      [`../.ai/conventions.md`](../../.ai/conventions.md).
 - [x] Audit every internal Markdown link and both generated site navigations;
       remove or correct stale/broken paths.
 - [x] Keep exact validation rules in schemas and use relative links from prose;
@@ -1357,9 +1357,9 @@ provider documentation during implementation and link those sources.
 - [x] Keep dynamic cross-file provider credential restrictions in the metadata
       contract and document why JSON Schema alone cannot express them.
 - [x] After root schemas are final, copy every root schema into a new complete
-      [`../schemas/v0.8.1`](../schemas/v0.8.1) directory and change only the
+      [`../schemas/v0.8.1`](../../schemas/v0.8.1) directory and change only the
       snapshot `$id` values to immutable `v0.8.1` URLs.
-- [x] Do not modify any file in [`../schemas/v0.8.0`](../schemas/v0.8.0) or an
+- [x] Do not modify any file in [`../schemas/v0.8.0`](../../schemas/v0.8.0) or an
       older versioned schema directory.
 - [x] Update metadata examples, fixtures, canonical example, root docs, both
       sites, and editor hints to `schemas/v0.8.1/...`.
@@ -1368,7 +1368,7 @@ provider documentation during implementation and link those sources.
 - [x] Update current Action and remote Dagger module examples from `v0.8.0` to
       `v0.8.1`; preserve historical versioned docs as generated.
 - [x] Add `v0.8.0` to `archivedDocsVersions` in
-      [`../website-docusaurus/docusaurus.config.ts`](../website-docusaurus/docusaurus.config.ts)
+      [`../website-docusaurus/docusaurus.config.ts`](../../website-docusaurus/docusaurus.config.ts)
       when changing `currentDocsVersion` to `v0.8.1`, so the frozen version has
       the correct label, route, banner, and version dropdown entry.
 - [x] Set the Docusaurus current docs version and both current website version
@@ -1503,7 +1503,7 @@ provider documentation during implementation and link those sources.
       running `dagger develop`; the self-check itself must make its matching
       ephemeral SDK available.
 - [x] Run the deterministic tests for
-      [`../test/scripts/run-oci-acceptance.sh`](../test/scripts/run-oci-acceptance.sh),
+      [`../test/scripts/run-oci-acceptance.sh`](../../test/scripts/run-oci-acceptance.sh),
       including its explicit test-only endpoint override, bounded failure
       classification, cleanup, and captured log-redaction checks. Run the actual
       project-controlled disposable trusted-TLS namespace in Phase 10.
@@ -1700,7 +1700,7 @@ Complete this corrective gate before the next exact-candidate dispatch:
       tree above the former 20,000-file ceiling is accepted, prove a protected
       sentinel after that boundary is still rejected without being echoed, and
       unit-test rejection at the new 30,000-file and one-GiB boundaries.
-- [ ] Re-run all focused and clean release-candidate gates after these
+- [x] Re-run all focused and clean release-candidate gates after these
       corrections, merge them through normal review, and dispatch the live
       workflow on that new exact merge commit. Do not reuse the failed run as
       evidence and do not create the release tag before both live jobs pass.
@@ -1713,42 +1713,93 @@ Complete this corrective gate before the next exact-candidate dispatch:
       tutorial/production docs, and version/release preparation as appropriate.
 - [x] Include compatibility/security notes in commit bodies without claiming
       transactionality, Rekor, or Deploy-time Cosign verification.
-- [ ] Push the implementation branch and use the repository's normal review and
+- [x] Push the implementation branch and use the repository's normal review and
       merge flow.
-- [ ] Re-run the clean release-candidate gates on the exact commit that will be
+- [x] Re-run the clean release-candidate gates on the exact commit that will be
       tagged.
-- [ ] Dispatch the tracked `oci-acceptance.yml` workflow on the exact merged
+- [x] Dispatch the tracked `oci-acceptance.yml` workflow on the exact merged
       release candidate. Verify both the single-target and eight-scenario GHCR
       jobs, retained non-secret diagnostics/evidence, independent inventory,
       zero-publication key/preparation failures, bounded partial-publication
       evidence, acceptance of the documented empty configuration by the pinned
       Grype image, and cleanup of every disposable namespace before tagging.
-- [ ] Create annotated tag `v0.8.1` on that exact release commit and verify the
+- [x] Create annotated tag `v0.8.1` on that exact release commit and verify the
       tag target before pushing it.
-- [ ] Push the `v0.8.1` tag.
-- [ ] Publish a GitHub Release containing the compatibility statement, security
+- [x] Push the `v0.8.1` tag.
+- [x] Publish a GitHub Release containing the compatibility statement, security
       corrections, OCI upgrade checklist, offline-Cosign trust model,
       multi-target/nontransactional warning, and links to the tutorial,
       production guide, recipes, and troubleshooting.
-- [ ] Verify the Pages deployment and live current documentation show `v0.8.1`.
-- [ ] Verify every public `schemas/v0.8.1/*.schema.json` URL returns the expected
+- [x] Verify the Pages deployment and live current documentation show `v0.8.1`.
+- [x] Verify every public `schemas/v0.8.1/*.schema.json` URL returns the expected
       content and `$id`.
-- [ ] Verify the remote Dagger module and GitHub Action work when pinned to
+- [x] Verify the remote Dagger module and GitHub Action work when pinned to
       `v0.8.1` in filesystem-only dry-run and OCI provider-off dry-run smoke
-      tests. Dispatch the tracked `release-smoke.yml` workflow against the
-      `v0.8.1` ref and verify all four surface/scenario matrix jobs and their
-      exact head SHA.
-- [ ] Verify the release tag contains the frozen `v0.8.0` docs snapshot and did
+      tests. The initial tracked `release-smoke.yml` dispatch must use the
+      `v0.8.1` ref and bind its head to the peeled release SHA. If that immutable
+      run exposes a verifier-only defect after publication, do not retarget the
+      tag: correct the verifier on `main`, require each rerun job to assert the
+      exact checked-out release SHA, and retain both runs as evidence.
+- [x] Verify the release tag contains the frozen `v0.8.0` docs snapshot and did
       not mutate the `v0.8.0` schema snapshot.
-- [ ] Move this task to `tasks/completed` only after tag, GitHub Release, Pages,
+- [x] Move this task to `tasks/completed` only after tag, GitHub Release, Pages,
       schema URL, Action, and remote-module verification all pass.
-- [ ] Immediately before the one-time archive move, while this file is still
+- [x] Immediately before the one-time archive move, while this file is still
       active, rewrite its repository-relative `../` links for the additional
       `tasks/completed` depth and rewrite the sibling compatibility-task link
       through `../`; verify every local link after the move. Do not edit the
       completed copy afterward.
-- [ ] Commit and push that final task-archive move as a post-release bookkeeping
+- [x] Commit and push that final task-archive move as a post-release bookkeeping
       commit; do not move or retarget the already verified `v0.8.1` tag.
+
+Final exact-release evidence recorded on 2026-08-05:
+
+- Exact merged release commit
+  `b90f4d7894254c58df35a39f69fe20bbf1004553` passed TypeScript,
+  all 419 tests, both production documentation checks/builds, focused Dagger
+  security-engine regressions, the deterministic OCI matrix, targeted Trunk
+  over 877 in-scope files, and the tracked-clean-archive Dagger self-check.
+- GitHub Actions
+  [run 31009073560](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31009073560)
+  used that exact merged SHA and passed `live-oci` plus all eight
+  `v081-live-matrix` scenarios. The downloaded
+  [single-target artifact](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31009073560/artifacts/8931736415)
+  and
+  [matrix artifact](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31009073560/artifacts/8932055484)
+  had no symlinks. Independent inspection found eight passing sanitized
+  diagnostics, eight zero pre-mutation inventories, eight scenario cleanup
+  proofs, eight recovery proofs, eight namespace records bound to the candidate
+  SHA, and the exact seven-file successful Package evidence set. The success
+  targets each had one subject plus three observed non-subject package versions
+  and passed real signature, SPDX-attestation, and provenance-attestation
+  verification. The ordered finalization failure proved one complete target,
+  exactly one unfinalized subject for the failed target, and no later-target
+  publication. Authenticated GitHub Packages API readback returned `404` for
+  all 13 disposable packages.
+- Annotated tag `v0.8.1` peels to the exact release commit and was pushed without
+  later movement. The published
+  [GitHub Release](https://github.com/BootstrapLaboratory/rush-delivery/releases/tag/v0.8.1)
+  records compatibility, security, upgrade, trust, nontransactional, and
+  operator-documentation guidance. Exact-SHA Pages
+  [run 31008241489](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31008241489)
+  passed build and deploy; five public current-documentation routes show
+  `v0.8.1`, and all nine public versioned schemas returned JSON byte-identical
+  to the repository with their exact `$id`. The tag preserves the original
+  28-file `v0.8.0` docs snapshot and the released `v0.8.0` schema tree objects.
+- The first exact-tag released-consumer
+  [run 31010439002](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31010439002)
+  bound its workflow head to the release commit and passed both GitHub Action
+  jobs. Both remote-module calls also returned the correct tag-pinned dry-run
+  contract, but the inline verifier parsed Dagger's JSON-encoded String scalar
+  only once and produced a false negative. The released module was reproduced
+  independently by parsing both JSON layers. Verifier-only correction commit
+  `de3524ff619351ab08b8bb0ccfadfeec5e517b33` requires the checked-out
+  `v0.8.1` source to equal the release SHA and parses the remote scalar twice;
+  TypeScript, targeted Trunk, and all 419 tests passed before push. Corrected
+  [run 31011292418](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31011292418)
+  then passed all four Action/module and filesystem/OCI-provider-off jobs while
+  consuming the unchanged `v0.8.1` tag. The tag and Release were never deleted,
+  recreated, moved, or retargeted.
 
 ## Explicit Non-Goals
 
@@ -1772,7 +1823,7 @@ Complete this corrective gate before the next exact-candidate dispatch:
 - [x] Do not add environment-selected provider coordinates, project-owned Rush
       toolchain metadata, or a repository-configurable source-exclusion API in
       this patch; each is deferred to
-      [`2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md`](2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md)
+      [`2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md`](../2026-08-03-1729_RUSH_DELIVERY_DEPLOYMENT_ENVIRONMENT_COMPATIBILITY.md)
       as a separate minor-release public-contract decision.
 - [x] Do not edit completed task archives or any released documentation/schema
       snapshot by hand.
@@ -1781,13 +1832,13 @@ Complete this corrective gate before the next exact-candidate dispatch:
 
 This task is complete only when all of the following are true:
 
-- [ ] A filesystem-only `v0.7.x` or `v0.8.0` consumer that does not shadow
+- [x] A filesystem-only `v0.7.x` or `v0.8.0` consumer that does not shadow
       framework-reserved runtime names can pin `v0.8.1` without adding
       application-image metadata, credentials, or `.dagger` changes; any
       reserved-name rename is explicit and actionable.
 - [x] A named global application provider cannot break a selected plan that has
       no OCI artifacts.
-- [ ] A selected live OCI target either completes the existing verified v2
+- [x] A selected live OCI target either completes the existing verified v2
       Package contract or fails before Deploy with accurate, sanitized side
       effects.
 - [x] Application-provider credentials cannot enter project Build, npm Release,
@@ -1797,11 +1848,11 @@ This task is complete only when all of the following are true:
       deliberate same-value reuse remain the documented caller capability
       boundary.
 - [x] Project metadata cannot shadow `ARTIFACT_*`, `GIT_SHA`, or `DRY_RUN`.
-- [ ] Invalid, locked, or mismatched Cosign key material fails before any
+- [x] Invalid, locked, or mismatched Cosign key material fails before any
       application-image build or destination-registry mutation.
-- [ ] A failure in any selected filesystem package operation or OCI
+- [x] A failure in any selected filesystem package operation or OCI
       build/SBOM/scan preparation publishes none of the selected OCI targets.
-- [ ] Later publication/signing failures identify every known or skipped target
+- [x] Later publication/signing failures identify every known or skipped target
       deterministically, never start Deploy, and provide safe cleanup guidance.
 - [x] Full, partial, filesystem, OCI, and mixed Deploy workspaces expose no
       unrelated framework evidence.
@@ -1817,10 +1868,10 @@ This task is complete only when all of the following are true:
       actionable.
 - [x] Every security/integrity guarantee has an automated test and every runnable
       documentation artifact is parsed, linted, or executed.
-- [ ] `dagger call self-check` passes from tracked clean-clone input without a
+- [x] `dagger call self-check` passes from tracked clean-clone input without a
       pre-existing generated SDK or a manual `dagger develop`, and live OCI
       acceptance has a stable project-controlled trusted-TLS endpoint plus
       bounded, side-effect-safe retry and failure-classification tests.
-- [ ] Root docs, both sites, schemas, provenance, Action/module examples, tag,
+- [x] Root docs, both sites, schemas, provenance, Action/module examples, tag,
       GitHub Release, and live Pages agree on `v0.8.1`.
 - [x] All `v0.8.0` and older published artifacts remain immutable.
