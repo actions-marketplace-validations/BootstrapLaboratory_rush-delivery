@@ -67,6 +67,12 @@ Delivery project.
 13. [Release Metadata](13-release-metadata.md)
 14. [Package Release Workflow](14-package-release-workflow.md)
 
+For an opt-in, production-oriented OCI image path, continue with the
+[OCI Application Images tutorial](oci-application-images/README.md). It starts
+from a minimal Rush repository and covers credential-free planning, GHCR and
+Cosign bootstrap, digest-only deployment, GitHub Actions, split-stage handoff,
+and rollback.
+
 ## The Deployment Example Repository
 
 The deployment example has three Rush projects:

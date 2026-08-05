@@ -26,11 +26,22 @@ scratch image, and verifies the digest manifest and evidence:
 test/scripts/run-oci-acceptance.sh
 ```
 
-The acceptance script requires Dagger and Docker only to create its temporary
-Cosign keypair; framework image build and publication still run through Dagger.
+The acceptance script requires Dagger but no host Docker or Podman CLI, socket,
+or daemon. It creates temporary Cosign material and performs framework image
+build/publication through Dagger.
 The Package implementation pins Syft 1.50.0, Grype 0.116.1, and Cosign 3.1.2 by
 immutable image digest. Update each version and digest together, then rerun the
 unit, Dagger self-check, and live acceptance paths.
+
+Every public Dagger function must declare an intentional cache scope. Calls that
+observe mutable external state, execute project code, or create side effects use
+`cache: "never"`; inspection-only functions may use session caching. Because
+that setting does not disable container layer caching, Cosign preflight and
+publication, Grype scans, Deploy scripts, and npm release also receive a fresh
+non-secret execution input. Keep those checks aligned with Dagger's official
+[function-caching](https://docs.dagger.io/extending/function-caching/) and
+[secret-handling](https://docs.dagger.io/extending/secrets/) guidance. Never
+write raw or derived credentials into a container filesystem layer.
 
 ## Website Checks
 
@@ -38,6 +49,14 @@ The public GitHub Pages site currently builds from
 [`../website-docusaurus`](../website-docusaurus). It uses Docusaurus, generates
 docs pages from `website-docusaurus/docs-tree.yaml`, and is deployed by
 [`../.github/workflows/pages.yml`](../.github/workflows/pages.yml).
+
+The two sites have independent lockfiles and are not root Yarn workspaces. From
+a clean checkout, install each site exactly before running its checks:
+
+```sh
+npm ci --prefix website
+npm ci --prefix website-docusaurus
+```
 
 ```sh
 npm run site:docusaurus:check
@@ -62,10 +81,10 @@ docs. When adding or renaming public docs pages, update both:
 Schemas under [`../schemas`](../schemas) are copied into the static site during
 website builds and are published under `/rush-delivery/schemas/`. Exact release
 schemas also live under versioned subdirectories such as
-`/rush-delivery/schemas/v0.8.0/`.
+`/rush-delivery/schemas/v0.8.1/`.
 
 When releasing a version that changes schema behavior, create a new versioned
-schema snapshot such as `schemas/v0.8.0`, keep earlier directories immutable,
+schema snapshot such as `schemas/v0.8.1`, keep earlier directories immutable,
 and update the root schemas to the current release shape.
 
 ## Versioned Docusaurus Docs

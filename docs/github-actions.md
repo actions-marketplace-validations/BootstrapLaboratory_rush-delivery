@@ -28,7 +28,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
         with:
           entrypoint: validate
           toolchain-image-provider: github
@@ -52,7 +52,7 @@ steps:
     with:
       fetch-depth: 0
 
-  - uses: BootstrapLaboratory/rush-delivery@v0.8.0
+  - uses: BootstrapLaboratory/rush-delivery@v0.8.1
     with:
       entrypoint: validate
       repo: .
@@ -77,7 +77,7 @@ steps:
       service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
   - name: Rush Delivery
-    uses: BootstrapLaboratory/rush-delivery@v0.8.0
+    uses: BootstrapLaboratory/rush-delivery@v0.8.1
     with:
       force-targets-json: ${{ inputs.force_targets_json || '[]' }}
       deploy-tag-prefix: ${{ env.DEPLOY_TAG_PREFIX }}
@@ -88,18 +88,12 @@ steps:
       toolchain-image-policy: ${{ env.TOOLCHAIN_IMAGE_POLICY }}
       rush-cache-provider: ${{ env.RUSH_CACHE_PROVIDER }}
       rush-cache-policy: ${{ env.RUSH_CACHE_POLICY }}
-      application-image-provider: release
       release-targets-json: '["npm"]'
       runtime-file-map: |
         ${{ steps.auth.outputs.credentials_file_path }}=>gcp-credentials.json
       release-env: |
         NPM_TOKEN=${{ secrets.NPM_TOKEN }}
       deploy-env: |
-        OCI_USERNAME=${{ secrets.OCI_USERNAME }}
-        OCI_TOKEN=${{ secrets.OCI_TOKEN }}
-        OCI_SIGNING_KEY=${{ secrets.OCI_SIGNING_KEY }}
-        OCI_SIGNING_PASSWORD=${{ secrets.OCI_SIGNING_PASSWORD }}
-        OCI_SIGNING_PUBLIC_KEY=${{ vars.OCI_SIGNING_PUBLIC_KEY }}
         GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
         GCP_ARTIFACT_REGISTRY_REPOSITORY=${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}
         CLOUD_RUN_SERVICE=${{ vars.CLOUD_RUN_SERVICE }}
@@ -128,6 +122,17 @@ default. Set `include-github-env: "false"` if you want to provide those values
 yourself. `deploy-env` and `release-env` may repeat workflow values only when
 the value is identical.
 
+When deploy-tag updates are enabled, `GITHUB_API_URL` must be an absolute,
+credential-free HTTPS base. GitHub Enterprise paths such as
+`https://github.example.com/api/v3` are supported; embedded userinfo, HTTP,
+query strings, and fragments are rejected before the bearer token is sent.
+Failures report only the fixed action and HTTP status, never the remote response
+body, because an endpoint could reflect authorization material.
+
+This release example is filesystem-first: it does not select an
+application-image provider and does not require OCI registry or Cosign
+credentials.
+
 ## OCI Application Images
 
 Set `application-image-provider` to a provider declared in
@@ -142,15 +147,22 @@ Store multiline PEM values with literal `\n` separators. Do not put registry or
 signing values in `runtime-file-map`: deploy scripts receive only the verified
 digest reference and target-scoped evidence.
 
-OCI image builds and publication are Dagger-native. The action's
-`docker-socket` compatibility input is not needed for them. Registry-specific
-login steps are also unnecessary when the metadata-selected username/token can
-push to the configured registry.
+OCI image builds and publication are Dagger-native. Set `docker-socket: ""` in
+OCI-only Action jobs; the non-empty Action default exists only for legacy
+project deploy scripts that invoke Docker. A mounted host socket gives that
+project code effective control of the runner's Docker daemon and can bypass
+Dagger workspace and secret-file isolation by mounting host paths. Keep it only
+for trusted legacy deploy scripts, never untrusted checkout code.
+Registry-specific login steps are also unnecessary when the metadata-selected
+username/token can push to the configured registry.
 
 Dry runs may leave `application-image-provider: off`, or select a named provider
-to validate the planned repository without resolving its credentials. See
-[OCI application images](oci-application-images.md) for the metadata and
-failure model.
+to validate the planned repository without resolving its credentials. Build
+the metadata and CI path with the
+[OCI application images tutorial](tutorial/oci-application-images/README.md),
+then use the [production guide](oci-application-images.md),
+[registry recipes](oci-registry-recipes.md), and
+[troubleshooting guide](oci-application-image-troubleshooting.md).
 
 ## Package Release
 
@@ -181,7 +193,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -240,8 +252,12 @@ steps where an output is intentionally blank for some target selections.
 ```yaml
 runtime-file-map: |
   ${{ steps.auth.outputs.credentials_file_path }}=>gcp-credentials.json
-  ${{ steps.signing.outputs.key_path }}=>signing/key.json
 ```
+
+Use runtime files only for deploy-platform inputs. OCI registry tokens, Cosign
+private keys, signing passwords, and Cosign public keys belong in
+`workflow-env` or `deploy-env` under the names declared by the selected
+application-image provider; Rush Delivery exposes them only to Package.
 
 Deploy target metadata can mount those files with:
 
@@ -259,7 +275,7 @@ The action mode does not replace raw Dagger usage. Local runs, other CI
 providers, and lower-level debugging can still call the module directly:
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.8.0 call workflow \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.8.1 call workflow \
   --git-sha="$GITHUB_SHA" \
   --source-mode=git \
   --source-repository-url="$SOURCE_REPOSITORY_URL" \

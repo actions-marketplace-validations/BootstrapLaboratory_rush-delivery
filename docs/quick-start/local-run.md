@@ -5,7 +5,7 @@ available to Dagger and avoids relying on a remote Git ref that does not contain
 your latest changes.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.1
 
 dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
   --repo=. \
@@ -62,3 +62,8 @@ to them from target metadata.
 
 For deployment and release metadata, see [Metadata contracts](../metadata.md).
 For workflow shape and release behavior, see the [Workflow Guide](../workflows.md).
+For OCI-specific local planning and live rollout, use the
+[OCI application images tutorial](../tutorial/oci-application-images/README.md),
+[production guide](../oci-application-images.md),
+[registry recipes](../oci-registry-recipes.md), and
+[troubleshooting guide](../oci-application-image-troubleshooting.md).

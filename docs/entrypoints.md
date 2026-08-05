@@ -4,7 +4,7 @@ When consuming this module from CI, prefer Git source mode so Dagger clones the
 Rush repository internally:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/OWNER/rush-delivery@VERSION
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.1
 ```
 
 ## `workflow`
@@ -22,7 +22,6 @@ dagger -m "$RUSH_DELIVERY_MODULE" call workflow \
   --dry-run=false \
   --workflow-env-file="$WORKFLOW_ENV_FILE" \
   --deploy-env-file="$DEPLOY_ENV_FILE" \
-  --application-image-provider=release \
   --release-targets-json='["npm"]' \
   --release-env-file="$RELEASE_ENV_FILE" \
   --runtime-files="$RUNTIME_FILES_DIR" \
@@ -146,7 +145,11 @@ when you want build-time env to use package target `dry_run_defaults`.
 Materializes deploy artifacts for targets selected by a CI plan file. Package
 behavior is driven by `.dagger/package/targets`.
 
-Use it only in split-stage workflows after build outputs already exist.
+Use it only in split-stage workflows after build outputs already exist. Treat
+that built directory and its provider/deploy metadata as trusted Package input:
+this entrypoint can freeze only the credential-name boundary present when it is
+invoked. Prefer `build-and-package-deploy-targets` when Build could modify
+metadata, because the combined producer captures the boundary before Build.
 
 ```sh
 dagger -m "$RUSH_DELIVERY_MODULE" call package-deploy-targets \
@@ -157,7 +160,7 @@ dagger -m "$RUSH_DELIVERY_MODULE" call package-deploy-targets \
   --source-repository-url="$SOURCE_REPOSITORY_URL" \
   --dry-run=false \
   --deploy-env-file="$DEPLOY_ENV_FILE" \
-  --application-image-provider=release
+  --application-image-provider=off
 ```
 
 Returns a Dagger directory containing packaged artifacts, a package manifest,
@@ -181,13 +184,19 @@ dagger -m "$RUSH_DELIVERY_MODULE" call build-and-package-deploy-targets \
   --deploy-env-file="$DEPLOY_ENV_FILE" \
   --git-sha="$GIT_SHA" \
   --source-repository-url="$SOURCE_REPOSITORY_URL" \
-  --application-image-provider=release
+  --application-image-provider=off
 ```
 
 Returns a Dagger directory containing packaged artifacts and a package manifest.
 For OCI targets, Package performs registry publication and carries the verified
 manifest/evidence into the returned directory; Deploy later resolves the image
 from the registry by digest.
+
+The commands above are filesystem-first examples. For a live OCI target,
+configure the package target and application-image provider together, then
+replace `off` with that provider name. Follow the
+[OCI application images tutorial](tutorial/oci-application-images/README.md)
+before using the lower-level split-stage APIs.
 
 ## `deploy-release`
 
@@ -248,6 +257,11 @@ dagger -m "$RUSH_DELIVERY_MODULE" call describe-release-targets \
 ```
 
 Returns a short text description.
+
+For OCI-specific package/deploy behavior, use the
+[production guide](oci-application-images.md),
+[registry recipes](oci-registry-recipes.md), and
+[troubleshooting guide](oci-application-image-troubleshooting.md).
 
 ## `ping`
 
