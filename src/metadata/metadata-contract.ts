@@ -53,6 +53,8 @@ import {
   releaseMetadataDirectory,
 } from "../stages/release/metadata-paths.ts";
 import { parseNpmRelease } from "../stages/release/parse-npm-release.ts";
+import { rushToolchainPath } from "../rush-toolchain/metadata-paths.ts";
+import { parseRushToolchain } from "../rush-toolchain/parse.ts";
 
 type RepositoryPathType = "directory" | "file";
 
@@ -293,6 +295,23 @@ async function validateToolchainImageProviderMetadata(
     toolchainImageProvidersPath,
     "Toolchain image provider metadata file",
     parseToolchainImageProviders,
+    issues,
+  );
+}
+
+async function validateRushToolchainMetadata(
+  repository: MetadataContractRepository,
+  issues: string[],
+): Promise<void> {
+  if (!(await repository.exists(rushToolchainPath, "file"))) {
+    return;
+  }
+
+  await readParsed(
+    repository,
+    rushToolchainPath,
+    "Rush toolchain metadata file",
+    parseRushToolchain,
     issues,
   );
 }
@@ -742,6 +761,7 @@ export async function validateMetadataContractRepository(
   );
   const toolchainImageProviders =
     await validateToolchainImageProviderMetadata(repository, issues);
+  await validateRushToolchainMetadata(repository, issues);
   const releaseMetadata = await validateReleaseMetadata(
     repository,
     issues,

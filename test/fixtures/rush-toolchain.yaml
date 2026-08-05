@@ -1,0 +1,10 @@
+version: rush-delivery-rush-toolchain/v1
+base_image: node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
+platform: linux/amd64
+downloads:
+  - url: https://github.com/astral-sh/uv/releases/download/0.12.2/uv-x86_64-unknown-linux-gnu.tar.gz
+    sha256: d66e96b5f1ca3b99806eee283a8125d33a0bd669e6e6d9bc4ab7ffda63c41bf4
+    format: tar_gz
+    archive_path: uv-x86_64-unknown-linux-gnu/uv
+    destination: /usr/local/bin/uv
+    mode: "0755"

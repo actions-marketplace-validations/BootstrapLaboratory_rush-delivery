@@ -188,6 +188,23 @@ test("application provider schema matches coordinate XOR combinations", async ()
   }
 });
 
+test("Rush toolchain fixture satisfies its strict root schema", async () => {
+  const schema = (await readJson("schemas/rush-toolchain.schema.json")) as AnySchema;
+  const validate = new Ajv2020({ allErrors: true }).compile(schema);
+  const fixture = parseYaml(
+    await readFile(path.join(testDirectory, "fixtures/rush-toolchain.yaml"), "utf8"),
+  );
+
+  assert.equal(validate(fixture), true, formatSchemaErrors(validate.errors));
+  for (const mutation of [
+    { ...fixture, command: "curl" },
+    { ...fixture, base_image: "node:24-bookworm-slim" },
+    { ...fixture, platform: "linux/arm64" },
+  ]) {
+    assert.equal(validate(mutation), false);
+  }
+});
+
 test("OCI package target schema requires a safe evidence target and normalized paths", async () => {
   const schema = (await readJson(
     "schemas/package-target.schema.json",

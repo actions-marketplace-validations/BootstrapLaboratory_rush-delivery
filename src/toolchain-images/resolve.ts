@@ -14,6 +14,8 @@ import {
   shouldPublishToolchainImage,
 } from "./resolve-plan.ts";
 import { toolchainImageName, toolchainImageTag } from "./spec.ts";
+import { CONFIGURED_RUSH_TOOLCHAIN_IMAGE_SPEC_VERSION } from "./spec.ts";
+import { buildConfiguredRushToolchainContainer } from "../rush-toolchain/build.ts";
 
 export type ResolveToolchainImageOptions = {
   hostEnv?: Record<string, string>;
@@ -47,7 +49,13 @@ function requireHostEnv(
   return value;
 }
 
-function buildToolchainContainer(spec: ToolchainImageSpec): Container {
+async function buildToolchainContainer(
+  spec: ToolchainImageSpec,
+): Promise<Container> {
+  if (spec.version === CONFIGURED_RUSH_TOOLCHAIN_IMAGE_SPEC_VERSION) {
+    return buildConfiguredRushToolchainContainer(spec);
+  }
+
   let container = dag.container().from(spec.baseImage);
 
   if (spec.install.length > 0) {
@@ -65,6 +73,15 @@ export async function resolveToolchainImage(
 
   switch (provider) {
     case "off":
+      if (spec.version === CONFIGURED_RUSH_TOOLCHAIN_IMAGE_SPEC_VERSION) {
+        return {
+          container: await buildToolchainContainer(spec),
+          image: spec.baseImage,
+          install: [],
+          prebuilt: true,
+          provider,
+        };
+      }
       return resolveOffToolchainImage(spec);
     case "github":
       return resolveGithubToolchainImage(spec, options);
@@ -132,7 +149,7 @@ async function resolveGithubToolchainImage(
       `[toolchain-images] building ${reference.reference}${publish ? "" : " locally"}`,
     );
 
-    let builtContainer = buildToolchainContainer(spec);
+    let builtContainer = await buildToolchainContainer(spec);
 
     if (publish) {
       builtContainer = builtContainer
