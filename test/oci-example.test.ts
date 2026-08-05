@@ -231,7 +231,10 @@ test("canonical Rush bootstrap bundles remain generated and formatter-excluded",
     expectedRushBootstrapHashes,
   )) {
     const contents = await readFile(path.join(exampleRoot, relativePath));
-    assert.equal(createHash("sha256").update(contents).digest("hex"), expectedHash);
+    assert.equal(
+      createHash("sha256").update(contents).digest("hex"),
+      expectedHash,
+    );
     assert.match(
       prettierIgnore,
       new RegExp(
@@ -479,6 +482,7 @@ test("canonical Dockerfile contains only the deterministic scratch payload", asy
       "utf8",
     ),
     [
+      "# checkov:skip=CKV_DOCKER_2:Intentional non-service scratch image has no executable health endpoint",
       "FROM scratch",
       "",
       "COPY --chmod=0444 dist/payload.txt /payload.txt",

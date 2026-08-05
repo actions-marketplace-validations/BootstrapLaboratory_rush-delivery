@@ -251,7 +251,7 @@ required. Do not grant `delete:packages` to the publisher unless the same job is
 explicitly responsible for cleanup. Keep package administration and live
 publishing out of untrusted PR jobs.
 
-### Pull, retention, and cleanup
+### GHCR pull, retention, and cleanup
 
 Public GHCR packages can be pulled anonymously. For private/internal packages,
 grant the deployment repository or platform identity Read access and use a
@@ -422,7 +422,7 @@ base64 form, and protect it as a high-risk secret. Do not use a credential helpe
 as a substitute for the five provider values; Rush Delivery does not read the
 host Docker configuration.
 
-### Pull, retention, and cleanup
+### GAR pull, retention, and cleanup
 
 Grant each deployment platform the exact Artifact Registry read capability it
 actually uses. For Cloud Run, the deployer needs Artifact Registry Reader and
@@ -575,7 +575,7 @@ documents a 12-hour lifetime. `docker login` in that guide explains the wire
 credentials; Rush Delivery passes them directly and does not require the login
 command.
 
-### Pull, retention, and cleanup
+### ECR pull, retention, and cleanup
 
 Give the runtime role only ECR authorization and pull operations for the exact
 repository. Keep it distinct from the publishing role.
@@ -664,7 +664,7 @@ repository before relying on it. Do not use an account password and do not run
 `docker login` for Rush Delivery. Keep the Docker Hub username non-secret;
 Dagger may display it in registry-auth progress.
 
-### Pull, retention, and cleanup
+### Docker Hub pull, retention, and cleanup
 
 Public repositories can be pulled without a secret but remain subject to
 Docker Hub usage/rate policy. Private deployment should use a separate Read or

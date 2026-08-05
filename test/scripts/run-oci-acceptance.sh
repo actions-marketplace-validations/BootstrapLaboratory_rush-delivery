@@ -44,29 +44,37 @@ cleanup() {
 
 	if [[ ${cleanup_registered} == true && -n ${cleanup_hook} ]]; then
 		diagnostic_cleanup_state=pending
-		if ! oci_acceptance_run_cleanup_hook \
+		set +e
+		oci_acceptance_run_cleanup_hook \
 			"${cleanup_hook}" \
 			"${registry}" \
 			"${repository_prefix}" \
 			"${cleanup_package_suffixes}" \
 			"${cleanup_github_token}" \
 			"${username}" \
-			"${token}"; then
+			"${token}"
+		local cleanup_hook_status=$?
+		set -e
+		if ((cleanup_hook_status != 0)); then
 			printf 'OCI acceptance infrastructure [registry-cleanup]: disposable namespace cleanup failed; inspect the configured endpoint before retrying\n' >&2
 			cleanup_failed=true
 			diagnostic_cleanup_state=failed
 			if ((original_status == 0)); then
-				diagnostic_failure_class=registry-cleanup
+				diagnostic_failure_class="registry-cleanup"
 			fi
 		else
 			diagnostic_cleanup_state=succeeded
 		fi
 	fi
 
-	if ! oci_acceptance_cleanup_tree "${OCI_ACCEPTANCE_TEMP_ROOT}" "${OCI_ACCEPTANCE_TEMP}"; then
+	set +e
+	oci_acceptance_cleanup_tree "${OCI_ACCEPTANCE_TEMP_ROOT}" "${OCI_ACCEPTANCE_TEMP}"
+	local cleanup_tree_status=$?
+	set -e
+	if ((cleanup_tree_status != 0)); then
 		cleanup_failed=true
 		if ((original_status == 0)); then
-			diagnostic_failure_class=temp-cleanup
+			diagnostic_failure_class="temp-cleanup"
 		fi
 	fi
 
@@ -81,14 +89,20 @@ cleanup() {
 		diagnostic_outcome=failed
 	fi
 
-	if [[ -n ${diagnostic_path} ]] && ! oci_acceptance_write_diagnostic \
-		"${diagnostic_path}" \
-		"${diagnostic_outcome}" \
-		"${diagnostic_failure_class}" \
-		"${diagnostic_mutation_state}" \
-		"${diagnostic_cleanup_state}"; then
-		printf 'OCI acceptance infrastructure: failed to write the controlled diagnostic artifact\n' >&2
-		original_status=1
+	if [[ -n ${diagnostic_path} ]]; then
+		set +e
+		oci_acceptance_write_diagnostic \
+			"${diagnostic_path}" \
+			"${diagnostic_outcome}" \
+			"${diagnostic_failure_class}" \
+			"${diagnostic_mutation_state}" \
+			"${diagnostic_cleanup_state}"
+		local diagnostic_write_status=$?
+		set -e
+		if ((diagnostic_write_status != 0)); then
+			printf 'OCI acceptance infrastructure: failed to write the controlled diagnostic artifact\n' >&2
+			original_status=1
+		fi
 	fi
 
 	exit "${original_status}"
@@ -114,7 +128,11 @@ require_command tar
 require_command timeout
 
 diagnostic_failure_class=node-runtime
-if ! oci_acceptance_node_runtime_ready; then
+set +e
+oci_acceptance_node_runtime_ready
+node_runtime_status=$?
+set -e
+if ((node_runtime_status != 0)); then
 	printf 'OCI acceptance infrastructure [node-runtime]: pinned Node.js 24 with built-in zstd support is required\n' >&2
 	exit 1
 fi
@@ -208,11 +226,15 @@ if [[ ! ${username} =~ ^[A-Za-z0-9_.@-]+$ ]]; then
 	exit 1
 fi
 
-if ! oci_acceptance_retry_read \
+set +e
+oci_acceptance_retry_read \
 	"${probe_attempts}" \
 	"${probe_delay_seconds}" \
-	oci_acceptance_registry_ready "${registry}"; then
-	diagnostic_failure_class=registry-readiness
+	oci_acceptance_registry_ready "${registry}"
+registry_readiness_status=$?
+set -e
+if ((registry_readiness_status != 0)); then
+	diagnostic_failure_class="registry-readiness"
 	printf 'OCI acceptance infrastructure [registry-transport]: trusted-TLS registry readiness failed after bounded retries\n' >&2
 	exit 1
 fi
@@ -390,10 +412,14 @@ verify_published_evidence() {
 		"container | from ${OCI_ACCEPTANCE_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${key_directory}/cosign.pub) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--key,/keys/cosign.pub,--insecure-ignore-tlog,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${published_reference} | sync"
 }
 
-if ! oci_acceptance_retry_read \
+set +e
+oci_acceptance_retry_read \
 	"${read_attempts}" \
 	"${read_delay_seconds}" \
-	verify_published_evidence; then
+	verify_published_evidence
+published_evidence_status=$?
+set -e
+if ((published_evidence_status != 0)); then
 	oci_acceptance_assert_protected_file_absent \
 		"${OCI_ACCEPTANCE_DIR}/verify-oci-acceptance.mjs" \
 		"${cosign_verification_log}" \
@@ -402,10 +428,10 @@ if ! oci_acceptance_retry_read \
 	if grep -Eqi \
 		'connection (refused|reset)|context deadline|dial tcp|i/o timeout|network is unreachable|no such host|TLS handshake timeout|unexpected EOF' \
 		"${cosign_verification_log}"; then
-		diagnostic_failure_class=registry-immutable-read
+		diagnostic_failure_class="registry-immutable-read"
 		printf 'OCI acceptance infrastructure [registry-immutable-read]: independent Cosign verification could not read the immutable subject after bounded retries\n' >&2
 	else
-		diagnostic_failure_class=verification-contract
+		diagnostic_failure_class="verification-contract"
 		printf 'OCI acceptance [verification-contract]: independent Cosign verification rejected the subject signature or required attestations\n' >&2
 	fi
 	exit 1
@@ -443,7 +469,7 @@ if ((image_export_status != 0)); then
 		"${image_export_log}" \
 		"${deploy_env}" \
 		"${docker_config}"
-	diagnostic_failure_class=registry-immutable-read
+	diagnostic_failure_class="registry-immutable-read"
 	printf 'OCI acceptance infrastructure [registry-immutable-read]: published digest could not be exported after bounded retries\n' >&2
 	exit 1
 fi
@@ -457,6 +483,8 @@ oci_acceptance_assert_protected_file_absent \
 deploy_result="${OCI_ACCEPTANCE_TEMP}/deploy-result.json"
 deploy_log="${OCI_ACCEPTANCE_TEMP}/deploy.log"
 set +e
+# Expansion belongs to the nested Bash process.
+# shellcheck disable=SC2016
 oci_acceptance_run_with_timeout \
 	"${deploy_timeout_seconds}" \
 	"${deploy_log}" \
