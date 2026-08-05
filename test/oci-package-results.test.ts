@@ -234,7 +234,7 @@ test("finalization failure reports completed, failed, and skipped targets", asyn
           `Earlier published target "api": ${digestA}`,
           `Failed target "worker" published reference: ${digestB}`,
           'Later target "web" was not started.',
-          "OCI publication is nontransactional. Inspect the registry and clean up any published digest and referrer artifacts before retrying.",
+          "OCI publication is nontransactional. Inspect the registry and clean up any published digest, signature, and attestation artifacts before retrying.",
         ].join("\n"),
       );
       return true;

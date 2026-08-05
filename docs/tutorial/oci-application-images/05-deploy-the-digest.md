@@ -141,8 +141,9 @@ control-plane-api accepted immutable image: ghcr.io/<owner>/rush-delivery-tutori
 
 ## Publication Identity Versus Pull Identity
 
-The Package username/token writes the image and referrers. Those credentials
-never reach Deploy. `ARTIFACT_IMAGE_REFERENCE` identifies the published subject
+The Package username/token writes the subject plus its digest-derived Cosign
+signature/attestation attachments. Those credentials never reach Deploy.
+`ARTIFACT_IMAGE_REFERENCE` identifies the published subject
 but grants no access to it. Kubernetes image-pull credentials, Swarm node
 credentials, or the equivalent platform control plane must independently
 receive least-privilege access to the private repository. Cloud Run is a

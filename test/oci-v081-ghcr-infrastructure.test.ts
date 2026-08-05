@@ -154,6 +154,19 @@ test("tracked GHCR matrix infrastructure is executable, pinned, and wired for al
     await readFile(inventoryHook, "utf8"),
     new RegExp(pinnedCosign.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"),
   );
+  const inventorySource = await readFile(inventoryHook, "utf8");
+  assert.match(
+    inventorySource,
+    /cosign,verify,--new-bundle-format=false,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog/,
+  );
+  assert.match(
+    inventorySource,
+    /cosign,verify-attestation,--new-bundle-format=false,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog,--type,spdxjson/,
+  );
+  assert.match(
+    inventorySource,
+    /cosign,verify-attestation,--new-bundle-format=false,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog,--type,slsaprovenance1/,
+  );
   assert.match(
     await readFile(profileScript, "utf8"),
     new RegExp(pinnedCosign.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"),
@@ -209,12 +222,6 @@ test("GHCR evidence planner binds subject tags, API order, verification, and cle
               metadata: { container: { tags: [] } },
               name: `sha256:${String(index + 8).repeat(64)}`,
             },
-            {
-              created_at: `2026-08-05T00:00:3${index}Z`,
-              id: 400 + index,
-              metadata: { container: { tags: [] } },
-              name: `sha256:${(index + 9).toString(16).repeat(64)}`,
-            },
           ],
         ])}\n`,
       );
@@ -248,8 +255,6 @@ test("GHCR evidence planner binds subject tags, API order, verification, and cle
         "control-plane-api",
         "control-plane-api",
         "control-plane-api",
-        "control-plane-api",
-        "matrix-worker",
         "matrix-worker",
         "matrix-worker",
         "matrix-worker",
@@ -261,9 +266,7 @@ test("GHCR evidence planner binds subject tags, API order, verification, and cle
         "subject-published",
         "package-version-present",
         "package-version-present",
-        "package-version-present",
         "subject-published",
-        "package-version-present",
         "package-version-present",
         "package-version-present",
       ],
@@ -272,10 +275,10 @@ test("GHCR evidence planner binds subject tags, API order, verification, and cle
       Record<string, unknown>
     >) {
       assert.equal(repository.publication_count, 1);
-      assert.equal(repository.package_version_count, 4);
+      assert.equal(repository.package_version_count, 3);
       assert.equal(
         (repository.versions as Array<Record<string, unknown>>).length,
-        4,
+        3,
       );
       assert.equal(repository.signature_verified, true);
       assert.equal(repository.spdx_attestation_verified, true);
@@ -328,7 +331,6 @@ test("GHCR evidence planner binds subject tags, API order, verification, and cle
     assert.deepEqual(
       orderedEvidence.events.map(({ target }: { target: string }) => target),
       [
-        "control-plane-api",
         "control-plane-api",
         "control-plane-api",
         "control-plane-api",
@@ -448,6 +450,27 @@ test("GHCR zero and skipped assertions reject every untagged or referrer package
         /unexpectedly contains a package version/u,
       );
     }
+
+    await writeFile(
+      path.join(snapshots, "0.json"),
+      `${JSON.stringify([
+        completedVersions(subjectVersion(303, "c")).slice(0, 2),
+      ])}\n`,
+    );
+    await assert.rejects(
+      execFileAsync("node", [
+        evidenceTool,
+        "inventory-plan",
+        "success",
+        "ghcr.io",
+        namespace,
+        "control-plane-api",
+        snapshots,
+        path.join(temporaryRoot, "incomplete-cosign-inventory.json"),
+        path.join(temporaryRoot, "incomplete-cosign-verification.json"),
+      ]),
+      /signature and attestation package versions/u,
+    );
 
     await Promise.all([
       writeFile(

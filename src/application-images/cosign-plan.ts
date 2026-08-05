@@ -222,8 +222,13 @@ export function classifyCosignPreflightExitCode(
 export function buildCosignPublicationCommandPlan(
   imageReference: string,
 ): CosignCommandStep<CosignPublicationStage>[] {
-  const signingArgs = ["--key", PRIVATE_KEY_REFERENCE];
+  const signingArgs = [
+    "--new-bundle-format=false",
+    "--key",
+    PRIVATE_KEY_REFERENCE,
+  ];
   const verificationArgs = [
+    "--new-bundle-format=false",
     "--key",
     PUBLIC_KEY_REFERENCE,
     "--insecure-ignore-tlog",

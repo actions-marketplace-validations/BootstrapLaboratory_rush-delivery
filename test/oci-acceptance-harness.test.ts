@@ -1436,7 +1436,15 @@ test("OCI acceptance never retries mutating calls and independently verifies sig
   assert.match(source, /with-mounted-secret \/keys\/cosign\.pub.+secret file:/);
   assert.match(
     source,
-    /cosign,verify,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog/,
+    /cosign,verify,--new-bundle-format=false,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog/,
+  );
+  assert.match(
+    source,
+    /cosign,verify-attestation,--new-bundle-format=false,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog,--type,spdxjson/,
+  );
+  assert.match(
+    source,
+    /cosign,verify-attestation,--new-bundle-format=false,--key,\/keys\/cosign\.pub,--insecure-ignore-tlog,--type,slsaprovenance1/,
   );
   assert.match(source, /cosign,verify-attestation.+--type,spdxjson/);
   assert.match(source, /cosign,verify-attestation.+--type,slsaprovenance1/);

@@ -43,7 +43,7 @@ verify_reference() {
 	}
 	for attempt in 1 2 3; do
 		if DAGGER_NO_NAG=1 dagger --silent -c \
-			"container | from ${OCI_V081_GHCR_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config_file}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${public_key_file}) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--key,/keys/cosign.pub,--insecure-ignore-tlog,${reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${reference} | sync" \
+			"container | from ${OCI_V081_GHCR_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config_file}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${public_key_file}) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,${reference} | with-exec --args=/ko-app/cosign,verify-attestation,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${reference} | with-exec --args=/ko-app/cosign,verify-attestation,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${reference} | sync" \
 			>"${verification_log}" 2>&1; then
 			find "${verification_log}" -maxdepth 0 -type f -delete
 			return 0

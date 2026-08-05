@@ -453,11 +453,32 @@ Signing, challenge signing, and both attestations use
 `--use-signing-config=false` to pin the explicit offline key flow and
 `--tlog-upload=false` to disable transparency-log upload. Signature and
 attestation verification use the configured key with
-`--insecure-ignore-tlog`. This private-registry-friendly mode proves that the
-configured key verified the digest-bound subject signature and the required
-attestations during Package. It does not prove Rekor inclusion, keyless workload
-identity, public transparency, trusted timestamping, public auditability, or a
-new cryptographic verification during Deploy.
+`--insecure-ignore-tlog`.
+
+All six registry commands (sign, two attestations, signature verification, and
+two attestation verifications) also pin `--new-bundle-format=false`. With the
+pinned Cosign `3.1.2`, this deliberately selects digest-derived legacy `.sig`
+and `.att` tag attachments rather than the OCI 1.1 Referrers API. The two
+attestations share the current `.att` image: the second operation reads the
+existing attachment, appends provenance, and writes the combined attachment.
+A registry may retain the superseded first-attestation manifest as an untagged
+historical version, so object counts are inventory—not proof of completeness.
+Package verifies the signature and each attestation type independently. This
+flag does not apply to the local preflight challenge bundle, enable legacy
+Docker media types, or permit insecure transport.
+
+The compatibility mode is pinned to Cosign `3.1.2`; that CLI marks the flag as
+deprecated. A future Cosign upgrade must re-prove the flag contract, registry
+storage behavior, cleanup, and live acceptance before changing the pin. Do not
+run concurrent Package finalization or key rotation for the same digest: the
+shared `.att` attachment is a read/append/write object. Serialize publishers for
+one subject to avoid lost updates or mixed-key verification failures.
+
+This private-registry-friendly mode proves that the configured key verified the
+digest-bound subject signature and the required attestations during Package. It
+does not prove Rekor inclusion, keyless workload identity, public transparency,
+trusted timestamping, public auditability, or a new cryptographic verification
+during Deploy.
 
 ### Dagger execution and caching
 
@@ -501,8 +522,8 @@ lookup, not a portable address for a standalone signature object.
 | Check                                                                        | Package                                  | Deploy                                                    | Operator/platform                                                                          |
 | ---------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Registry returned a lowercase digest for the expected repository             | Yes                                      | Rechecks manifest agreement only                          | Retain that digest.                                                                        |
-| Subject signature is cryptographically valid under the configured public key | Yes, with Cosign                         | No; requires the strict `verified: true` assertion        | Retain key history and registry signature/referrers.                                       |
-| SPDX and provenance attestations are cryptographically valid                 | Yes, with Cosign                         | No; requires manifest assertions and local files          | Retain registry referrers and evidence.                                                    |
+| Subject signature is cryptographically valid under the configured public key | Yes, with Cosign                         | No; requires the strict `verified: true` assertion        | Retain key history and the registry signature attachment.                                  |
+| SPDX and provenance attestations are cryptographically valid                 | Yes, with Cosign                         | No; requires manifest assertions and local files          | Retain the combined attestation attachment and evidence.                                   |
 | Local evidence bytes match manifest SHA-256 values                           | When constructing manifest               | Yes, before any live deploy wave                          | Protect the complete bundle from coordinated replacement.                                  |
 | Artifact source revision matches release revision                            | Builds provenance/manifest from full SHA | Compares every selected OCI artifact to supplied `gitSha` | Supply the expected SHA from protected metadata outside the bundle.                        |
 | Deployment platform pulls the same image                                     | Provides digest reference                | Passes reference to project script unchanged              | Configure target-platform registry read identity and enforce digest pulls.                 |
@@ -670,8 +691,8 @@ Before the first live publication:
   has passed a pre-production live test. See
   [Registry recipes](oci-registry-recipes.md).
 - Create every required destination repository and give the publisher only
-  image/referrer push and verification-read access. Give cleanup to a separate
-  operator when practical.
+  image plus digest-derived signature/attestation tag push and verification-read
+  access. Give cleanup to a separate operator when practical.
 - Configure the target platform with a distinct pull-only identity.
 - Generate a password-protected Cosign key, protect the private key/password,
   record the public-key inventory, and test rotation and recovery.
@@ -713,13 +734,13 @@ references, but never credentials or Docker auth payloads.
 | Docker build                                                                                            | No destination mutation                                                                              | No / No                                              | Target, platform, context/Dockerfile paths, and sanitized build stage                                                     | Correct context/Dockerfile/build output and retry.                                                                                                                                             |
 | SPDX generation or structure validation                                                                 | No                                                                                                   | No / No                                              | Target, pinned Syft identity, and sanitized stage error                                                                   | Fix subject/tool availability and retry.                                                                                                                                                       |
 | Grype execution, database, report validation, or policy                                                 | No                                                                                                   | No / No                                              | Target, pinned Grype identity, database status/time, rejected IDs/severities, and sanitized error                         | Restore database availability/freshness or remediate/govern findings, then retry. Do not weaken fail-closed parsing.                                                                           |
-| Registry publish request                                                                                | Yes; outcome may be unknown after interruption                                                       | No / No                                              | Expected repository, SHA tag, target, audit/event ID, and sanitized transport class                                       | Inspect digest, deterministic SHA tag, and referrers first. Clean or retain deliberately; never automatically replay the whole Package flow.                                                   |
+| Registry publish request                                                                                | Yes; outcome may be unknown after interruption                                                       | No / No                                              | Expected repository, SHA tag, target, audit/event ID, and sanitized transport class                                       | Inspect the subject and every associated tagged or untagged package version first. Clean or retain deliberately; never automatically replay the whole Package flow.                            |
 | Returned-reference validation                                                                           | Yes                                                                                                  | No / No                                              | Expected repository/tag and sanitized returned reference shape                                                            | Treat the namespace as mutated, inspect it, and investigate registry/Dagger compatibility before retry.                                                                                        |
 | Provenance construction                                                                                 | Yes, with canonical subject known                                                                    | No / No                                              | Target, canonical subject reference, and sanitized local stage                                                            | Inspect and clean the subject/tag as policy requires; fix locally, then retry manually.                                                                                                        |
-| Cosign sign                                                                                             | Yes; subject and possibly signature exist                                                            | No / No                                              | Target, canonical subject, Cosign stage, and key-version inventory; no key bytes                                          | Inspect subject/referrers, then clean or quarantine incomplete objects before a controlled new Package attempt.                                                                                |
-| SPDX or provenance attestation                                                                          | Yes; earlier signature/attestation may exist                                                         | No / No                                              | Target, canonical subject, failed attestation kind, and referrer inventory                                                | Discover every referrer, then apply provider cleanup/retention policy before retry.                                                                                                            |
-| Signature or attestation verification                                                                   | Yes; all objects may exist but are not accepted                                                      | No / No                                              | Target, canonical subject, verification kind, key-version inventory, and sanitized failure                                | Preserve failure evidence, inspect keys/referrers, and clean or quarantine before retry.                                                                                                       |
-| Local evidence hashing/finalization                                                                     | Yes; the subject and all verified Cosign objects may exist                                           | No / No                                              | Target, canonical subject, evidence kind/path, and sanitized local stage; no evidence contents unless separately reviewed | Inspect the subject/referrers, diagnose local Dagger/evidence handling, and clean or quarantine before a controlled retry.                                                                     |
+| Cosign sign                                                                                             | Yes; subject and possibly signature exist                                                            | No / No                                              | Target, canonical subject, Cosign stage, and key-version inventory; no key bytes                                          | Inspect the subject, attachment tags, and all package versions, then clean or quarantine incomplete objects before a controlled new Package attempt.                                           |
+| SPDX or provenance attestation                                                                          | Yes; earlier signature/attestation may exist                                                         | No / No                                              | Target, canonical subject, failed attestation kind, and complete package-version inventory                                | Inventory the `.sig`/`.att` attachments plus untagged history, then apply provider cleanup/retention policy before retry.                                                                      |
+| Signature or attestation verification                                                                   | Yes; all objects may exist but are not accepted                                                      | No / No                                              | Target, canonical subject, verification kind, key-version inventory, and sanitized failure                                | Preserve failure evidence, inspect keys and all associated package versions, and clean or quarantine before retry.                                                                             |
+| Local evidence hashing/finalization                                                                     | Yes; the subject and all verified Cosign objects may exist                                           | No / No                                              | Target, canonical subject, evidence kind/path, and sanitized local stage; no evidence contents unless separately reviewed | Inspect the subject and associated package versions, diagnose local Dagger/evidence handling, and clean or quarantine before a controlled retry.                                               |
 | Later target finalization                                                                               | Earlier siblings may be fully published; failed target may be partial; later targets are not started | No / No                                              | Stable earlier/failed/later target sets and canonical references supplied by the sanitized report                         | Inspect every earlier/failed target. Never assume batch rollback occurred.                                                                                                                     |
 | Manifest parsing, source SHA, planned-live, repository/reference, path, or evidence-integrity preflight | No new mutation; prior Package objects remain                                                        | Existing supplied bundle only / No target starts     | External bundle identity/checksum, expected SHA, target, non-secret manifest field/path, and evidence digest              | Restore the correct trusted bundle and expected SHA. Do not edit the manifest to force acceptance.                                                                                             |
 | Deploy execution                                                                                        | Registry objects and manifest already exist; deployment-platform side effects may occur              | Yes / Current and earlier wave work may have started | Target/wave, digest reference, deployment event ID, and sanitized script/platform status                                  | Inspect the target platform before retry. Reuse the same digest; do not rebuild or retag as “rollback.”                                                                                        |
@@ -727,7 +748,7 @@ references, but never credentials or Docker auth payloads.
 Only bounded, side-effect-free readiness/capability probes and immutable reads
 are candidates for automatic retry. A transport failure after a publish request
 may have crossed the mutation boundary. Classify it as unknown/partial, inspect
-the unique repository namespace and referrers, then decide cleanup or manual
+the unique repository namespace and all associated package versions, then decide cleanup or manual
 retry.
 
 ## Trusted Split-Stage Handoff And Rollback
@@ -743,7 +764,7 @@ bundle. Persisting only the manifest is insufficient.
    identity and the original full Git SHA in protected metadata outside the
    unsigned archive.
 4. Upload the archive atomically to access-controlled immutable storage. Retain
-   it for the same window as the image digest and registry referrers.
+   it for the same window as the image digest and Cosign attachment artifacts.
 5. In the protected consumer job, download to a staging location, verify the
    externally recorded checksum before extraction, inspect member/link safety,
    extract into a new directory, and atomically promote the restored tree.
@@ -808,8 +829,10 @@ automatic deletion.
 - No public custom-CA or insecure-registry option. The destination must be
   reachable with trusted TLS from Dagger and Cosign.
 - Registry support must include image push, a returned digest, and storage and
-  retrieval of the Cosign signature and both attestations. OCI conformance alone
-  does not prove the complete Rush Delivery path; test the exact service.
+  retrieval of Cosign's digest-derived `.sig` and `.att` tag attachments. The
+  OCI 1.1 Referrers API is neither required nor exercised in `v0.8.1`. OCI
+  conformance alone does not prove the complete Rush Delivery path; test the
+  exact service.
 - No framework-owned Cloud Run, Kubernetes, Swarm, or other vendor deployment.
   Project Deploy code owns platform rollout and pull authentication.
 - No automatic deletion or transactional registry rollback.

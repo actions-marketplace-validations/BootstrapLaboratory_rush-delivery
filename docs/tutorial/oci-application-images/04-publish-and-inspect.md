@@ -11,7 +11,8 @@ packaged directory only after every selected target succeeds.
   GHCR owner, not `example`.
 - `OCI_SECRET_DIR/deploy.env` contains all five selected provider values as
   single physical lines; PEMs contain literal `\n` pairs.
-- The GHCR token can push the subject and write signature/attestation referrers.
+- The GHCR token can push the subject and write Cosign's digest-derived `.sig`
+  and `.att` attachment artifacts.
 - The source tree and source URL represent a trusted release revision.
 
 Commit the provider coordinate so the live SHA identifies the exact inputs:
@@ -97,6 +98,14 @@ The observable ordering is deliberate:
 Preparation can run concurrently. Publication is ordered and nontransactional.
 If a post-publish Cosign step fails, Rush Delivery reports the canonical digest
 that may remain, writes no successful manifest, and does not start Deploy.
+
+Rush Delivery pins `--new-bundle-format=false` on the six registry Cosign
+commands. With the pinned Cosign `3.1.2`, one `.sig` attachment stores the
+signature and one shared `.att` image stores both attestation predicates. The
+OCI 1.1 Referrers API is not used. GHCR may retain an untagged superseded `.att`
+version after the second attestation write, so package-version counts can exceed
+the two current attachments. The three real Cosign verification commands—not a
+UI count—prove completeness.
 
 Sanitized expected output:
 
@@ -358,9 +367,10 @@ For an OCI artifact:
 
 Rush Delivery also pushes the navigation tag `sha-<full-source-sha>` during the
 single publication call, but does not record or deploy that tag. The canonical
-manifest reference remains digest-only. The signature plus SPDX and provenance
-attestations are attached to the registry subject. The local Grype report is
-evidence only and is not presented as a registry scan attestation.
+manifest reference remains digest-only. The signature is stored in the
+digest-derived `.sig` attachment, while the SPDX and provenance predicates share
+the current `.att` attachment. The local Grype report is evidence only and is
+not presented as a registry scan attestation.
 
 ## Evidence Excerpts
 

@@ -20,9 +20,10 @@ inspection and cleanup links are in
 4. Never print or attach an env file, registry token, username sentinel, private
    key, public key, signing password, generated Docker config, Dagger secret, or
    an unreviewed debug/trace export.
-5. If mutation is possible, inspect the unique repository namespace and all
-   referrers before a manual retry. Keep or remove objects according to the
-   provider's release and cleanup policy.
+5. If mutation is possible, inspect the unique repository namespace, attachment
+   tags, and every tagged or untagged package version before a manual retry.
+   Keep or remove objects according to the provider's release and cleanup
+   policy.
 6. If Deploy may have started, inspect the deployment platform separately. A
    retained registry digest does not prove whether a platform rollout occurred.
 
@@ -49,16 +50,16 @@ inspection and cleanup links are in
 | Vulnerability policy rejected findings                                       | OCI preparation                       | Review IDs/severities in the sanitized error and full report under security access controls.                                                                                                                                                                                        | No publication. Remediate or add a governed narrow Grype rule, then retry.                                                                                                                       |
 | Registry readiness/transport failure before Package mutation                 | Harness/infrastructure                | Probe trusted `https://<authority>/v2/` with bounded timeouts; `200`, `401`, or `403` proves service reachability, not write auth.                                                                                                                                                  | Safe to retry only the bounded probe/read. Do not turn it into an automatic Package retry.                                                                                                       |
 | `failed during registry publication authentication`                          | Publication                           | Check token lifetime, username form, credential type, and clock using the provider control plane.                                                                                                                                                                                   | The fixed stage describes the registry response, not proof of zero side effects. Inspect the target repository before retry unless provider audit evidence proves rejection before every upload. |
-| `failed during registry publication authorization`                           | Publication                           | Check repository existence plus subject/referrer push and read scopes for the resolved identity.                                                                                                                                                                                    | Blob or manifest work may already have started. Inspect the target repository and all referrers before retry.                                                                                    |
+| `failed during registry publication authorization`                           | Publication                           | Check repository existence plus subject and digest-derived Cosign attachment push/read scopes for the resolved identity.                                                                                                                                                            | Blob or manifest work may already have started. Inspect the target repository and all package versions before retry.                                                                             |
 | `failed during registry publication transport`                               | Publication                           | Check bounded DNS, trusted-TLS, connection, timeout, and provider-status evidence without replaying Package.                                                                                                                                                                        | Outcome is unknown/partial because the publication boundary was crossed. Inspect the target repository before retry.                                                                             |
-| Generic `failed during registry publication`                                 | Publication                           | Use provider audit events and complete package-version/referrer inventory; do not infer a credential or network cause from the generic stage.                                                                                                                                       | Outcome is unknown/partial. Inspect and clean or quarantine the disposable namespace before a controlled retry.                                                                                  |
+| Generic `failed during registry publication`                                 | Publication                           | Use provider audit events and a complete tagged/untagged package-version inventory; do not infer a credential or network cause from the generic stage.                                                                                                                              | Outcome is unknown/partial. Inspect and clean or quarantine the disposable namespace before a controlled retry.                                                                                  |
 | Repository not found/permission denied                                       | Publication                           | Confirm every literal repository path exists and the identity has subject plus Cosign-object push/read permission.                                                                                                                                                                  | Usually pre-manifest, but blob uploads may have started. Inspect the repository before retry.                                                                                                    |
 | TLS, unknown authority, or insecure registry error                           | Tool pull/publication/Cosign          | Confirm the endpoint presents a publicly trusted chain from the Dagger/Cosign execution environment.                                                                                                                                                                                | No supported custom-CA or insecure bypass exists. Move to trusted TLS; inspect if upload may have begun.                                                                                         |
 | Returned publication reference is malformed/unexpected                       | Post-publish reference validation     | Record expected repository, SHA tag, and sanitized returned authority/name/digest shape.                                                                                                                                                                                            | Publication occurred or may have occurred. Inspect digest/tag; do not sign or deploy it manually as a workaround.                                                                                |
-| Cosign sign/attest/verify failed                                             | Ordered finalization                  | Use the canonical subject reference in the sanitized error to inventory registry referrers and key inventory.                                                                                                                                                                       | Subject and some Cosign objects may exist. No successful manifest or Deploy; clean/quarantine before retry.                                                                                      |
+| Cosign sign/attest/verify failed                                             | Ordered finalization                  | Use the canonical subject reference in the sanitized error to inventory attachment tags, all tagged/untagged package versions, and key inventory.                                                                                                                                   | Subject and some Cosign objects may exist. No successful manifest or Deploy; clean/quarantine before retry.                                                                                      |
 | Evidence finalization failed after Cosign verification                       | Ordered finalization                  | Record the canonical subject, target, evidence kind/path, and sanitized Dagger stage without attaching unreviewed evidence contents.                                                                                                                                                | Subject, signature, and both attestations may all exist, but no successful manifest or Deploy exists. Inspect and clean/quarantine before retry.                                                 |
 | Earlier published target / later target was not started                      | Multi-target finalization             | Follow each canonical earlier/failed reference in stable error order.                                                                                                                                                                                                               | Earlier siblings are external side effects; later listed targets were not started. Inspect each repository independently.                                                                        |
-| Transport interruption during/after publication                              | Publication/finalization              | Check provider audit logs, SHA tag, digest listing, and referrers.                                                                                                                                                                                                                  | Outcome is unknown/partial. Never assume the first attempt did nothing and never auto-replay the batch.                                                                                          |
+| Transport interruption during/after publication                              | Publication/finalization              | Check provider audit logs, SHA tag, subject digest, attachment tags, and all package versions.                                                                                                                                                                                      | Outcome is unknown/partial. Never assume the first attempt did nothing and never auto-replay the batch.                                                                                          |
 | Live Deploy requires a published OCI artifact                                | Deploy preflight                      | Inspect manifest `status`; a provider-off or named dry-run manifest is `planned`.                                                                                                                                                                                                   | No Deploy target starts. Produce a new live Package bundle; do not edit status.                                                                                                                  |
 | Frozen credential capability missing or invalid during standalone OCI Deploy | Deploy credential-boundary activation | A `v0.8.1` bundle must contain a valid `.dagger/runtime/application-image-credential-capability.json`; only an older bundle without that file uses `.dagger/application-images/providers.yaml` as a legacy names-only fallback. A present malformed capability always fails closed. | No Deploy target starts and no provider credential value is read. Restore the intact trusted bundle; do not delete the capability or `repository` field to force a weaker path.                  |
 | Provider credential projection rejected during standalone Deploy             | Deploy credential-boundary activation | Inspect the named Deploy target/field and the named credential declaration. The check includes every declared provider, not only the provider that originally published the artifact.                                                                                               | No Deploy target starts and no registry operation occurs. Rename and separately scope the project-owned capability; rebuild the trusted bundle after a metadata change.                          |
@@ -224,7 +225,7 @@ exception. The fixed stage also cannot prove that a failed target is empty: the
 ordered publication boundary is crossed before each registry result is known,
 and a registry can accept blobs before rejecting a later request. Treat all
 four stages as possibly mutating unless independent provider audit and complete
-repository/referrer inventory prove otherwise.
+repository/package-version inventory prove otherwise.
 
 Use the provider-specific username/token form and check expiry:
 
@@ -263,15 +264,24 @@ expected repository and SHA tag, inspect provider audit logs and digest listings
 and treat the namespace as mutated. Do not manually manufacture a manifest or
 continue signing a different reference.
 
-### Cosign/referrer incompatibility
+### Cosign legacy-attachment incompatibility
 
 The live path must create one subject signature and two attestations, then read
-and verify all three. A registry can accept the image and still reject a Cosign
-media type, referrer/tag operation, or read. Preserve the canonical subject,
-Cosign stage name, provider service/tier/region, and sanitized registry error.
-Compare the exact endpoint with the provider and
+and verify all three. Rush Delivery pins `--new-bundle-format=false` on all six
+registry Cosign commands. With Cosign `3.1.2`, that means a digest-derived
+`.sig` attachment and a shared `.att` attachment containing both predicates;
+the OCI 1.1 Referrers API is not used. A registry can accept the image and still
+reject an attachment manifest, tag update, or read. Preserve the canonical
+subject, exact fixed Cosign stage, provider service/tier/region, and sanitized
+registry error. Compare the exact endpoint with the provider and
 [Cosign registry support](https://github.com/sigstore/cosign#registry-support)
 documentation.
+
+One subject plus at least two non-subject package versions is the inventory
+lower bound after success. Extra untagged history may remain when the second
+attestation replaces the `.att` tag. Counts never prove semantic completeness:
+the successful Package must independently verify the signature, SPDX
+attestation, and provenance attestation.
 
 If Package reports a sign, attestation, or verification failure, no successful
 manifest is written and Deploy does not start, but registry objects may remain.
@@ -337,7 +347,8 @@ For every earlier/failed repository:
 1. Query the provider control plane/audit log for the deterministic
    `sha-<full-git-sha>` tag and recent manifests.
 2. Record each canonical subject digest found.
-3. Discover signature and attestation referrers for each subject.
+3. Discover the digest-derived signature/attestation tags and every tagged or
+   untagged related package version for each subject.
 4. Compare inventory with the failed Cosign stage; do not infer completeness
    only from object count.
 5. Decide to retain/quarantine or delete under provider policy. Use a separate
@@ -476,7 +487,8 @@ Collect only what is necessary:
 - SHA-256 values and paths for local evidence, not key material;
 - pinned Syft/Grype/Cosign versions and image digests;
 - Grype database build/status metadata and network failure class;
-- provider audit/event identifiers and a subject/referrer inventory; and
+- provider audit/event identifiers and a complete subject/associated-package-
+  version inventory; and
 - reviewed logs with values redacted at collection time.
 
 Never include:

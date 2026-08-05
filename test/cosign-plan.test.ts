@@ -145,6 +145,22 @@ test("pins all offline Cosign publication and verification flags", () => {
     assert.equal(step.redirectStdout, "/dev/null");
   }
 
+  for (const step of plan) {
+    assert.equal(
+      step.args.filter((argument) => argument === "--new-bundle-format=false")
+        .length,
+      1,
+      `${step.stage} must pin the registry-compatible Cosign bundle format`,
+    );
+    assert.equal(
+      step.args.some((argument) =>
+        argument.startsWith("--registry-referrers-mode"),
+      ),
+      false,
+      `${step.stage} must not opt into OCI referrers mode`,
+    );
+  }
+
   assert.deepEqual(
     plan
       .filter(({ args }) => args.includes("attest"))

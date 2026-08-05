@@ -438,7 +438,11 @@ Deliver a `v0.8.1` release in which:
       availability, freshness, reproducibility, and fail-closed assumptions.
 - [x] Preserve the current private-registry-friendly key-backed Cosign mode:
       signing and attestations use `--tlog-upload=false`; verification uses
-      `--insecure-ignore-tlog`.
+      `--insecure-ignore-tlog`. Pin `--new-bundle-format=false` on all six
+      registry sign, attest, and verify commands so Cosign `3.1.2` uses
+      digest-derived `.sig` and shared `.att` tag attachments rather than the
+      OCI 1.1 Referrers API; distinguish this from legacy Docker media types and
+      leave the local blob preflight unchanged.
 - [x] State what this mode proves: the configured key verified the digest-bound
       subject signature and required attestations during Package.
 - [x] State what it does not prove: Rekor inclusion, public transparency,
@@ -991,7 +995,7 @@ checkpoint, and link to the next chapter.
 - [x] Show exact `gh secret set`/`gh variable set` forms without echoing values.
 - [x] Run a named-provider dry run that validates repository construction but
       does not read or preflight keys.
-- [x] Explain credential roles, minimum push/referrer permissions, dedicated
+- [x] Explain credential roles, minimum subject/attachment-tag push permissions, dedicated
       credentials, rotation, loss/recovery, retention of old public keys, and
       why the manifest does not record a key fingerprint. For GHCR classic
       PATs, state that `write:packages` is not token-scoped to one namespace or
@@ -1093,7 +1097,7 @@ checkpoint, and link to the next chapter.
       independently recorded release SHA to Deploy, checking that the manifest's
       `source_revision` agrees, and consuming its digest without editing the
       manifest or resolving a tag.
-- [x] Cover registry subject/referrer retention, package-bundle retention,
+- [x] Cover registry subject/attachment retention, package-bundle retention,
       deploy-tag effects, pull identity, retry safety, and cleanup of possible
       post-publication or sibling artifacts.
 - [x] State the unsigned-manifest/coordinated-replacement limitation directly.
@@ -1163,14 +1167,15 @@ into the authoritative production contract/runbook. Add
       secrets, SSH mount, or Dockerfile target; no keyless/OIDC/Rekor mode; no
       trusted timestamp; no custom-CA/insecure-registry configuration; no
       framework vendor deploy logic; no automatic cleanup; no signed portable
-      manifest; and registry support required for Cosign artifacts/referrers.
+      manifest; and registry support required for Cosign's tag-addressed
+      signature/attestation artifacts.
 - [x] Warn that target image suffixes must not collide within the same provider
       namespace because navigation tags are deterministic per SHA.
 
 ### Registry Recipes
 
 For each recipe, show complete provider YAML, credential acquisition, minimum
-push/referrer permissions, CI mapping, repository preparation, target-platform
+subject/attachment-tag push permissions, CI mapping, repository preparation, target-platform
 pull identity, retention, and cleanup. Verify details against current official
 provider documentation during implementation and link those sources.
 
@@ -1197,17 +1202,19 @@ provider documentation during implementation and link those sources.
       exchange with `id-token: write`, exact repository/environment admission,
       a narrowly bound `roles/iam.workloadIdentityUser` publisher service
       account, and the generated access-token output mapped directly to Rush
-      Delivery. Document that predefined Writer includes attachment deletion,
-      requiring a tested custom role for strict no-delete publication, and
+      Delivery. Document that predefined Writer includes broad deletion
+      authority, while the separate GAR Attachment resource API is not used by
+      this tag-addressed Cosign mode; require a tested custom role for strict
+      no-delete publication, and
       explain deterministic SHA-tag retry/cleanup effects when immutable tags
       are enabled.
 - [x] Add an Amazon ECR recipe covering the `AWS` username, short-lived login
       token, repository creation, token lifetime, and Cosign artifact retention.
       Include executable GitHub OIDC configuration with `id-token: write`, the
       standard STS audience, an exact protected-environment `sub`, and a
-      full-SHA-pinned credential action. State that reference artifacts expire
-      or archive within 24 hours after lifecycle deletion/archive of the subject,
-      making subject retention the root of Cosign retention.
+      full-SHA-pinned credential action. Do not apply ECR's OCI reference-
+      artifact lifecycle behavior or ORAS cleanup flow to `v0.8.1`; document
+      retention and cleanup of the subject plus `.sig`/`.att` image tags.
 - [x] Add a Docker Hub recipe using an access token and organization/user
       namespace. Distinguish PAT authentication with a personal Docker ID from
       OAT authentication with the organization name; document PAT
@@ -1217,8 +1224,10 @@ provider documentation during implementation and link those sources.
 - [x] Label each recipe as continuously tested, manually exercised, or
       syntax-reviewed; do not imply CI coverage that does not exist.
 - [x] State required registry capabilities: trusted TLS, image push, returned
-      digest, Cosign signature and attestation storage, digest/referrer
-      retention, cleanup permissions, and deployment-platform pull access.
+      digest, Cosign signature and attestation tag storage, complete tagged and
+      untagged version inventory, cleanup permissions, and deployment-platform
+      pull access. State that OCI 1.1 Referrers API support is not required or
+      exercised.
 - [x] Do not teach `docker login` as a Rush Delivery prerequisite; explain that
       Dagger and Cosign receive selected authentication directly.
 
@@ -1236,7 +1245,8 @@ provider documentation during implementation and link those sources.
       actual-newline versus literal-`\n` corruption, malformed PEM, wrong
       password, mismatched public key, and protected-name collision.
 - [x] Cover registry auth denial, repository permission/not-found, trusted-TLS or
-      custom-CA limitation, malformed returned reference, Cosign-referrer
+      custom-CA limitation, malformed returned reference, Cosign legacy-
+      attachment
       incompatibility, and deployment-platform pull denial.
 - [x] Cover Grype database download/cache/freshness errors, policy rejection,
       governed ignore configuration, and changed findings between runs.
@@ -1562,13 +1572,23 @@ independent harness defects:
 A correction-branch rehearsal on 2026-08-05, GitHub Actions
 [run 31000299709](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31000299709),
 tested branch commit `0fde2deca45ff17281ddd5fcff5b99e2b12e114d` and is also
-diagnostic history rather than release evidence. All five prepublication
-scenarios passed, while the positive and injected-finalization scenarios both
-stopped at the first target's allowlisted but over-broad `cosign-publication`
-stage. Every scenario cleanup and the independent recovery sweep succeeded.
-The next branch rehearsal must retain the exact fixed Cosign command stage
-without promoting raw tool output, then use that stage to correct and prove the
-real package flow.
+diagnostic history rather than release evidence. All five key-negative scenarios
+and the multi-target preparation-failure scenario passed, while the positive and
+injected-finalization scenarios both stopped at the first target's allowlisted
+but over-broad `cosign-publication` stage. Every scenario cleanup and the
+independent recovery sweep succeeded.
+
+The exact-stage correction-branch rehearsal on 2026-08-05, GitHub Actions
+[run 31001542904](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31001542904),
+tested commit `fd1cfb238c81dba7376dd32118457633be51f76e`. The single
+live path, multi-target success path, and injected-finalization path all stopped
+at the first target's exact `cosign-sign` stage after subject publication. All
+five key-negative scenarios and the multi-target preparation-failure scenario
+passed; every cleanup and the independent recovery sweep succeeded. This is
+diagnostic history, not release evidence. It establishes that Cosign `3.1.2`'s
+default new-bundle write is not a usable GHCR contract for this release, so the
+corrected candidate must explicitly select and verify the registry-compatible
+legacy tag storage before another live proof.
 
 Complete this corrective gate before the next exact-candidate dispatch:
 
@@ -1581,13 +1601,16 @@ Complete this corrective gate before the next exact-candidate dispatch:
       Cosign sign, attest, and verify stage), and regression-test that the
       progress mode exposes the controlled marker without exposing a secret
       sentinel.
-- [x] Treat every paginated GHCR package version, including untagged partial
-      uploads and signature/attestation referrers, as inventory. Zero and
+- [ ] Treat every paginated GHCR package version, including untagged partial
+      uploads and signature/attestation attachment history, as inventory. Zero and
       skipped-target assertions must require zero total versions. For completed
-      targets, require exactly one subject plus at least three non-subject
-      package versions without assuming legacy `.sig`/`.att` tags, run real
-      Cosign verification for the signature and both attestations, and retain a
-      stable post-verification inventory snapshot. For the injected
+      targets, explicitly pin Cosign `3.1.2` legacy tag storage on publication
+      and independent verification, require exactly one subject plus at least
+      two non-subject package versions without using `.sig`/`.att` suffixes as
+      the acceptance predicate, run real Cosign verification for the signature
+      and both attestations, and retain a stable post-verification inventory
+      snapshot. The current `.att` attachment contains both predicates, while a
+      registry may retain additional untagged historical versions. For the injected
       post-publication fault, require exactly the failed subject and zero
       non-subject package versions so the evidence proves the hook ran before
       any Cosign finalization. Serialize the inventory ledger canonically by

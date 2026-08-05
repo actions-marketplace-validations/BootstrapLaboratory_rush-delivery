@@ -137,6 +137,21 @@ async function canDerivePublicKey(client, toolContainer, privateKey, password) {
   }
 }
 
+async function assertRegistryBundleFlagSupport(toolContainer) {
+  await Promise.all(
+    ["sign", "attest", "verify", "verify-attestation"].map((command) =>
+      toolContainer
+        .withExec([
+          "/ko-app/cosign",
+          command,
+          "--new-bundle-format=false",
+          "--help",
+        ])
+        .sync(),
+    ),
+  );
+}
+
 await connect(async (client) => {
   const [cosignContainer, busyboxContainer] = await Promise.all([
     client.container().from(COSIGN_IMAGE).sync(),
@@ -149,6 +164,7 @@ await connect(async (client) => {
       { permissions: 0o555 },
     )
     .sync();
+  await assertRegistryBundleFlagSupport(toolContainer);
   const password = `engine-preflight-${randomBytes(16).toString("hex")}`;
   const otherPassword = `engine-preflight-${randomBytes(16).toString("hex")}`;
   const [primary, other] = await Promise.all([

@@ -782,7 +782,7 @@ test("documented environment, scan, Cosign, and deploy-result contracts match co
     `registry.example/platform/api@sha256:${"a".repeat(64)}`,
   );
   const securityModeFlagPattern =
-    /^--(?:insecure-ignore-tlog|tlog-upload=false|use-signing-config=false)$/u;
+    /^--(?:insecure-ignore-tlog|new-bundle-format=false|tlog-upload=false|use-signing-config=false)$/u;
   const codeFlags = new Set(
     [...preflight, ...publication]
       .flatMap((step) => step.args)
@@ -798,6 +798,16 @@ test("documented environment, scan, Cosign, and deploy-result contracts match co
     [...documentedFlags].sort(),
     [...codeFlags].sort(),
     "The documented Cosign security mode flags must match the command plans.",
+  );
+  assert.match(
+    guide,
+    /`--new-bundle-format=false`[\s\S]+legacy `\.sig`[\s\S]+`\.att`[\s\S]+OCI 1\.1 Referrers API/u,
+  );
+  assert.match(
+    await readRepoFile(
+      "docs/tutorial/oci-application-images/04-publish-and-inspect.md",
+    ),
+    /`--new-bundle-format=false`[\s\S]+shared `\.att`[\s\S]+three real Cosign verification commands/u,
   );
 
   const manifestSources: string[] = [];

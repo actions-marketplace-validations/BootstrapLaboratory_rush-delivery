@@ -137,8 +137,8 @@ function isSubjectVersion(version) {
 
 function requireCompleteCosignPackageVersions(versions, target) {
   requireCondition(
-    versions.filter((version) => !isSubjectVersion(version)).length >= 3,
-    `GHCR does not yet expose the three Cosign package versions for ${target}.`,
+    versions.filter((version) => !isSubjectVersion(version)).length >= 2,
+    `GHCR does not yet expose the signature and attestation package versions for ${target}.`,
   );
 }
 

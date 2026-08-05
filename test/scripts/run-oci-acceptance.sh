@@ -444,7 +444,7 @@ verify_published_evidence() {
 		"${read_timeout_seconds}" \
 		"${cosign_verification_log}" \
 		env DAGGER_NO_NAG=1 dagger --silent -c \
-		"container | from ${OCI_ACCEPTANCE_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${key_directory}/cosign.pub) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--key,/keys/cosign.pub,--insecure-ignore-tlog,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${published_reference} | sync"
+		"container | from ${OCI_ACCEPTANCE_COSIGN_IMAGE} | with-env-variable DOCKER_CONFIG /home/nonroot/.docker | with-mounted-secret /home/nonroot/.docker/config.json \$(secret file://${docker_config}) --mode=256 --owner=65532:65532 | with-mounted-secret /keys/cosign.pub \$(secret file://${key_directory}/cosign.pub) --mode=256 --owner=65532:65532 | with-exec --args=/ko-app/cosign,verify,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,spdxjson,${published_reference} | with-exec --args=/ko-app/cosign,verify-attestation,--new-bundle-format=false,--key,/keys/cosign.pub,--insecure-ignore-tlog,--type,slsaprovenance1,${published_reference} | sync"
 }
 
 set +e

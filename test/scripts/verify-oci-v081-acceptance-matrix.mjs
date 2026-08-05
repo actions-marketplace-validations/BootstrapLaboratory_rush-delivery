@@ -629,7 +629,7 @@ function assertZeroInventory(inventory, targets) {
 function hasCompleteCosignPackageVersions(repository) {
   return (
     repository.versions.filter((version) => version.subject).length === 1 &&
-    repository.versions.filter((version) => !version.subject).length >= 3
+    repository.versions.filter((version) => !version.subject).length >= 2
   );
 }
 

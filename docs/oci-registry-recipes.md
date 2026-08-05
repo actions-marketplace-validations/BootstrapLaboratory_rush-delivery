@@ -47,12 +47,19 @@ A compatible endpoint must provide:
 - a distinct pull identity for the deployment platform.
 
 The [OCI Distribution Specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md)
-defines push, digest, discovery, referrer, and deletion APIs. Cosign also
-documents a broad but qualified
+defines image push, digest, tag, and deletion APIs. Cosign also documents a
+broad but qualified
 [registry support matrix](https://github.com/sigstore/cosign#registry-support).
-Rush Delivery does not enable Cosign's legacy-media fallback, a custom CA, or an
-insecure/HTTP registry. Test the exact endpoint rather than relying on the
-product name alone.
+Rush Delivery `v0.8.1` pins Cosign `3.1.2` and passes
+`--new-bundle-format=false` on every registry sign, attest, and verify command.
+That mode stores one digest-derived `.sig` attachment and a shared `.att`
+attachment containing both attestations. It does not use or require the OCI 1.1
+Referrers API. “Associated Cosign artifact” in this guide means either of those
+tag-addressed objects or an untagged historical version—not a claim that the
+Referrers API is in use. This is distinct from Cosign's legacy Docker media-type
+fallback, which Rush Delivery does not enable. Custom CAs and insecure/HTTP
+registries also remain unsupported. Test the exact endpoint rather than relying
+on the product name alone.
 
 Rush Delivery supplies the selected username/token directly to Dagger registry
 authentication and mounts a generated Docker config as a Dagger secret for
@@ -90,7 +97,8 @@ release. The publishing identity needs the narrow equivalent of:
 - pull/read manifests and blobs, because Package verifies what it wrote;
 - initiate, upload, and complete blobs;
 - create/update the deterministic `sha-<full-git-sha>` tag and subject manifest;
-- create and discover Cosign signature and attestation objects; and
+- create/read the digest-derived `.sig` and `.att` attachment tags and their
+  manifests; and
 - read those objects for verification.
 
 Give delete/retention administration to a separate cleanup identity when the
@@ -121,11 +129,13 @@ execution.
 
 ### Retention and cleanup
 
-Retain the immutable subject, navigation tag, signature, both attestations,
+Retain the immutable subject, navigation tag, signature, combined attestation
+attachment,
 manifest/evidence bundle, public-key history, and external bundle checksum/SHA
 record for the same rollback period. Preview lifecycle rules where supported.
-Before deleting a partial release, inventory the digest and every referrer; tag
-deletion alone may not remove the subject or Cosign objects.
+Before deleting a partial release, inventory every tagged and untagged package
+version. Tag deletion alone may not remove the subject, current attachments, or
+superseded attachment history.
 
 ### Repository acceptance topology
 
@@ -256,7 +266,8 @@ publishing out of untrusted PR jobs.
 Public GHCR packages can be pulled anonymously. For private/internal packages,
 grant the deployment repository or platform identity Read access and use a
 pull-only token; never reuse the publishing token as runtime pull identity.
-Public visibility also exposes the image's registry-hosted Cosign referrers:
+Public visibility also exposes the image's registry-hosted Cosign signature and
+attestation package versions:
 classify the SPDX dependency inventory and provenance source/build parameters
 before choosing anonymous pull access.
 Cloud Run does not accept that GHCR token through its runtime service account:
@@ -271,8 +282,9 @@ The deterministic SHA tag is navigation only. Retain the digest and Cosign
 objects for every deployable release. Cleanup requires package Admin access;
 GitHub documents package/version removal in
 [Deleting and restoring a package](https://docs.github.com/en/packages/learn-github-packages/deleting-and-restoring-a-package).
-Discover signatures and attestations before deleting a failed subject, and
-verify the package/version list afterward. GitHub's Actions delete/restore API
+Inventory the subject plus every tagged and untagged signature/attestation
+package version before deleting a failed subject, and verify the package list
+afterward. GitHub's Actions delete/restore API
 support is documented as preview, so do not make recovery depend on an
 unverified automatic deletion workflow.
 
@@ -324,12 +336,14 @@ separates tag/upload permissions from delete permissions.
 
 The predefined Writer role is not a strict no-delete publisher role: Google's
 [current role matrix](https://cloud.google.com/iam/docs/roles-permissions/artifactregistry)
-includes `artifactregistry.attachments.delete`. If policy requires the
-publisher to be unable to delete signature/attestation attachments, create and
-review a custom repository role that contains only the exact read, upload, tag,
-and attachment operations exercised by a disposable Rush Delivery acceptance
-run. Re-run that acceptance whenever Google or Cosign changes its artifact
-operations; do not infer that removing one permission is sufficient.
+includes broader deletion authority, including
+`artifactregistry.attachments.delete`. Rush Delivery's tag-addressed Cosign
+objects are ordinary OCI image artifacts and do not exercise the separate GAR
+Attachment resource API; removing that one unrelated permission is therefore
+not a complete no-delete policy. If publisher deletion must be prohibited,
+create and live-test a custom repository role containing only the required
+manifest, blob, and tag operations. Re-run acceptance whenever Google or Cosign
+changes its registry operations.
 
 Decide whether to enable immutable tags before the first release. Rush Delivery
 uses the deterministic `sha-<full-git-sha>` navigation tag. With Artifact
@@ -445,9 +459,10 @@ Apply cleanup policies only after a dry-run review and keep every production or
 rollback digest plus associated Cosign objects. Google documents rule order,
 keep precedence, and asynchronous application in the
 [cleanup policy overview](https://docs.cloud.google.com/artifact-registry/docs/repositories/cleanup-policy-overview).
-For a partial publication, list the subject and related artifacts, then use the
-provider's digest deletion command under a cleanup identity. Verify referrer
-state after deletion instead of assuming a tag cleanup removed everything.
+For a partial publication, list the subject, attachment tags, and every tagged
+or untagged related package version, then use the provider's digest deletion
+command under a cleanup identity. Verify the complete remaining inventory after
+deletion instead of assuming a tag cleanup removed everything.
 
 ## Amazon Elastic Container Registry
 
@@ -580,21 +595,19 @@ command.
 Give the runtime role only ECR authorization and pull operations for the exact
 repository. Keep it distinct from the publishing role.
 
-Preview lifecycle policies before activation and ensure they retain release and
-rollback subjects and their Cosign objects. AWS documents that lifecycle actions
-are asynchronous in
+Preview lifecycle policies before activation and ensure they retain the release
+and rollback subjects plus the digest-derived `.sig` and `.att` image tags. AWS
+documents that lifecycle actions are asynchronous in
 [Creating a lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lp_creation.html).
-ECR also automatically expires or archives reference artifacts within 24 hours
-after its lifecycle policy deletes or archives their subject. Subject retention
-therefore roots signature and attestation retention; keeping a tag or attempting
-to retain a reference artifact separately is not a substitute for keeping the
-subject digest.
+ECR's lifecycle behavior for OCI reference artifacts does not describe this
+`v0.8.1` storage mode; Rush Delivery does not publish those reference artifacts.
+Treat the subject and both tag-addressed Cosign attachments as separately
+retained OCI image content.
 
-For partial publication, use a cleanup role and discover every reference
-artifact. AWS provides an explicit
-[ORAS procedure for discovering and deleting signatures/reference artifacts](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-artifact-delete.html).
-Delete in the provider-required dependency order and verify afterward; Rush
-Delivery does not automate it.
+For partial publication, use a cleanup role to inventory the subject,
+attachment tags, and untagged image history, delete only the reviewed targets in
+the provider-required order, and verify the complete repository inventory
+afterward. Rush Delivery does not automate deletion.
 
 ## Docker Hub
 
@@ -694,11 +707,14 @@ For every registry:
    returned directory.
 5. Confirm the manifest reference is exactly `repository@digest`, all three
    evidence hashes match, and no credential sentinel appears in output.
-6. Confirm the registry exposes the subject signature and both attestations.
+6. Use real Cosign verification to prove the subject signature and both
+   attestation predicates. For package-version inventory, require one subject
+   plus at least two non-subject versions and allow additional untagged history;
+   counts alone are not semantic proof.
 7. Configure the deployment platform's separate pull identity and pull by the
    manifest digest.
 8. Exercise cleanup on disposable content, including an intentionally partial
-   subject/referrer set.
+   subject/attachment package-version set.
 9. Record the exact service/tier/region, policy, client versions, and date of the
    successful test. Re-run after registry, Cosign, permissions, or retention
    changes.

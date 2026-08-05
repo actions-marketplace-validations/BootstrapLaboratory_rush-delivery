@@ -89,7 +89,7 @@ function cosignInventoryVersions(
   _subjectDigest: string,
   firstRegistryVersionId: number,
 ) {
-  return ["a", "b", "c"].map((digestCharacter, index) =>
+  return ["a", "b"].map((digestCharacter, index) =>
     registryInventoryVersion(
       `sha256:${digestCharacter.repeat(64)}`,
       firstRegistryVersionId + index,
@@ -734,7 +734,7 @@ test("credential-gated runner executes every deferred scenario with unique clean
         "const repositories = {};",
         "const events = [];",
         'const subjectVersion = (digest, id) => ({ created_at: "2026-08-05T00:00:00.000Z", digest, registry_version_id: id, subject: true, tags: ["sha-0123456789abcdef0123456789abcdef01234567"] });',
-        'const cosignVersions = (_digest, index) => [{ created_at: "2026-08-05T00:00:01.000Z", digest: "sha256:" + String(index + 7).repeat(64), registry_version_id: 100 + index * 3, subject: false, tags: [] }, { created_at: "2026-08-05T00:00:02.000Z", digest: "sha256:" + String(index + 8).repeat(64), registry_version_id: 101 + index * 3, subject: false, tags: [] }, { created_at: "2026-08-05T00:00:03.000Z", digest: "sha256:" + (index + 9).toString(16).repeat(64), registry_version_id: 102 + index * 3, subject: false, tags: [] }];',
+        'const cosignVersions = (_digest, index) => [{ created_at: "2026-08-05T00:00:01.000Z", digest: "sha256:" + String(index + 7).repeat(64), registry_version_id: 100 + index * 2, subject: false, tags: [] }, { created_at: "2026-08-05T00:00:02.000Z", digest: "sha256:" + String(index + 8).repeat(64), registry_version_id: 101 + index * 2, subject: false, tags: [] }];',
         'const appendEvents = (target, versions) => { for (const version of versions) events.push({ ...version, operation: version.subject ? "subject-published" : "package-version-present", sequence: events.length + 1, target }); };',
         'if (assertion === "success") {',
         "  for (const [index, target] of targets.entries()) {",
@@ -1760,7 +1760,7 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
       const version = registryInventoryVersion(digest, index + 1);
       const versions = [
         version,
-        ...cosignInventoryVersions(digest, 100 + index * 3),
+        ...cosignInventoryVersions(digest, 100 + index * 2),
       ];
       const evidenceRoot = `.dagger/runtime/evidence/${target}`;
       const evidenceContents = {
@@ -1854,6 +1854,69 @@ test("live success verifier cross-checks manifest order, local evidence, and reg
     ]);
 
     const validInventory = JSON.parse(await readFile(inventoryPath, "utf8"));
+    const withUntaggedHistory = JSON.parse(JSON.stringify(validInventory));
+    const historicalVersion = registryInventoryVersion(
+      `sha256:${"f".repeat(64)}`,
+      999,
+      [],
+    );
+    withUntaggedHistory.repositories[targets[0]].versions.push(
+      historicalVersion,
+    );
+    withUntaggedHistory.repositories[targets[0]].package_version_count += 1;
+    withUntaggedHistory.events.splice(
+      validInventory.repositories[targets[0]].versions.length,
+      0,
+      registryInventoryEvent(targets[0], historicalVersion, 0),
+    );
+    withUntaggedHistory.events.forEach(
+      (event: { sequence: number }, index: number) => {
+        event.sequence = index + 1;
+      },
+    );
+    await writeFile(inventoryPath, `${JSON.stringify(withUntaggedHistory)}\n`);
+    await execFileAsync(process.execPath, [
+      verifierPath,
+      "live-success",
+      outputDirectory,
+      inventoryPath,
+      targets.join(","),
+      registry,
+      repositoryPrefix,
+    ]);
+
+    const missingAttestationObject = JSON.parse(JSON.stringify(validInventory));
+    const removedVersion =
+      missingAttestationObject.repositories[targets[0]].versions.pop();
+    missingAttestationObject.repositories[targets[0]].package_version_count -=
+      1;
+    missingAttestationObject.events = missingAttestationObject.events.filter(
+      (event: { registry_version_id: number; target: string }) =>
+        event.target !== targets[0] ||
+        event.registry_version_id !== removedVersion.registry_version_id,
+    );
+    missingAttestationObject.events.forEach(
+      (event: { sequence: number }, index: number) => {
+        event.sequence = index + 1;
+      },
+    );
+    await writeFile(
+      inventoryPath,
+      `${JSON.stringify(missingAttestationObject)}\n`,
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        verifierPath,
+        "live-success",
+        outputDirectory,
+        inventoryPath,
+        targets.join(","),
+        registry,
+        repositoryPrefix,
+      ]),
+      /Independent registry evidence is incomplete/u,
+    );
+
     const nonCanonicalInventory = JSON.parse(JSON.stringify(validInventory));
     [nonCanonicalInventory.events[0], nonCanonicalInventory.events[1]] = [
       nonCanonicalInventory.events[1],
