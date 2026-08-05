@@ -1,6 +1,7 @@
 import type { Directory } from "@dagger.io/dagger";
 
 import type { ApplicationImageProvidersDefinition } from "../model/application-image.ts";
+import type { ResolvedApplicationImageCoordinates } from "../model/application-image.ts";
 import type { NpmReleaseDefinition } from "../model/npm-release.ts";
 import {
   getOwnPackageManifestArtifact,
@@ -10,6 +11,7 @@ import { loadDeployTargetDefinition } from "../stages/deploy/load-deploy-metadat
 import type { PreparedPackageTarget } from "../stages/package-stage/package-planning.ts";
 import {
   assertNoApplicationImageCredentialProjections,
+  assertApplicationImageCoordinateNameSeparation,
   collectApplicationImageCredentialNames,
   collectDeployRuntimeCredentialProjectionIssues,
   collectNpmReleaseCredentialProjectionIssues,
@@ -20,8 +22,10 @@ import { loadOptionalApplicationImageCredentialCapability } from "./credential-c
 import { loadApplicationImageProviders } from "./load-providers.ts";
 import { parseApplicationImageProvider } from "./options.ts";
 import { selectApplicationImageProvider } from "./provider-selection.ts";
+import { resolveApplicationImageCoordinates } from "./coordinates.ts";
 
 export type ApplicationImageProviderActivation = {
+  coordinates?: ResolvedApplicationImageCoordinates;
   name: string;
   protectedCredentials: ProtectedApplicationImageCredential[];
   providers?: ApplicationImageProvidersDefinition;
@@ -30,7 +34,9 @@ export type ApplicationImageProviderActivation = {
 export type ActivateApplicationImageProviderOptions = {
   applicationImageProvider?: string;
   dryRun: boolean;
+  hostEnv?: Record<string, string>;
   npmReleaseDefinition?: NpmReleaseDefinition;
+  protectedEnvironmentNames?: string[];
 };
 
 export async function activateApplicationImageProvider(
@@ -62,7 +68,16 @@ export async function activateApplicationImageProvider(
   }
 
   const providers = await loadApplicationImageProviders(repo);
-  selectApplicationImageProvider(name, providers);
+  const selected = selectApplicationImageProvider(name, providers);
+  assertApplicationImageCoordinateNameSeparation(
+    providers,
+    options.protectedEnvironmentNames,
+  );
+  const coordinates = resolveApplicationImageCoordinates(
+    name,
+    selected.definition!,
+    options.hostEnv ?? {},
+  );
   const protectedCredentials =
     collectApplicationImageCredentialNames(providers);
   const deployDefinitions = await Promise.all(
@@ -97,6 +112,7 @@ export async function activateApplicationImageProvider(
   assertNoApplicationImageCredentialProjections(projectionIssues);
 
   return {
+    coordinates,
     name,
     protectedCredentials,
     providers,

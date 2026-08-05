@@ -7,7 +7,6 @@ import {
 } from "../src/application-images/planned-artifact.ts";
 import { assertSafeApplicationImageTarget } from "../src/application-images/evidence-target.ts";
 import { isolateApplicationImagePreparationCoordinates } from "../src/application-images/preparation-boundary.ts";
-import type { OciRegistryProviderDefinition } from "../src/model/application-image.ts";
 import type { OciImagePackagePlan } from "../src/stages/package-stage/package-action-plan.ts";
 import { formatPackageManifest } from "../src/stages/package-stage/package-manifest.ts";
 
@@ -32,20 +31,14 @@ test("provider-off dry run emits relative OCI intent", () => {
 
 test("named-provider dry run emits canonical repository without credentials", () => {
   const sentinel = "SENTINEL_REGISTRY_SECRET_7be349";
-  const provider: OciRegistryProviderDefinition = {
-    kind: "oci_registry",
+  const coordinates = {
     registry: "registry.example",
-    repository_prefix: "example/platform",
-    signing_key_env: "OCI_SIGNING_KEY",
-    signing_password_env: "OCI_SIGNING_PASSWORD",
-    token_env: "OCI_TOKEN",
-    username_env: "OCI_USERNAME",
-    verification_key_env: "OCI_SIGNING_PUBLIC_KEY",
+    repositoryPrefix: "example/platform",
   };
   const artifact = createPlannedApplicationImageArtifact(
     plan,
     gitSha,
-    provider,
+    coordinates,
   );
   const output = formatPackageManifest({
     schema_version: "rush-delivery-package-manifest/v2",

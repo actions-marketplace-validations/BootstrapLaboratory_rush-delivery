@@ -36,8 +36,6 @@
       "description": "All five credential environment names are distinct roles and must also be unique across other declared providers.",
       "required": [
         "kind",
-        "registry",
-        "repository_prefix",
         "signing_key_env",
         "signing_password_env",
         "token_env",
@@ -45,6 +43,28 @@
         "verification_key_env"
       ],
       "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": ["registry"]
+            },
+            {
+              "required": ["registry_env"]
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": ["repository_prefix"]
+            },
+            {
+              "required": ["repository_prefix_env"]
+            }
+          ]
+        }
+      ],
       "properties": {
         "kind": {
           "const": "oci_registry"
@@ -53,8 +73,14 @@
           "type": "string",
           "pattern": "^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[1-9][0-9]{0,4})?$"
         },
+        "registry_env": {
+          "$ref": "#/$defs/envName"
+        },
         "repository_prefix": {
           "$ref": "#/$defs/repositoryPath"
+        },
+        "repository_prefix_env": {
+          "$ref": "#/$defs/envName"
         },
         "signing_key_env": {
           "$ref": "#/$defs/envName"

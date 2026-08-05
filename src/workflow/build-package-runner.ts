@@ -121,10 +121,31 @@ export type BuildPackageWorkflowOptions = RushWorkflowContainerOptions & {
   dryRun?: boolean;
   gitSha?: string;
   npmReleaseDefinition?: NpmReleaseDefinition;
+  protectedEnvironmentNames?: string[];
   releaseTargets?: string[];
   skipDeployPlanning?: boolean;
   sourceRepositoryUrl?: string;
 };
+
+function collectCoordinateProtectedEnvironmentNames(
+  options: BuildPackageWorkflowOptions,
+): string[] {
+  const rushCacheProvider = options.rushCacheProviders.providers.github;
+  const toolchainImageProvider = options.toolchainImageProviders?.providers.github;
+
+  return [
+    ...(options.protectedEnvironmentNames ?? []),
+    ...(options.npmReleaseDefinition === undefined
+      ? []
+      : [options.npmReleaseDefinition.auth.token_env]),
+    ...(rushCacheProvider === undefined
+      ? []
+      : [rushCacheProvider.username_env, rushCacheProvider.token_env]),
+    ...(toolchainImageProvider === undefined
+      ? []
+      : [toolchainImageProvider.username_env, toolchainImageProvider.token_env]),
+  ];
+}
 
 export async function runBuildPackageWorkflow(
   repo: Directory,
@@ -180,7 +201,10 @@ export async function runBuildPackageWorkflow(
     await activateApplicationImageProvider(repo, packageTargets, {
       applicationImageProvider: options.applicationImageProvider,
       dryRun: options.dryRun ?? false,
+      hostEnv: options.buildHostEnv ?? options.hostEnv,
       npmReleaseDefinition: options.npmReleaseDefinition,
+      protectedEnvironmentNames:
+        collectCoordinateProtectedEnvironmentNames(options),
     });
 
   console.log(

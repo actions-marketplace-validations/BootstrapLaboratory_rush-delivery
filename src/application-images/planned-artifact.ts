@@ -1,4 +1,4 @@
-import type { OciRegistryProviderDefinition } from "../model/application-image.ts";
+import type { ResolvedApplicationImageCoordinates } from "../model/application-image.ts";
 import type { PlannedOciImagePackageManifestArtifact } from "../model/package-manifest.ts";
 import type { OciImagePackagePlan } from "../stages/package-stage/package-action-plan.ts";
 import { normalizeCredentialFreeRepositoryLocator } from "../source/repository-locator.ts";
@@ -34,15 +34,17 @@ export function normalizeApplicationImageSourceUrl(
 export function createPlannedApplicationImageArtifact(
   plan: OciImagePackagePlan,
   gitSha: string,
-  provider?: OciRegistryProviderDefinition,
+  coordinates?: ResolvedApplicationImageCoordinates,
 ): PlannedOciImagePackageManifestArtifact {
   return {
     image: plan.image,
     kind: "oci_image",
     platforms: [plan.platform],
-    ...(provider === undefined
+    ...(coordinates === undefined
       ? {}
-      : { repository: buildApplicationImageRepository(provider, plan.image) }),
+      : {
+          repository: buildApplicationImageRepository(coordinates, plan.image),
+        }),
     source_revision: normalizeApplicationImageGitSha(gitSha),
     status: "planned",
   };

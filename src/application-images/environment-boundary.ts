@@ -34,6 +34,12 @@ export type ProtectedApplicationImageCredential = {
   provider: string;
 };
 
+export type PublicApplicationImageCoordinateName = {
+  field: "registry_env" | "repository_prefix_env";
+  name: string;
+  provider: string;
+};
+
 export type ApplicationImageCredentialProjectionIssue =
   ProtectedApplicationImageCredential & {
     metadataField: string;
@@ -65,6 +71,82 @@ export function collectApplicationImageCredentialNames(
         provider,
       }));
     });
+}
+
+export function collectApplicationImageCoordinateNames(
+  providers: ApplicationImageProvidersDefinition,
+): PublicApplicationImageCoordinateName[] {
+  return Object.keys(providers.providers)
+    .sort()
+    .flatMap((provider) => {
+      const definition = providers.providers[provider];
+
+      return [
+        ...(definition.registry_env === undefined
+          ? []
+          : [
+              {
+                field: "registry_env" as const,
+                name: definition.registry_env,
+                provider,
+              },
+            ]),
+        ...(definition.repository_prefix_env === undefined
+          ? []
+          : [
+              {
+                field: "repository_prefix_env" as const,
+                name: definition.repository_prefix_env,
+                provider,
+              },
+            ]),
+      ];
+    });
+}
+
+export function assertApplicationImageCoordinateNameSeparation(
+  providers: ApplicationImageProvidersDefinition,
+  additionalProtectedNames: string[] = [],
+): void {
+  const coordinates = collectApplicationImageCoordinateNames(providers);
+  const protectedNames = new Set([
+    ...collectApplicationImageCredentialNames(providers).map(({ name }) => name),
+    ...additionalProtectedNames,
+    "GIT_SHA",
+    "DRY_RUN",
+  ]);
+  const coordinateOwners = new Map<string, PublicApplicationImageCoordinateName>();
+  const issues: string[] = [];
+
+  for (const coordinate of coordinates) {
+    const existing = coordinateOwners.get(coordinate.name);
+
+    if (existing !== undefined) {
+      issues.push(
+        `provider "${coordinate.provider}" field "${coordinate.field}" aliases provider "${existing.provider}" field "${existing.field}" through environment name "${coordinate.name}"`,
+      );
+    } else {
+      coordinateOwners.set(coordinate.name, coordinate);
+    }
+
+    if (
+      protectedNames.has(coordinate.name) ||
+      coordinate.name.startsWith("ARTIFACT_")
+    ) {
+      issues.push(
+        `provider "${coordinate.provider}" field "${coordinate.field}" uses protected environment name "${coordinate.name}"`,
+      );
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new Error(
+      [
+        "Application image provider coordinate environment names must be public and distinct:",
+        ...issues.sort().map((issue) => `- ${issue}.`),
+      ].join("\n"),
+    );
+  }
 }
 
 export function collectApplicationImageCredentialNameReuseIssues(

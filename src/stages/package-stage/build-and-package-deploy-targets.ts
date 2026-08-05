@@ -31,6 +31,7 @@ export async function buildAndPackageDeployTargets(
     await activateApplicationImageProvider(repo, packageTargets, {
       applicationImageProvider,
       dryRun,
+      hostEnv,
     });
 
   const builtRepo = await buildDeployTargets(
