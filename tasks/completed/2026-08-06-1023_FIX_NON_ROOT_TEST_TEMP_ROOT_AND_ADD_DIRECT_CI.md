@@ -1,6 +1,6 @@
 # Fix Non-Root Test Temp Root And Add Direct CI
 
-Status: accepted for implementation.
+Status: completed.
 
 Baseline: `v0.9.1` release commit
 `db35bb8eefef173aa052b1264b973bdb0794912d`; working baseline
@@ -14,7 +14,7 @@ contract, and it must not retarget or republish `v0.9.1`.
 
 A clean direct `npm test` run as an ordinary non-root user exposes one harness
 failure in the v0.8.1 OCI compatibility archive-helper test. The test sources
-[`../test/scripts/lib/oci-v081-acceptance-matrix.sh`](../test/scripts/lib/oci-v081-acceptance-matrix.sh)
+[`../../test/scripts/lib/oci-v081-acceptance-matrix.sh`](../../test/scripts/lib/oci-v081-acceptance-matrix.sh)
 without the matrix runner that normally initializes
 `OCI_V081_MATRIX_TEMP_ROOT`. The unset value produces root-level
 `/rush-delivery-v081-*` `mktemp` templates, which a root Dagger test container
@@ -81,23 +81,23 @@ standard fallback, and CI must exercise the unconfigured non-root path directly.
 - [x] Run the focused matrix and CI workflow contract tests.
 - [x] Run a clean archived `npm test` as a non-root user with both
       `OCI_V081_MATRIX_TEMP_ROOT` and `TMPDIR` initially absent.
-- [ ] Run the complete direct test suite, `yarn typecheck`, workflow/shell lint,
+- [x] Run the complete direct test suite, `yarn typecheck`, workflow/shell lint,
       `git diff --check`, and the clean Dagger self-check.
 - [x] Review the final diff for unrelated changes, mutable pins, secret access,
       excessive permissions, and release/version drift.
-- [ ] Commit and push reviewable changes, then open a draft pull request through
+- [x] Commit and push reviewable changes, then open a draft pull request through
       the normal repository flow.
-- [ ] Record validation and pull-request evidence, mark every item complete, and
+- [x] Record validation and pull-request evidence, mark every item complete, and
       move this file to `tasks/completed` without changing a released tag.
 
 ## Completion Criteria
 
-- [ ] A clean non-root direct `npm test` passes without the private matrix temp
+- [x] A clean non-root direct `npm test` passes without the private matrix temp
       override.
-- [ ] Direct CI runs automatically and cannot silently reintroduce the override.
-- [ ] Production acceptance behavior and all consumer contracts remain
+- [x] Direct CI runs automatically and cannot silently reintroduce the override.
+- [x] Production acceptance behavior and all consumer contracts remain
       unchanged.
-- [ ] `v0.9.1` remains immutable.
+- [x] `v0.9.1` remains immutable.
 
 ## Validation Evidence
 
@@ -115,3 +115,11 @@ standard fallback, and CI must exercise the unconfigured non-root path directly.
   checkout correctly excludes the generated `sdk` directory. CI was aligned
   with project architecture by leaving that generated-SDK-aware check in the
   clean Dagger self-check instead of inventing a second SDK bootstrap path.
+- The corrected clean Dagger self-check passed all 448 tests and its generated
+  SDK-aware `yarn typecheck` on commit
+  `29b155a0f66d329c689555d1e776eaae666b2b1e`.
+- The corrected GitHub-hosted pull-request CI passed in
+  [run 31093830711](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31093830711),
+  and the review handoff is [pull request #7](https://github.com/BootstrapLaboratory/rush-delivery/pull/7).
+- The immutable `v0.9.1` tag still resolves to release commit
+  `db35bb8eefef173aa052b1264b973bdb0794912d`.
