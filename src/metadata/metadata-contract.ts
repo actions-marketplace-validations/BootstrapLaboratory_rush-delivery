@@ -5,6 +5,7 @@ import { applicationImageProvidersPath } from "../application-images/metadata-pa
 import { parseApplicationImageProviders } from "../application-images/parse-providers.ts";
 import {
   collectApplicationImageCredentialNames,
+  assertApplicationImageCoordinateNameSeparation,
   collectDeployRuntimeCredentialProjectionIssues,
   collectNpmReleaseCredentialProjectionIssues,
   collectPackageBuildCredentialProjectionIssues,
@@ -42,12 +43,18 @@ import {
 } from "./rush-projects.ts";
 import { parseRushCacheProviders } from "../rush-cache/parse-providers.ts";
 import { rushCacheProvidersPath } from "../rush-cache/metadata-paths.ts";
+import type { RushCacheProvidersDefinition } from "../model/rush-cache.ts";
+import type { ToolchainImageProvidersDefinition } from "../model/toolchain-image.ts";
+import { parseToolchainImageProviders } from "../toolchain-images/parse-providers.ts";
+import { toolchainImageProvidersPath } from "../toolchain-images/metadata-paths.ts";
 import type { NpmReleaseDefinition } from "../model/npm-release.ts";
 import {
   npmReleaseMetadataPath,
   releaseMetadataDirectory,
 } from "../stages/release/metadata-paths.ts";
 import { parseNpmRelease } from "../stages/release/parse-npm-release.ts";
+import { rushToolchainPath } from "../rush-toolchain/metadata-paths.ts";
+import { parseRushToolchain } from "../rush-toolchain/parse.ts";
 
 type RepositoryPathType = "directory" | "file";
 
@@ -248,7 +255,7 @@ async function validateRushCacheMetadata(
   repository: MetadataContractRepository,
   issues: string[],
   required: boolean,
-): Promise<void> {
+): Promise<RushCacheProvidersDefinition | undefined> {
   const exists = await repository.exists(rushCacheProvidersPath, "file");
 
   if (!exists) {
@@ -257,7 +264,7 @@ async function validateRushCacheMetadata(
         `Rush cache provider metadata file "${rushCacheProvidersPath}" must exist.`,
       );
     }
-    return;
+    return undefined;
   }
 
   const definition = await readParsed(
@@ -269,10 +276,44 @@ async function validateRushCacheMetadata(
   );
 
   if (!definition) {
+    return undefined;
+  }
+
+  return definition;
+}
+
+async function validateToolchainImageProviderMetadata(
+  repository: MetadataContractRepository,
+  issues: string[],
+): Promise<ToolchainImageProvidersDefinition | undefined> {
+  if (!(await repository.exists(toolchainImageProvidersPath, "file"))) {
+    return undefined;
+  }
+
+  return readParsed(
+    repository,
+    toolchainImageProvidersPath,
+    "Toolchain image provider metadata file",
+    parseToolchainImageProviders,
+    issues,
+  );
+}
+
+async function validateRushToolchainMetadata(
+  repository: MetadataContractRepository,
+  issues: string[],
+): Promise<void> {
+  if (!(await repository.exists(rushToolchainPath, "file"))) {
     return;
   }
 
-  void definition;
+  await readParsed(
+    repository,
+    rushToolchainPath,
+    "Rush toolchain metadata file",
+    parseRushToolchain,
+    issues,
+  );
 }
 
 async function validateNpmReleaseMetadata(
@@ -319,7 +360,10 @@ async function validateReleaseMetadata(
   repository: MetadataContractRepository,
   issues: string[],
   protectedCredentials: ProtectedApplicationImageCredential[],
-): Promise<string[]> {
+): Promise<{
+  definition?: NpmReleaseDefinition;
+  targets: string[];
+}> {
   const releaseTargets = await listYamlTargets(
     repository,
     releaseMetadataDirectory,
@@ -340,7 +384,10 @@ async function validateReleaseMetadata(
     protectedCredentials,
   );
 
-  return npmRelease === undefined ? [] : ["npm"];
+  return {
+    ...(npmRelease === undefined ? {} : { definition: npmRelease }),
+    targets: npmRelease === undefined ? [] : ["npm"],
+  };
 }
 
 function validatePackageArtifact(
@@ -707,12 +754,50 @@ export async function validateMetadataContractRepository(
     applicationImageProviders === undefined
       ? []
       : collectApplicationImageCredentialNames(applicationImageProviders);
-  await validateRushCacheMetadata(repository, issues, requireRushCacheMetadata);
-  const releaseTargets = await validateReleaseMetadata(
+  const rushCacheProviders = await validateRushCacheMetadata(
+    repository,
+    issues,
+    requireRushCacheMetadata,
+  );
+  const toolchainImageProviders = await validateToolchainImageProviderMetadata(
+    repository,
+    issues,
+  );
+  await validateRushToolchainMetadata(repository, issues);
+  const releaseMetadata = await validateReleaseMetadata(
     repository,
     issues,
     protectedApplicationImageCredentials,
   );
+
+  if (applicationImageProviders !== undefined) {
+    const protectedCoordinateAliases = [
+      ...(rushCacheProviders?.providers.github === undefined
+        ? []
+        : [
+            rushCacheProviders.providers.github.username_env,
+            rushCacheProviders.providers.github.token_env,
+          ]),
+      ...(toolchainImageProviders?.providers.github === undefined
+        ? []
+        : [
+            toolchainImageProviders.providers.github.username_env,
+            toolchainImageProviders.providers.github.token_env,
+          ]),
+      ...(releaseMetadata.definition === undefined
+        ? []
+        : [releaseMetadata.definition.auth.token_env]),
+    ];
+
+    try {
+      assertApplicationImageCoordinateNameSeparation(
+        applicationImageProviders,
+        protectedCoordinateAliases,
+      );
+    } catch (error) {
+      issues.push(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   if (!requireDeployMetadata) {
     if (issues.length > 0) {
@@ -722,7 +807,7 @@ export async function validateMetadataContractRepository(
     return {
       deploy_targets: [],
       package_targets: [],
-      release_targets: releaseTargets,
+      release_targets: releaseMetadata.targets,
       rush_projects: [...rushProjects.keys()].sort(),
       validation_targets: [],
     };
@@ -812,7 +897,7 @@ export async function validateMetadataContractRepository(
   return {
     deploy_targets: deployTargets,
     package_targets: packageMetadataTargets,
-    release_targets: releaseTargets,
+    release_targets: releaseMetadata.targets,
     rush_projects: [...rushProjects.keys()].sort(),
     validation_targets: validationTargets,
   };

@@ -4,7 +4,7 @@ Package targets describe the deploy artifact for each deploy target. Rush
 Delivery builds selected Rush projects first, then materializes the artifacts
 declared in `.dagger/package/targets`.
 
-The example has two filesystem package styles. v0.8.1 also supports an opt-in
+The example has two filesystem package styles. v0.9.0 also supports an opt-in
 OCI application image.
 
 ## Rush Deploy Archive
@@ -55,7 +55,7 @@ frontend assets are the common case.
 Use an OCI artifact when the deploy platform consumes a container image:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
 name: server
 
 artifact:

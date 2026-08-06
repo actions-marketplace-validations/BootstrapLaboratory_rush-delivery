@@ -1,3 +1,5 @@
+import type { RushToolchainDownload } from "./rush-toolchain.ts";
+
 export type ToolchainImageKind = "deploy-executor" | "rush";
 
 export type ToolchainImageProvider = "off" | "github";
@@ -6,19 +8,23 @@ export type ToolchainImagePolicy = "lazy" | "pull-or-build";
 
 export type ToolchainImageSpec = {
   baseImage: string;
+  downloads?: RushToolchainDownload[];
   env: Record<string, string>;
   install: string[];
   kind: ToolchainImageKind;
   name: string;
+  platform?: "linux/amd64";
   version: string;
 };
 
 export type NormalizedToolchainImageSpec = {
   base_image: string;
+  downloads?: RushToolchainDownload[];
   env: Record<string, string>;
   install: string[];
   kind: ToolchainImageKind;
   name: string;
+  platform?: "linux/amd64";
   version: string;
 };
 

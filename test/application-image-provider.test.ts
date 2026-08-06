@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { parseApplicationImageProvider } from "../src/application-images/options.ts";
 import { parseApplicationImageProviders } from "../src/application-images/parse-providers.ts";
+import { resolveApplicationImageCoordinates } from "../src/application-images/coordinates.ts";
 import {
   resolveApplicationImageCredentialValues,
   selectApplicationImageProvider,
@@ -41,6 +42,147 @@ test("parses generic application image provider metadata", () => {
 test("accepts off and normalized named provider options", () => {
   assert.equal(parseApplicationImageProvider("off"), "off");
   assert.equal(parseApplicationImageProvider("release-eu"), "release-eu");
+});
+
+test("parses every static and environment-backed coordinate combination", () => {
+  for (const [registryField, repositoryField] of [
+    ["registry: registry.example", "repository_prefix: example/platform"],
+    ["registry: registry.example", "repository_prefix_env: OCI_REPOSITORY"],
+    ["registry_env: OCI_REGISTRY", "repository_prefix: example/platform"],
+    ["registry_env: OCI_REGISTRY", "repository_prefix_env: OCI_REPOSITORY"],
+  ]) {
+    const parsed = parseApplicationImageProviders(`
+providers:
+  release:
+    kind: oci_registry
+    ${registryField}
+    ${repositoryField}
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+`);
+    const reads: string[] = [];
+    const hostEnv = new Proxy(
+      {
+        OCI_REGISTRY: "registry.example",
+        OCI_REPOSITORY: "example/platform",
+      },
+      {
+        get(target, property, receiver) {
+          if (typeof property === "string") {
+            reads.push(property);
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+
+    assert.deepEqual(
+      resolveApplicationImageCoordinates(
+        "release",
+        parsed.providers.release,
+        hostEnv,
+      ),
+      {
+        registry: "registry.example",
+        repositoryPrefix: "example/platform",
+      },
+    );
+    assert.deepEqual(reads, [
+      ...(registryField.includes("_env") ? ["OCI_REGISTRY"] : []),
+      ...(repositoryField.includes("_env") ? ["OCI_REPOSITORY"] : []),
+    ]);
+  }
+});
+
+test("rejects missing and conflicting coordinate XOR fields", () => {
+  for (const replacement of [
+    "registry: registry.example.test:5000\n    registry_env: OCI_REGISTRY",
+    "",
+    "repository_prefix: example/platform\n    repository_prefix_env: OCI_REPOSITORY",
+  ]) {
+    const source = replacement.includes("repository_prefix")
+      ? providersYaml.replace(
+          "repository_prefix: example/platform",
+          replacement,
+        )
+      : providersYaml.replace(
+          "registry: registry.example.test:5000",
+          replacement,
+        );
+
+    assert.throws(
+      () => parseApplicationImageProviders(source),
+      /must define exactly one of/,
+    );
+  }
+});
+
+test("redacts invalid dynamic coordinate values", () => {
+  const providers = parseApplicationImageProviders(
+    providersYaml
+      .replace(
+        "registry: registry.example.test:5000",
+        "registry_env: OCI_REGISTRY",
+      )
+      .replace(
+        "repository_prefix: example/platform",
+        "repository_prefix_env: OCI_REPOSITORY",
+      ),
+  );
+  const sentinel = "https://SENTINEL_COORDINATE.invalid/Upper";
+  let message = "";
+
+  assert.throws(
+    () =>
+      resolveApplicationImageCoordinates(
+        "release",
+        providers.providers.release,
+        {
+          OCI_REGISTRY: sentinel,
+          OCI_REPOSITORY: "example/platform",
+        },
+      ),
+    (error) => {
+      message = error instanceof Error ? error.message : String(error);
+      return true;
+    },
+  );
+  assert.equal(message.includes(sentinel), false);
+  assert.match(message, /registry from environment OCI_REGISTRY/);
+});
+
+test("rejects coordinate names that alias credentials, each other, or framework names", () => {
+  for (const coordinateName of ["OCI_TOKEN", "GIT_SHA", "ARTIFACT_PATH"]) {
+    assert.throws(
+      () =>
+        parseApplicationImageProviders(
+          providersYaml.replace(
+            "registry: registry.example.test:5000",
+            `registry_env: ${coordinateName}`,
+          ),
+        ),
+      /coordinate environment names must be public and distinct/,
+    );
+  }
+
+  assert.throws(
+    () =>
+      parseApplicationImageProviders(
+        providersYaml
+          .replace(
+            "registry: registry.example.test:5000",
+            "registry_env: OCI_COORDINATE",
+          )
+          .replace(
+            "repository_prefix: example/platform",
+            "repository_prefix_env: OCI_COORDINATE",
+          ),
+      ),
+    /aliases provider "release" field/,
+  );
 });
 
 test("rejects reserved off provider metadata", () => {

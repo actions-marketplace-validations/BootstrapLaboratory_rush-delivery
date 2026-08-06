@@ -25,8 +25,8 @@ import { parsePackageManifest } from "../src/stages/package-stage/package-manife
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "..");
-const currentRelease = "v0.8.1";
-const previousRelease = "v0.8.0";
+const currentRelease = "v0.9.0";
+const previousRelease = "v0.8.1";
 const daggerVersion = "v0.20.7";
 
 type MarkdownFence = {
@@ -425,8 +425,8 @@ test("current release, Dagger, schema, provenance, and tool pins agree", async (
     "website-docusaurus/src/pages/index.tsx",
   ]) {
     const source = await readRepoFile(homepage);
-    assert.match(source, /BootstrapLaboratory\/rush-delivery@v0\.8\.1/u);
-    assert.match(source, /\/schemas\/v0\.8\.1\//u);
+    assert.match(source, /BootstrapLaboratory\/rush-delivery@v0\.9\.0/u);
+    assert.match(source, /\/schemas\/v0\.9\.0\//u);
   }
 
   const packageImageSource = await readRepoFile(
@@ -434,11 +434,11 @@ test("current release, Dagger, schema, provenance, and tool pins agree", async (
   );
   assert.match(
     packageImageSource,
-    /https:\/\/bootstraplaboratory\.github\.io\/rush-delivery\/build-types\/oci-image\/v0\.8\.1/u,
+    /https:\/\/bootstraplaboratory\.github\.io\/rush-delivery\/build-types\/oci-image\/v0\.9\.0/u,
   );
   assert.match(
     packageImageSource,
-    /https:\/\/github\.com\/BootstrapLaboratory\/rush-delivery@v0\.8\.1/u,
+    /https:\/\/github\.com\/BootstrapLaboratory\/rush-delivery@v0\.9\.0/u,
   );
 
   const cosignSource = await readRepoFile("src/application-images/cosign.ts");
@@ -986,7 +986,7 @@ test("documented locator, env-diagnostic, and host-path guarantees match code", 
   );
   assert.match(
     splitStageTutorial,
-    /Run the `v0\.8\.1` Package producer again from the intended source and built\s+output, export the complete returned directory, and register a new archive/u,
+    /Run the `v0\.9\.0` Package producer again from the intended source and built\s+output, export the complete returned directory, and register a new archive/u,
   );
   for (const frameworkPath of [
     '".dagger"',

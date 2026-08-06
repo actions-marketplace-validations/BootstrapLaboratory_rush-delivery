@@ -1,4 +1,4 @@
-import type { OciRegistryProviderDefinition } from "../model/application-image.ts";
+import type { ResolvedApplicationImageCoordinates } from "../model/application-image.ts";
 
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const FULL_GIT_SHA_PATTERN = /^[a-f0-9]{40}$/;
@@ -11,10 +11,10 @@ export type PublishedImageReference = {
 };
 
 export function buildApplicationImageRepository(
-  provider: OciRegistryProviderDefinition,
+  coordinates: ResolvedApplicationImageCoordinates,
   image: string,
 ): string {
-  return `${provider.registry}/${provider.repository_prefix}/${image}`;
+  return `${coordinates.registry}/${coordinates.repositoryPrefix}/${image}`;
 }
 
 export function buildApplicationImageTagReference(

@@ -97,10 +97,10 @@ docs. When adding or renaming public docs pages, update both:
 Schemas under [`../schemas`](../schemas) are copied into the static site during
 website builds and are published under `/rush-delivery/schemas/`. Exact release
 schemas also live under versioned subdirectories such as
-`/rush-delivery/schemas/v0.8.1/`.
+`/rush-delivery/schemas/v0.9.0/`.
 
 When releasing a version that changes schema behavior, create a new versioned
-schema snapshot such as `schemas/v0.8.1`, keep earlier directories immutable,
+schema snapshot such as `schemas/v0.9.0`, keep earlier directories immutable,
 and update the root schemas to the current release shape.
 
 ## Versioned Docusaurus Docs

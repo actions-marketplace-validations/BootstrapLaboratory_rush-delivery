@@ -3,7 +3,9 @@ import { dag, type Secret } from "@dagger.io/dagger";
 import type {
   ApplicationImageProvidersDefinition,
   OciRegistryProviderDefinition,
+  ResolvedApplicationImageCoordinates,
 } from "../model/application-image.ts";
+import { resolveApplicationImageCoordinates } from "./coordinates.ts";
 import {
   resolveApplicationImageCredentialValues,
   selectApplicationImageProvider,
@@ -11,6 +13,7 @@ import {
 
 export type ResolvedApplicationImageProvider = {
   definition?: OciRegistryProviderDefinition;
+  coordinates?: ResolvedApplicationImageCoordinates;
   dockerConfig?: Secret;
   name: string;
   registryToken?: Secret;
@@ -29,6 +32,7 @@ export function resolveApplicationImageProvider(
   providers: ApplicationImageProvidersDefinition | undefined,
   hostEnv: Record<string, string>,
   dryRun: boolean,
+  resolvedCoordinates?: ResolvedApplicationImageCoordinates,
 ): ResolvedApplicationImageProvider {
   const selected = selectApplicationImageProvider(providerName, providers);
   const { definition, name } = selected;
@@ -37,8 +41,12 @@ export function resolveApplicationImageProvider(
     return { name };
   }
 
+  const coordinates =
+    resolvedCoordinates ??
+    resolveApplicationImageCoordinates(name, definition!, hostEnv);
+
   if (dryRun) {
-    return { definition, name };
+    return { coordinates, definition, name };
   }
 
   const liveDefinition = definition!;
@@ -49,12 +57,13 @@ export function resolveApplicationImageProvider(
     );
 
   return {
+    coordinates,
     definition: liveDefinition,
     dockerConfig: dag.setSecret(
       secretName(name, "docker-config"),
       JSON.stringify({
         auths: {
-          [liveDefinition.registry]: {
+          [coordinates.registry]: {
             auth: Buffer.from(`${username}:${token}`, "utf8").toString(
               "base64",
             ),

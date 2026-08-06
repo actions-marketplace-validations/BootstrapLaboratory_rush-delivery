@@ -9,6 +9,8 @@ import {
   resolveToolchainImage,
 } from "../toolchain-images/resolve.ts";
 import { rushToolchainImageSpec } from "../toolchain-images/spec.ts";
+import { loadOptionalRushToolchain } from "../rush-toolchain/load.ts";
+import type { RushToolchainDefinition } from "../model/rush-toolchain.ts";
 
 export const RUSH_WORKDIR = "/workspace";
 
@@ -36,8 +38,10 @@ export type RushToolchainImageOptions = {
   providers?: ToolchainImageProvidersDefinition;
 };
 
-export function rushWorkflowToolchainSpec() {
-  return rushToolchainImageSpec(RUSH_IMAGE, RUSH_INSTALL_COMMANDS);
+export function rushWorkflowToolchainSpec(
+  definition?: RushToolchainDefinition,
+) {
+  return rushToolchainImageSpec(RUSH_IMAGE, RUSH_INSTALL_COMMANDS, definition);
 }
 
 export function prepareRushWorkspaceContainer(repo: Directory): Container {
@@ -52,8 +56,9 @@ export async function prepareRushContainer(
   repo: Directory,
   options: RushToolchainImageOptions = {},
 ): Promise<Container> {
+  const definition = await loadOptionalRushToolchain(repo);
   const toolchainImage = await resolveToolchainImage(
-    rushWorkflowToolchainSpec(),
+    rushWorkflowToolchainSpec(definition),
     options,
   );
 

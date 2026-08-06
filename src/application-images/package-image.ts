@@ -245,7 +245,7 @@ function formatProvenance(
     {
       buildDefinition: {
         buildType:
-          "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.8.1",
+          "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.0",
         externalParameters: {
           context: prepared.context,
           dockerfile: prepared.dockerfile,
@@ -266,7 +266,7 @@ function formatProvenance(
       },
       runDetails: {
         builder: {
-          id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.8.1",
+          id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.0",
         },
         metadata: {
           invocationId: `${prepared.target}:${prepared.gitSha}:${imageDigest}`,
@@ -282,6 +282,7 @@ function requireLiveProvider(
   provider: ResolvedApplicationImageProvider,
 ): asserts provider is ResolvedApplicationImageProvider & {
   definition: NonNullable<ResolvedApplicationImageProvider["definition"]>;
+  coordinates: NonNullable<ResolvedApplicationImageProvider["coordinates"]>;
   dockerConfig: NonNullable<ResolvedApplicationImageProvider["dockerConfig"]>;
   registryToken: NonNullable<ResolvedApplicationImageProvider["registryToken"]>;
   signingKey: NonNullable<ResolvedApplicationImageProvider["signingKey"]>;
@@ -295,6 +296,7 @@ function requireLiveProvider(
 } {
   if (
     provider.name === "off" ||
+    provider.coordinates === undefined ||
     provider.definition === undefined ||
     provider.dockerConfig === undefined ||
     provider.registryToken === undefined ||
@@ -322,7 +324,7 @@ export function planApplicationImage(
     artifact: createPlannedApplicationImageArtifact(
       plan,
       gitSha,
-      options.provider.definition,
+      options.provider.coordinates,
     ),
     evidenceFiles: [],
   };
@@ -394,7 +396,7 @@ export async function finalizeApplicationImage(
 ): Promise<OciPackageFinalization<PackageApplicationImageResult>> {
   requireLiveProvider(provider);
   const liveRepository = buildApplicationImageRepository(
-    provider.definition,
+    provider.coordinates,
     prepared.image,
   );
   const tagReference = buildApplicationImageTagReference(
@@ -406,7 +408,7 @@ export async function finalizeApplicationImage(
   try {
     returnedReference = await prepared.preparedSubject
       .withRegistryAuth(
-        provider.definition.registry,
+        provider.coordinates.registry,
         provider.username,
         provider.registryToken,
       )

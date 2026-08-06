@@ -59,15 +59,16 @@ export async function packageDeployTargets(
   const packagePlans =
     options.packageTargets ??
     (await preparePackageTargets(repo, ciPlan.deploy_targets, artifactPrefix));
+  const hostEnv =
+    options.hostEnv ??
+    (await parseOptionalEnvFile(deployEnvFile, "deploy env"));
   const applicationImageProviderActivation =
     options.applicationImageProviderActivation ??
     (await activateApplicationImageProvider(repo, packagePlans, {
       applicationImageProvider,
       dryRun,
+      hostEnv,
     }));
-  const hostEnv =
-    options.hostEnv ??
-    (await parseOptionalEnvFile(deployEnvFile, "deploy env"));
   const needsRushInstall = packagePlansRequireRushInstall(packagePlans);
   const container = needsRushInstall
     ? installRush(await prepareRushContainer(repo))

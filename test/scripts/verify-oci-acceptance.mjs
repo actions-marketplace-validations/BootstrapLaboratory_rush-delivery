@@ -303,6 +303,7 @@ async function inspectPublishedImageArchive(
   imageTarball,
   protectedValues,
   expectedDigest,
+  inspectArchiveEnvelope = true,
 ) {
   const archive = await readFile(imageTarball);
   const entries = parseTarArchive(
@@ -415,11 +416,13 @@ async function inspectPublishedImageArchive(
     );
   }
 
-  assertProtectedBufferAbsent(
-    archive,
-    "Acceptance published image archive",
-    protectedValues,
-  );
+  if (inspectArchiveEnvelope) {
+    assertProtectedBufferAbsent(
+      archive,
+      "Acceptance published image archive",
+      protectedValues,
+    );
+  }
 }
 
 function addProtectedValue(values, seen, value) {
@@ -517,6 +520,26 @@ async function assertProtectedValuesAbsent(filePath, label, protectedValues) {
       throw new Error(`${label} contains a credential sentinel.`);
     }
   }
+}
+
+if (process.argv[2] === "--assert-image-runtime-protected-absent") {
+  const [imageTarball, protectedValuesFile] = process.argv.slice(3);
+
+  if (!imageTarball || !protectedValuesFile) {
+    throw new Error(
+      "Usage: verify-oci-acceptance.mjs --assert-image-runtime-protected-absent IMAGE_TARBALL PROTECTED_VALUES_FILE",
+    );
+  }
+
+  const protectedValues = await loadProtectedValues(protectedValuesFile);
+  await inspectPublishedImageArchive(
+    imageTarball,
+    protectedValues,
+    undefined,
+    false,
+  );
+  process.stdout.write("OCI acceptance image runtime is redacted.\n");
+  process.exit(0);
 }
 
 if (process.argv[2] === "--assert-image-protected-absent") {
@@ -763,12 +786,12 @@ if (!provenance.runDetails?.metadata?.invocationId?.endsWith(artifact.digest)) {
 }
 if (
   provenance.buildDefinition?.buildType !==
-    "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.8.1" ||
+    "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.0" ||
   provenance.runDetails?.builder?.id !==
-    "https://github.com/BootstrapLaboratory/rush-delivery@v0.8.1"
+    "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
 ) {
   throw new Error(
-    "Acceptance provenance does not identify the v0.8.1 builder contract.",
+    "Acceptance provenance does not identify the v0.9.0 builder contract.",
   );
 }
 

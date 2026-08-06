@@ -131,6 +131,85 @@ test("OCI metadata and manifest fixtures satisfy their JSON schemas", async () =
   }
 });
 
+test("application provider schema matches coordinate XOR combinations", async () => {
+  const schema = (await readJson(
+    "schemas/application-image-providers.schema.json",
+  )) as AnySchema;
+  const validate = new Ajv2020({ allErrors: true }).compile(schema);
+  const baseProvider = {
+    kind: "oci_registry",
+    signing_key_env: "OCI_SIGNING_KEY",
+    signing_password_env: "OCI_SIGNING_PASSWORD",
+    token_env: "OCI_TOKEN",
+    username_env: "OCI_USERNAME",
+    verification_key_env: "OCI_VERIFICATION_KEY",
+  };
+
+  for (const coordinates of [
+    { registry: "registry.example", repository_prefix: "example/platform" },
+    {
+      registry: "registry.example",
+      repository_prefix_env: "OCI_REPOSITORY",
+    },
+    {
+      registry_env: "OCI_REGISTRY",
+      repository_prefix: "example/platform",
+    },
+    {
+      registry_env: "OCI_REGISTRY",
+      repository_prefix_env: "OCI_REPOSITORY",
+    },
+  ]) {
+    assert.equal(
+      validate({ providers: { release: { ...baseProvider, ...coordinates } } }),
+      true,
+      formatSchemaErrors(validate.errors),
+    );
+  }
+
+  for (const coordinates of [
+    { repository_prefix: "example/platform" },
+    {
+      registry: "registry.example",
+      registry_env: "OCI_REGISTRY",
+      repository_prefix: "example/platform",
+    },
+    { registry: "registry.example" },
+    {
+      registry: "registry.example",
+      repository_prefix: "example/platform",
+      repository_prefix_env: "OCI_REPOSITORY",
+    },
+  ]) {
+    assert.equal(
+      validate({ providers: { release: { ...baseProvider, ...coordinates } } }),
+      false,
+    );
+  }
+});
+
+test("Rush toolchain fixture satisfies its strict root schema", async () => {
+  const schema = (await readJson(
+    "schemas/rush-toolchain.schema.json",
+  )) as AnySchema;
+  const validate = new Ajv2020({ allErrors: true }).compile(schema);
+  const fixture = parseYaml(
+    await readFile(
+      path.join(testDirectory, "fixtures/rush-toolchain.yaml"),
+      "utf8",
+    ),
+  );
+
+  assert.equal(validate(fixture), true, formatSchemaErrors(validate.errors));
+  for (const mutation of [
+    { ...fixture, command: "curl" },
+    { ...fixture, base_image: "node:24-bookworm-slim" },
+    { ...fixture, platform: "linux/arm64" },
+  ]) {
+    assert.equal(validate(mutation), false);
+  }
+});
+
 test("OCI package target schema requires a safe evidence target and normalized paths", async () => {
   const schema = (await readJson(
     "schemas/package-target.schema.json",
@@ -224,34 +303,72 @@ test("released v0.8.0 schema snapshots remain byte-immutable", async () => {
   }
 });
 
-test("v0.8.1 snapshots every current schema with only a versioned id", async () => {
-  const schemaNames = (await readdir(path.join(repoRoot, "schemas")))
-    .filter((entry) => entry.endsWith(".schema.json"))
-    .sort();
+test("released v0.8.1 schema snapshots remain byte-immutable", async () => {
+  const expectedDigests: Record<string, string> = {
+    "application-image-providers.schema.json":
+      "1a7c65eff5e47e52fa90554add5af10736a6deacc3472773f290673ff42d35c5",
+    "deploy-services-mesh.schema.json":
+      "74702820f5be65ed94a533f8d830fd17061254f42c2bb90d9596fdb34d3ce42c",
+    "deploy-target.schema.json":
+      "4d51fd7c98f95867f38d655c4192383eb0fa47ad3d714699e516b15356ec8ef4",
+    "npm-release.schema.json":
+      "e2c879ebb7b9bf6e31f25f6a95340c00272728624f9469e485e5e43758f620d7",
+    "package-manifest.schema.json":
+      "1d2ff5771be9150d322249316567592a8ffe15ce7ef1690c16b1483f50097425",
+    "package-target.schema.json":
+      "00bc0dad0f6b878878146ee7241238e93a2b3ade92111d82a112cead358a66fd",
+    "rush-cache-providers.schema.json":
+      "576a27b5de68c7e500cb71c476b25a6b260842190f86117dcff3876cc25b9f2c",
+    "toolchain-image-providers.schema.json":
+      "f4c5fdf204ed97789aa1256537b05ccaed4b222defe921c30ce67ab45d93d5c2",
+    "validation-target.schema.json":
+      "f4e9d7bdd6fc37392ad4ee964cdb37c0ac4193db4574c52de2c8f89fde84450a",
+  };
   const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.8.1")))
     .filter((entry) => entry.endsWith(".schema.json"))
     .sort();
 
-  assert.deepEqual(snapshotNames, schemaNames);
+  assert.deepEqual(snapshotNames, Object.keys(expectedDigests).sort());
 
-  for (const schemaName of schemaNames) {
-    const current = (await readJson(`schemas/${schemaName}`)) as Record<
-      string,
-      unknown
-    >;
-    const snapshot = (await readJson(`schemas/v0.8.1/${schemaName}`)) as Record<
-      string,
-      unknown
-    >;
-
-    assert.equal(
-      snapshot.$id,
-      `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.1/${schemaName}`,
+  for (const schemaName of snapshotNames) {
+    const contents = await readFile(
+      path.join(repoRoot, "schemas/v0.8.1", schemaName),
     );
-    assert.deepEqual(
-      { ...snapshot, $id: current.$id },
-      current,
-      `${schemaName} snapshot must differ from the root schema only by $id`,
+    assert.equal(
+      createHash("sha256").update(contents).digest("hex"),
+      expectedDigests[schemaName],
+      `${schemaName} must remain byte-identical to the released v0.8.1 snapshot`,
+    );
+  }
+});
+
+test("current root schemas match the complete v0.9.0 snapshot", async () => {
+  const rootNames = (
+    await readdir(path.join(repoRoot, "schemas"), {
+      withFileTypes: true,
+    })
+  )
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".schema.json"))
+    .map((entry) => entry.name)
+    .sort();
+  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.9.0")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+
+  assert.deepEqual(snapshotNames, rootNames);
+  for (const schemaName of rootNames) {
+    const rootSchema = await readFile(
+      path.join(repoRoot, "schemas", schemaName),
+      "utf8",
+    );
+    const snapshotSchema = await readFile(
+      path.join(repoRoot, "schemas/v0.9.0", schemaName),
+      "utf8",
+    );
+    assert.equal(
+      snapshotSchema.replace("/schemas/v0.9.0/", "/schemas/"),
+      rootSchema,
+      `${schemaName} must differ only by the immutable v0.9.0 $id`,
     );
   }
 });

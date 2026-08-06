@@ -6,9 +6,12 @@ credentials.
 
 ## Source Providers
 
-`sourceMode=local_copy` copies the caller-provided `repo` directory into a
-Dagger-owned workspace. Use it for local development, offline runs, and
-unpushed changes. It requires `--repo`.
+`sourceMode=local_copy` consumes a caller-provided `repo` Directory. For local
+development, offline runs, and unpushed changes, use the versioned
+`rush-delivery-local` launcher so bounded defaults and repository patterns are
+applied to `host.directory` before transfer. The Action uses the same launcher
+parser. The old top-level call path remains available as the `legacy` policy.
+See [bounded local-copy imports](local-copy-source-imports.md).
 
 `sourceMode=git` clones or fetches the source from provider-neutral coordinates.
 This is the recommended CI path and does not require `--repo`:
@@ -29,6 +32,12 @@ Dagger run.
 `toolchainImageProvider=github` uses GitHub Container Registry as an OCI image
 store for content-addressed toolchain images. Image references are derived from
 normalized runtime specs and provider metadata.
+
+Optional `.dagger/toolchains/rush.yaml` changes the Rush toolchain spec to v2
+and includes the digest-pinned base, platform, and every ordered checksummed
+download in its cache identity. Projects without the file keep the exact v1
+identity. The [toolchain guide](rush-toolchain.md) defines the safe extension
+and update procedure.
 
 Policies:
 
@@ -65,14 +74,16 @@ credential-free OCI dry runs. A live selected OCI package target must name an
 When no selected package target is OCI, planning ignores the application-image
 provider input, provider metadata file, and provider credentials entirely.
 
-The adapter is registry-neutral. Metadata supplies a registry authority,
-repository prefix, and the names of environment variables containing registry
-and key-backed Cosign credentials. Selected values come from `workflow-env`
-plus `deploy-env`. The four sensitive values and derived Docker configuration
-become Dagger secrets; the globally unique `username_env` resolves to Dagger's
-required non-secret registry username. All five names must be globally unique
-across declared providers so a secret role cannot alias that plain channel.
-Provider metadata and dry-run output never contain credential values.
+The adapter is registry-neutral. Registry authority and repository prefix may
+be static metadata or public values named by `registry_env` and
+`repository_prefix_env`. Selected workflow values come from the
+workflow-plus-deploy overlay; standalone Package uses `deploy-env`. The four
+sensitive credential values and derived Docker configuration become Dagger
+secrets; the globally unique `username_env` resolves to Dagger's required
+non-secret registry username. All credential names are protected, and public
+coordinate names cannot alias them or another framework capability. Named dry
+runs resolve only required coordinates. Provider metadata and output never
+contain credential values.
 
 Application images are distinct from toolchain images and Rush cache images.
 They use package-target image names, are published once per target under a

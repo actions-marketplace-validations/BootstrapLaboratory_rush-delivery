@@ -91,6 +91,7 @@ export async function executePackagePlans(
       providers,
       options.hostEnv ?? {},
       dryRun,
+      options.applicationImageProviderActivation?.coordinates,
     );
   }
 

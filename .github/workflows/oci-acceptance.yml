@@ -31,7 +31,14 @@ jobs:
       - name: Prove security boundaries on the pinned engine
         run: npm run test:dagger-security-engine
 
-      - name: Run project-controlled GHCR acceptance
+      - name: Prove provider-backed mixed-language Rush toolchain caching
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash test/scripts/run-rush-toolchain-provider-engine.sh
+
+      - name: Run project-controlled dynamic-coordinate GHCR acceptance
         env:
           GITHUB_TOKEN: ${{ github.token }}
           OCI_ACCEPTANCE_DIAGNOSTIC_PATH: ${{ runner.temp }}/rush-delivery-oci-acceptance-diagnostic.txt

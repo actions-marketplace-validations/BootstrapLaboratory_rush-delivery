@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/validation-target.schema.json",
+  "title": "Rush Delivery validation target",
+  "type": "object",
+  "required": ["name"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "$ref": "#/$defs/identifier"
+    },
+    "services": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["image"],
+        "additionalProperties": false,
+        "properties": {
+          "env": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "image": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "ports": {
+            "$ref": "#/$defs/ports"
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["command", "name"],
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "$ref": "#/$defs/stringList"
+              },
+              "command": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "env": {
+                "$ref": "#/$defs/stringMap"
+              },
+              "name": {
+                "$ref": "#/$defs/identifier"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["name", "service"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/identifier"
+              },
+              "service": {
+                "type": "object",
+                "required": ["command"],
+                "additionalProperties": false,
+                "properties": {
+                  "args": {
+                    "$ref": "#/$defs/stringList"
+                  },
+                  "command": {
+                    "$ref": "#/$defs/nonEmptyString"
+                  },
+                  "env": {
+                    "$ref": "#/$defs/stringMap"
+                  },
+                  "ports": {
+                    "$ref": "#/$defs/ports"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 65535
+      },
+      "uniqueItems": true
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

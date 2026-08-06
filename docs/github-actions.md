@@ -28,7 +28,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
         with:
           entrypoint: validate
           toolchain-image-provider: github
@@ -52,12 +52,21 @@ steps:
     with:
       fetch-depth: 0
 
-  - uses: BootstrapLaboratory/rush-delivery@v0.8.1
+  - uses: BootstrapLaboratory/rush-delivery@v0.9.0
     with:
       entrypoint: validate
       repo: .
       source-mode: local_copy
+      source-import-policy: bounded
+      source-import-ignore-file: .dagger/source-import.ignore
 ```
+
+`bounded` is the v0.9.0 local-copy default. It removes dependency/cache trees
+at the Dagger host import operation while retaining `.git`, `.dagger`, and
+`rush.json`. Repository `!` inclusions are read from the optional ignore file.
+Use `legacy` only as a temporary recovery path for a required matched file. Git
+source mode never reads either local-copy input and emits one fixed diagnostic.
+See [bounded local-copy imports](local-copy-source-imports.md).
 
 ## Release Workflow
 
@@ -77,7 +86,7 @@ steps:
       service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
   - name: Rush Delivery
-    uses: BootstrapLaboratory/rush-delivery@v0.8.1
+    uses: BootstrapLaboratory/rush-delivery@v0.9.0
     with:
       force-targets-json: ${{ inputs.force_targets_json || '[]' }}
       deploy-tag-prefix: ${{ env.DEPLOY_TAG_PREFIX }}
@@ -140,9 +149,11 @@ Set `application-image-provider` to a provider declared in
 `oci_image` package target. The action default is `off`, so existing
 directory/archive projects need no configuration change when upgrading.
 
-Provider metadata names the registry and Cosign environment variables. Put
-their values in `workflow-env` or `deploy-env`; the action passes the flat env
-file to Dagger, and Rush Delivery converts only the selected values to secrets.
+Provider metadata names public registry coordinates (or the environment names
+that select them) and protected Cosign/registry credential environment names.
+Put their values in `workflow-env` or `deploy-env`; the action passes the flat
+env file to Dagger. Rush Delivery treats coordinates as public routing inputs
+and converts only credential values to protected capabilities.
 Store multiline PEM values with literal `\n` separators. Do not put registry or
 signing values in `runtime-file-map`: deploy scripts receive only the verified
 digest reference and target-scoped evidence.
@@ -160,9 +171,23 @@ Dry runs may leave `application-image-provider: off`, or select a named provider
 to validate the planned repository without resolving its credentials. Build
 the metadata and CI path with the
 [OCI application images tutorial](tutorial/oci-application-images/README.md),
+the [environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md),
 then use the [production guide](oci-application-images.md),
 [registry recipes](oci-registry-recipes.md), and
 [troubleshooting guide](oci-application-image-troubleshooting.md).
+
+## Project-Owned Rush Tools
+
+When `.dagger/toolchains/rush.yaml` exists, every Rush-using entrypoint receives
+its digest-pinned, checksummed executables before Rush install and lifecycle
+scripts. No new Action input is required. Toolchain provider/cache inputs keep
+their existing meaning; the project metadata becomes part of the v2 toolchain
+cache identity.
+
+Trusted workflows may use `toolchain-image-policy: lazy` to publish a missing
+content-addressed image. PR validation should use `pull-or-build` so it never
+publishes. Follow the [toolchain guide](rush-toolchain.md) and
+[mixed Node/Python tutorial](tutorial/15-mixed-node-python-toolchain.md).
 
 ## Package Release
 
@@ -193,7 +218,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.8.1
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -275,7 +300,7 @@ The action mode does not replace raw Dagger usage. Local runs, other CI
 providers, and lower-level debugging can still call the module directly:
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.8.1 call workflow \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 call workflow \
   --git-sha="$GITHUB_SHA" \
   --source-mode=git \
   --source-repository-url="$SOURCE_REPOSITORY_URL" \

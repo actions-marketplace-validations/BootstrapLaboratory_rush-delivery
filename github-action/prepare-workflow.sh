@@ -205,6 +205,8 @@ rush_cache_provider="${INPUT_RUSH_CACHE_PROVIDER:-off}"
 rush_cache_policy="${INPUT_RUSH_CACHE_POLICY-}"
 application_image_provider="${INPUT_APPLICATION_IMAGE_PROVIDER:-off}"
 source_mode="${INPUT_SOURCE_MODE:-git}"
+source_import_policy="${INPUT_SOURCE_IMPORT_POLICY:-bounded}"
+source_import_ignore_file="${INPUT_SOURCE_IMPORT_IGNORE_FILE:-.dagger/source-import.ignore}"
 source_repository_url="${INPUT_SOURCE_REPOSITORY_URL-}"
 source_ref="${INPUT_SOURCE_REF:-${GITHUB_REF-}}"
 source_auth_token_env="${INPUT_SOURCE_AUTH_TOKEN_ENV:-GITHUB_TOKEN}"
@@ -219,6 +221,21 @@ fi
 if [[ -z ${source_repository_url} && -n ${GITHUB_SERVER_URL-} && -n ${GITHUB_REPOSITORY-} ]]; then
 	source_repository_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
 fi
+
+bounded_local_copy="false"
+case "${source_mode}" in
+git)
+	printf '%s\n' '[source-import] bounded local-copy settings are ignored in Git source mode' >&2
+	;;
+local_copy)
+	case "${source_import_policy}" in
+	bounded) bounded_local_copy="true" ;;
+	legacy) ;;
+	*) die "source-import-policy must be bounded or legacy" ;;
+	esac
+	;;
+*) die "source-mode must be git or local_copy" ;;
+esac
 
 if [[ -z ${toolchain_image_policy} ]]; then
 	if [[ ${entrypoint} == "validate" ]]; then
@@ -285,7 +302,9 @@ workflow)
 	if [[ ${release_targets_json} != "[]" || -s ${release_env_file} ]]; then
 		args+=("--release-env-file=${release_env_file}")
 	fi
-	append_source_args
+	if [[ ${bounded_local_copy} == "false" ]]; then
+		append_source_args
+	fi
 
 	if [[ -n ${host_workspace_dir} ]]; then
 		args+=("--host-workspace-dir=${host_workspace_dir}")
@@ -308,7 +327,9 @@ validate)
 		"--rush-cache-provider=${rush_cache_provider}"
 		"--rush-cache-policy=${rush_cache_policy}"
 	)
-	append_source_args
+	if [[ ${bounded_local_copy} == "false" ]]; then
+		append_source_args
+	fi
 	;;
 releasePackages | release-packages)
 	args=(
@@ -321,20 +342,41 @@ releasePackages | release-packages)
 		"--rush-cache-provider=${rush_cache_provider}"
 		"--rush-cache-policy=${rush_cache_policy}"
 	)
-	append_source_args
+	if [[ ${bounded_local_copy} == "false" ]]; then
+		append_source_args
+	fi
 	;;
 *)
 	die "unsupported entrypoint: ${entrypoint}"
 	;;
 esac
 
-call_args="$(shell_quote_args "${args[@]}")"
-if [[ -n ${INPUT_EXTRA_ARGS-} ]]; then
-	call_args="${call_args} ${INPUT_EXTRA_ARGS}"
+dagger_shell=""
+if [[ ${bounded_local_copy} == "true" ]]; then
+	bounded_repo="${repo_input:-${GITHUB_WORKSPACE:-.}}"
+	launcher_args=(
+		"--emit-shell"
+		"--module=${module}"
+		"--repo=${bounded_repo}"
+		"--source-import-policy=${source_import_policy}"
+		"--source-import-ignore-file=${source_import_ignore_file}"
+	)
+	if [[ -n ${INPUT_EXTRA_ARGS-} ]]; then
+		launcher_args+=("--trusted-extra-args=${INPUT_EXTRA_ARGS}")
+	fi
+	launcher_args+=("--" "${args[@]}")
+	dagger_shell="$("${GITHUB_ACTION_PATH}/github-action/rush-delivery-local" "${launcher_args[@]}")"
+	call_args=""
+else
+	call_args="$(shell_quote_args "${args[@]}")"
+	if [[ -n ${INPUT_EXTRA_ARGS-} ]]; then
+		call_args="${call_args} ${INPUT_EXTRA_ARGS}"
+	fi
 fi
 
 write_output module "${module}"
 write_output args "${call_args}"
+write_output shell "${dagger_shell}"
 write_output workflow-env-file "${workflow_env_file}"
 write_output deploy-env-file "${deploy_env_file}"
 write_output release-env-file "${release_env_file}"

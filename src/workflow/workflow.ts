@@ -239,6 +239,10 @@ export async function workflow(input: WorkflowInput): Promise<string> {
       gitSha,
       hostEnv: sourceHostEnv,
       npmReleaseDefinition,
+      protectedEnvironmentNames:
+        sourcePlan.mode === "git" && sourcePlan.auth !== undefined
+          ? [sourcePlan.auth.tokenEnv]
+          : [],
       releaseTargets,
       skipDeployPlanning: !deployMetadataExists,
       sourceRepositoryUrl:

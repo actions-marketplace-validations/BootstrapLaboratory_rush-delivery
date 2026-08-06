@@ -271,6 +271,67 @@ test("named OCI dry run loads metadata but never requests credential values", as
   ]);
 });
 
+test("named OCI dry run resolves only selected public coordinates before Build", async () => {
+  const { reads, repo } = fakeRepo(["api"]);
+  const originalFile = repo.file.bind(repo);
+  const dynamicRepo = {
+    exists: repo.exists.bind(repo),
+    file(path: string) {
+      if (path === ".dagger/application-images/providers.yaml") {
+        reads.push(path);
+        return {
+          async contents(): Promise<string> {
+            return providerYaml
+              .replace(
+                "registry: registry.example",
+                "registry_env: RELEASE_REGISTRY",
+              )
+              .replace(
+                "repository_prefix: example/release",
+                "repository_prefix_env: RELEASE_REPOSITORY",
+              );
+          },
+        };
+      }
+      return originalFile(path);
+    },
+  } as unknown as Directory;
+  const environmentReads: string[] = [];
+  const hostEnv = new Proxy(
+    {
+      RELEASE_REGISTRY: "registry.dynamic.example",
+      RELEASE_REPOSITORY: "dynamic/release",
+    },
+    {
+      get(target, property, receiver) {
+        if (typeof property === "string") {
+          environmentReads.push(property);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
+
+  const activation = await activateApplicationImageProvider(
+    dynamicRepo,
+    [ociTarget("api")],
+    {
+      applicationImageProvider: "release",
+      dryRun: true,
+      hostEnv,
+    },
+  );
+
+  assert.deepEqual(activation?.coordinates, {
+    registry: "registry.dynamic.example",
+    repositoryPrefix: "dynamic/release",
+  });
+  assert.deepEqual(environmentReads, [
+    "RELEASE_REGISTRY",
+    "RELEASE_REPOSITORY",
+  ]);
+});
+
 test("selecting one provider protects credentials from every declared provider", async () => {
   const { repo } = fakeRepo(["api"]);
 

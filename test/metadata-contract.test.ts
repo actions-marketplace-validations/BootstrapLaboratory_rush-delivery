@@ -715,3 +715,48 @@ test("repository-wide validation reports provider credential projections across 
     },
   );
 });
+
+test("repository-wide validation rejects coordinate aliases from composed provider metadata", async () => {
+  for (const [coordinateName, extraFiles] of [
+    ["NPM_TOKEN", {}],
+    ["GITHUB_TOKEN", {}],
+    [
+      "TOOLCHAIN_TOKEN",
+      {
+        ".dagger/toolchain-images/providers.yaml": [
+          "providers:",
+          "  github:",
+          "    kind: github_container_registry",
+          "    repository_env: TOOLCHAIN_REPOSITORY",
+          "    token_env: TOOLCHAIN_TOKEN",
+          "    username_env: TOOLCHAIN_USERNAME",
+          "",
+        ].join("\n"),
+      },
+    ],
+  ] as const) {
+    const files: Record<string, string> = {
+      ...validMetadataFiles(),
+      ...extraFiles,
+    };
+    files[".dagger/application-images/providers.yaml"] = [
+      "providers:",
+      "  release:",
+      "    kind: oci_registry",
+      `    registry_env: ${coordinateName}`,
+      "    repository_prefix: example/release",
+      "    username_env: RELEASE_USERNAME",
+      "    token_env: RELEASE_TOKEN",
+      "    signing_key_env: RELEASE_SIGNING_KEY",
+      "    signing_password_env: RELEASE_SIGNING_PASSWORD",
+      "    verification_key_env: RELEASE_VERIFICATION_KEY",
+      "",
+    ].join("\n");
+
+    await assert.rejects(
+      () =>
+        validateMetadataContractRepository(new MemoryMetadataRepository(files)),
+      new RegExp(`protected environment name "${coordinateName}"`),
+    );
+  }
+});

@@ -4,7 +4,7 @@ When consuming this module from CI, prefer Git source mode so Dagger clones the
 Rush repository internally:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.1
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
 ```
 
 ## `workflow`
@@ -38,8 +38,8 @@ with `deploy` and `release_packages` sections.
 Deploy and package release side effects run after shared prerequisites. They
 can run concurrently and are not transactional across external systems.
 
-For local runs against a checked-out working tree, use `--repo=.` with
-`--source-mode=local_copy`.
+For local runs against a checked-out working tree, use `rush-delivery-local`
+from the [bounded local-copy guide](local-copy-source-imports.md).
 
 ## `validate`
 
@@ -65,8 +65,8 @@ dagger -m "$RUSH_DELIVERY_MODULE" call validate \
 
 Returns a validation summary.
 
-For local runs against a checked-out working tree, use `--repo=.` with
-`--source-mode=local_copy`.
+For local runs against a checked-out working tree, use `rush-delivery-local`
+from the [bounded local-copy guide](local-copy-source-imports.md).
 
 ## `release-packages`
 
@@ -100,8 +100,26 @@ Use `toolchain-image-provider=github` or `rush-cache-provider=github` only when
 the repository has matching provider metadata and the CI job has package
 registry permissions.
 
-For local dry-runs against a checked-out working tree, use `--repo=.` with
-`--source-mode=local_copy` and keep `--dry-run=true`.
+For local dry-runs against a checked-out working tree, use
+`rush-delivery-local ... -- release-packages` and keep `--dry-run=true`.
+
+## `local-source`
+
+Returns an additive Dagger object with `workflow`, `validate`, and
+`release-packages` functions over a caller-composed `repo` Directory. It is the
+module boundary used by `rush-delivery-local` and the bounded GitHub Action
+path. The constructor applies no static ignores, so ordered caller re-inclusions
+survive.
+
+```sh
+repo=$(host | directory /workspace/project --exclude='**/node_modules')
+local-source --repo=$repo | validate --event-name=pull_request
+```
+
+The snippet is Dagger Shell, not a host shell. Prefer the release launcher,
+which validates and quotes paths/patterns and verifies `.git`, `.dagger`, and
+`rush.json` before delegating. The old top-level functions remain the
+legacy-compatible direct-call API.
 
 ## `detect`
 

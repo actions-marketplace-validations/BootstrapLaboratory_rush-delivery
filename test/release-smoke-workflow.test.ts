@@ -11,12 +11,12 @@ const workflowPath = path.join(
   "../.github/workflows/release-smoke.yml",
 );
 
-test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths", async () => {
+test("release smoke takes an exact ref/commit and covers v0.9.0 consumer paths", async () => {
   const source = await readFile(workflowPath, "utf8");
   const workflow = parseYaml(source) as {
-    env: { RELEASE_SMOKE_EXPECTED_SHA: string };
+    env: Record<string, string>;
     jobs: {
-      "v081-consumer-smoke": {
+      "released-consumer-smoke": {
         strategy: {
           matrix: { scenario: string[]; surface: string[] };
         };
@@ -26,25 +26,37 @@ test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths
   };
 
   assert.deepEqual(
-    workflow.jobs["v081-consumer-smoke"].strategy.matrix.surface,
-    ["github-action", "remote-module"],
+    workflow.jobs["released-consumer-smoke"].strategy.matrix.surface,
+    [
+      "github-action-bounded",
+      "github-action-legacy",
+      "remote-module-legacy",
+      "release-launcher-bounded",
+    ],
   );
   assert.deepEqual(
-    workflow.jobs["v081-consumer-smoke"].strategy.matrix.scenario,
+    workflow.jobs["released-consumer-smoke"].strategy.matrix.scenario,
     ["filesystem-only", "oci-provider-off"],
   );
   assert.deepEqual(workflow.permissions, { contents: "read" });
   assert.deepEqual(workflow.env, {
-    RELEASE_SMOKE_EXPECTED_SHA: "b90f4d7894254c58df35a39f69fe20bbf1004553",
+    RELEASE_SMOKE_EXPECTED_SHA: "${{ inputs.expected_commit }}",
+    RELEASE_SMOKE_REF: "${{ inputs.target_ref }}",
   });
 
-  assert.match(source, /ref: v0\.8\.1/u);
-  assert.match(source, /uses: BootstrapLaboratory\/rush-delivery@v0\.8\.1/u);
+  assert.match(source, /target_ref:[\s\S]+default: v0\.9\.0/u);
+  assert.match(source, /expected_commit:[\s\S]+required: true/u);
+  assert.match(source, /ref: \$\{\{ env\.RELEASE_SMOKE_REF \}\}/u);
+  assert.match(source, /uses: \.\/release-source/u);
+  assert.match(source, /source-import-policy:/u);
+  assert.match(source, /github-action-legacy/u);
+  assert.match(source, /--source-import-policy=bounded/u);
+  assert.match(source, /gh release download "\$\{RELEASE_SMOKE_REF\}"/u);
+  assert.match(source, /cmp[\s\S]+github-action\/rush-delivery-local/u);
   assert.match(
     source,
-    /-m github\.com\/BootstrapLaboratory\/rush-delivery@v0\.8\.1/u,
+    /github\.com\/BootstrapLaboratory\/rush-delivery@\$\{RELEASE_SMOKE_REF\}/u,
   );
-  assert.match(source, /source-mode: local_copy/u);
   assert.match(source, /--source-mode=local_copy/u);
   assert.match(
     source,
@@ -55,12 +67,6 @@ test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths
       'if [[ ${actual_release_sha} != "${RELEASE_SMOKE_EXPECTED_SHA}" ]]; then',
     ),
   );
-  assert.match(
-    source,
-    /const encodedResult = JSON\.parse\(process\.env\.RELEASE_SMOKE_OUTPUT\);/u,
-  );
-  assert.match(source, /typeof encodedResult !== "string"/u);
-  assert.match(source, /const result = JSON\.parse\(encodedResult\);/u);
   assert.match(source, /application-image-provider: off/u);
   assert.match(source, /--application-image-provider=off/u);
   assert.match(source, /docker-socket: ""/u);
@@ -75,5 +81,5 @@ test("release smoke covers both v0.8.1 consumer surfaces and compatibility paths
     /dagger\/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8\.4\.1/u,
   );
   assert.doesNotMatch(source, /packages:\s+write/u);
-  assert.doesNotMatch(source, /(?:TOKEN|PASSWORD|PRIVATE_KEY|SIGNING_KEY):/u);
+  assert.doesNotMatch(source, /secrets\./u);
 });

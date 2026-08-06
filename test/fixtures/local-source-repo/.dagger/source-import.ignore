@@ -1,0 +1,2 @@
+# Preserve one project-owned generated tool under an excluded dependency tree.
+!packages/required/node_modules/keep.txt

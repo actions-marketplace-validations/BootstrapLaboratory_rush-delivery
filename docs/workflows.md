@@ -14,22 +14,24 @@ This exercises the full release composition without GHCR, cloud credentials, or
 a Docker socket against local unpushed changes:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.8.1
-
-dagger -m "$RUSH_DELIVERY_MODULE" call workflow \
+./rush-delivery-local \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
   --repo=. \
+  -- \
+  workflow \
   --git-sha="$(git rev-parse HEAD)" \
   --event-name=workflow_call \
   --force-targets-json='["server","webapp"]' \
   --dry-run=true \
   --toolchain-image-provider=off \
   --rush-cache-provider=off \
-  --application-image-provider=off \
-  --source-mode=local_copy
+  --application-image-provider=off
 ```
 
 Dry-runs use package and deploy target `dry_run_defaults` for allowed build and
 runtime environment values.
+The checksummed launcher applies bounded source exclusions before transfer; see
+[bounded local-copy imports](local-copy-source-imports.md).
 
 ## CI Release Workflow
 
@@ -40,7 +42,7 @@ For GitHub Actions, prefer the repository action wrapper:
 
 ```yaml
 - name: Rush Delivery
-  uses: BootstrapLaboratory/rush-delivery@v0.8.1
+  uses: BootstrapLaboratory/rush-delivery@v0.9.0
   with:
     force-targets-json: ${{ inputs.force_targets_json || '[]' }}
     environment: prod
@@ -63,7 +65,7 @@ change files:
 
 ```yaml
 - name: Rush Delivery validation
-  uses: BootstrapLaboratory/rush-delivery@v0.8.1
+  uses: BootstrapLaboratory/rush-delivery@v0.9.0
   with:
     entrypoint: validate
     toolchain-image-provider: github
@@ -82,7 +84,7 @@ adapters off:
 
 ```yaml
 - name: Rush Delivery package release
-  uses: BootstrapLaboratory/rush-delivery@v0.8.1
+  uses: BootstrapLaboratory/rush-delivery@v0.9.0
   with:
     entrypoint: release-packages
     dry-run: "false"
@@ -182,6 +184,10 @@ input, provider metadata file, and provider credentials are ignored.
 Provider `off` remains the default and needs no metadata for filesystem-only
 projects. OCI dry runs are also valid with provider `off`: they report relative
 image/platform intent without resolving credentials or producing a fake digest.
+Named providers may choose registry authority and repository prefix from public
+workflow/deploy environment values. Package resolves the coordinates once;
+Deploy still consumes only the manifest digest. Follow the
+[environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md).
 
 Publication is not transactional. A signing or verification failure after
 publish can leave an orphaned registry digest or navigation tag, but Rush
@@ -192,6 +198,16 @@ then consult the [production guide](oci-application-images.md),
 [registry recipes](oci-registry-recipes.md), and
 [troubleshooting guide](oci-application-image-troubleshooting.md) for live
 release, retention, rollback, and incident handling.
+
+## Project-Owned Rush Tools
+
+Optional `.dagger/toolchains/rush.yaml` extends the common Rush container before
+Rush install, detection, build, validation, Rush-requiring Package, and package
+Release. The metadata is part of the content-addressed toolchain provider key.
+Absence preserves the v0.8.1 Node-only graph. See the
+[toolchain guide](rush-toolchain.md) for the security/update contract and the
+[mixed Node/Python tutorial](tutorial/15-mixed-node-python-toolchain.md) for a
+complete provider-off and cached run.
 
 ## Split Stage Workflows
 

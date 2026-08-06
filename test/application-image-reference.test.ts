@@ -14,14 +14,8 @@ const repository = "registry.example.test/example/platform/services/server";
 test("builds generic application image repository and navigation tag", () => {
   const builtRepository = buildApplicationImageRepository(
     {
-      kind: "oci_registry",
       registry: "registry.example.test",
-      repository_prefix: "example/platform",
-      signing_key_env: "SIGNING_KEY",
-      signing_password_env: "SIGNING_PASSWORD",
-      token_env: "TOKEN",
-      username_env: "USERNAME",
-      verification_key_env: "VERIFICATION_KEY",
+      repositoryPrefix: "example/platform",
     },
     "services/server",
   );

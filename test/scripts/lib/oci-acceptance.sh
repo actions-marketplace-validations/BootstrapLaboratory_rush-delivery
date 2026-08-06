@@ -276,10 +276,10 @@ if (
 writeFileSync(
   providerPath,
   source
-    .replace(registryTemplate, `    registry: ${registry}\n`)
+    .replace(registryTemplate, "    registry_env: RD_OCI_REGISTRY\n")
     .replace(
       repositoryTemplate,
-      `    repository_prefix: ${repositoryPrefix}\n`,
+      "    repository_prefix_env: RD_OCI_REPOSITORY_PREFIX\n",
     ),
 );
 NODE
