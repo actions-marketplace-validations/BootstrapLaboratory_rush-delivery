@@ -59,7 +59,6 @@ test("direct CI runs the unconfigured non-root project test path", async () => {
 
   const commands = steps.flatMap((step) => (step.run ? [step.run] : []));
   assert.ok(commands.includes("yarn install --frozen-lockfile"));
-  assert.ok(commands.includes("yarn typecheck"));
   assert.ok(commands.includes("git diff --exit-code"));
   assert.ok(
     commands.some(

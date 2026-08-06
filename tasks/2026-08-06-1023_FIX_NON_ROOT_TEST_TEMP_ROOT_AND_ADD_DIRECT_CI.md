@@ -61,8 +61,9 @@ standard fallback, and CI must exercise the unconfigured non-root path directly.
 
 - [x] Add a dedicated CI workflow for pull requests and pushes to `main`.
 - [x] Install with `yarn install --frozen-lockfile`, run direct `npm test` with
-      the private override absent, run `yarn typecheck`, and fail on generated or
-      tracked-file drift.
+      the private override absent, and fail on generated or tracked-file drift.
+      Keep clean-checkout type-checking in the Dagger self-check, which injects
+      the generated, ignored `sdk` directory before running `yarn typecheck`.
 - [x] Add workflow contract tests for triggers, least privilege, immutable Action
       pins, pinned Node version, direct command path, unset override, and clean
       tree verification.
@@ -109,3 +110,8 @@ standard fallback, and CI must exercise the unconfigured non-root path directly.
   all 30 tests.
 - `yarn install --frozen-lockfile`, `yarn typecheck`, repository-wide Trunk
   checks, shell syntax validation, and `git diff --check` passed.
+- The first GitHub-hosted run proved that direct `npm test` passes as the runner
+  user. Its subsequent standalone `yarn typecheck` failed because a clean Git
+  checkout correctly excludes the generated `sdk` directory. CI was aligned
+  with project architecture by leaving that generated-SDK-aware check in the
+  clean Dagger self-check instead of inventing a second SDK bootstrap path.

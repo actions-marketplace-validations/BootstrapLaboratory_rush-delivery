@@ -40,8 +40,5 @@ jobs:
           fi
           env -u OCI_V081_MATRIX_TEMP_ROOT npm test
 
-      - name: Type-check project sources
-        run: yarn typecheck
-
       - name: Reject generated or tracked-file drift
         run: git diff --exit-code
