@@ -1,8 +1,8 @@
 # Rush Delivery Deployment Environment Compatibility
 
-Status: release candidate for `v0.9.0`; credentialed and clean-checkout
-acceptance remain pending. Implementation began after `v0.8.1` was released
-and verified through
+Status: release candidate for `v0.9.0`; local, clean-checkout, and credentialed
+acceptance pass, while merge, tag, release, and remote-tag verification remain
+pending. Implementation began after `v0.8.1` was released and verified through
 [`2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md`](completed/2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md).
 
 Historical customer-requirement baseline: `BootstrapLaboratory/rush-delivery`
@@ -397,13 +397,13 @@ Preserve this activation table:
       policies and missing-image/authentication error classification.
 - [x] Add a Node/Python fixture using a digest- and checksum-pinned toolchain that
       makes its Python package manager available before Rush lifecycle scripts.
-- [ ] Add unique application-provider credential sentinels and prove none enters
+- [x] Add unique application-provider credential sentinels and prove none enters
       toolchain input, downloads, image config/history/filesystem, hash,
       cache reference, logs, or errors.
 
 ### Phase 3 Exit Gate
 
-- [ ] The mixed-language fixture works with provider off and with toolchain image
+- [x] The mixed-language fixture works with provider off and with toolchain image
       caching, while an unconfigured project retains the exact `v0.8.1` toolchain.
 
 ## Phase 4: Version Schemas And Release Inputs
@@ -507,23 +507,31 @@ Preserve this activation table:
 - [x] Run `yarn install --frozen-lockfile`, `yarn typecheck`, and `yarn test`.
 - [x] Run both site sync/check/build pipelines, link validation, `git diff --check`,
       and `trunk check -a -y`.
-- [ ] Confirm Dagger CLI/module engine alignment, then run module load, `ping`,
+- [x] Confirm Dagger CLI/module engine alignment, then run module load, `ping`,
       clean-clone `self-check`, provider-off acceptance, static-provider
       acceptance, dynamic-coordinate live acceptance, local-copy ingestion
       acceptance, and provider-backed mixed-toolchain acceptance.
-- [ ] Repeat the release-candidate gates from a clean checkout without local SDK,
+- [x] Repeat the release-candidate gates from a clean checkout without local SDK,
       dependency, generated-doc, toolchain, or registry cache state masking defects.
 
 ### Phase 6 Exit Gate
 
-- [ ] Code, schema, tests, examples, docs, sites, and runtime behavior enforce one
+- [x] Code, schema, tests, examples, docs, sites, and runtime behavior enforce one
       contract, and all compatibility/security claims have automated evidence.
+
+Release-candidate evidence: credentialed GitHub Actions
+[run 31057638812](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31057638812)
+executed exact commit `c42b3870571f319e93ff2e2c4fd3e589830acd53`.
+Its `live-oci` job passed provider-backed mixed-language toolchain caching and
+dynamic-coordinate publication, signing, attestation, verification, digest-only
+Deploy, and cleanup. Its `v081-live-matrix` job passed all eight frozen
+compatibility scenarios and independently recovered every disposable namespace.
 
 ## Phase 7: Publish, Tag, And Verify `v0.9.0`
 
 Do not begin this phase while an earlier checkbox or exit gate is incomplete.
 
-- [ ] Review for unrelated changes, credentials, mutable pins, generated-file
+- [x] Review for unrelated changes, credentials, mutable pins, generated-file
       mistakes, and changes to `v0.8.1` or older immutable artifacts.
 - [ ] Build the local launcher release asset reproducibly, publish its SHA-256 in
       the release, and verify the Action-bundled and release-asset implementations
