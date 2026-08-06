@@ -54,9 +54,14 @@ const realFaultHookPath = path.join(
 );
 const gitSha = "0123456789abcdef0123456789abcdef01234567";
 
-async function runBash(source: string, args: string[] = []) {
+async function runBash(
+  source: string,
+  args: string[] = [],
+  environment: NodeJS.ProcessEnv = process.env,
+) {
   return execFileAsync("bash", ["-c", source, "matrix-test", ...args], {
     encoding: "utf8",
+    env: environment,
   });
 }
 
@@ -305,6 +310,11 @@ test("archive helpers verify external checksum and preserve bytes, modes, and sy
   const checksum = path.join(temporaryRoot, "protected", "bundle.sha256");
   const sourceRecord = path.join(temporaryRoot, "protected", "bundle.git-sha");
   const restored = path.join(temporaryRoot, "restored", "bundle");
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    TMPDIR: temporaryRoot,
+  };
+  delete environment.OCI_V081_MATRIX_TEMP_ROOT;
 
   try {
     await buildFixture("oci-isolation", fixture);
@@ -318,6 +328,7 @@ test("archive helpers verify external checksum and preserve bytes, modes, and sy
         'oci_v081_matrix_restore_archive "$3" "$4" "$7"',
       ].join("; "),
       [libraryPath, fixture, archive, checksum, sourceRecord, gitSha, restored],
+      environment,
     );
     assert.deepEqual(
       await readFile(
@@ -335,6 +346,12 @@ test("archive helpers verify external checksum and preserve bytes, modes, and sy
       true,
     );
     assert.equal(await readFile(sourceRecord, "utf8"), `${gitSha}\n`);
+    assert.deepEqual(
+      (await readdir(temporaryRoot)).filter((entry) =>
+        entry.startsWith("rush-delivery-v081-archive-"),
+      ),
+      [],
+    );
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }

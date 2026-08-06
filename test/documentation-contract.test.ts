@@ -571,6 +571,7 @@ test("generic onboarding snippets remain OCI-credential-free and provider-off", 
 
 test("current production snippets pin third-party actions to reviewed commits", async () => {
   const productionFiles = [
+    ".github/workflows/ci.yml",
     ".github/workflows/oci-acceptance.yml",
     ".github/workflows/pages.yml",
     ".github/workflows/release-smoke.yml",
