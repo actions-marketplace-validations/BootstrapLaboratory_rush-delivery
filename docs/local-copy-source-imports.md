@@ -1,6 +1,6 @@
 # Bounded Local-Copy Source Imports
 
-Rush Delivery `v0.9.0` applies local-copy exclusions before Dagger traverses and
+Rush Delivery `v0.9.1` applies local-copy exclusions before Dagger traverses and
 uploads the repository. Use the bundled `rush-delivery-local` launcher for
 unpushed worktrees and use Git source mode in CI whenever the source already
 exists at a remote commit.
@@ -15,9 +15,9 @@ POSIX file tools. It does not require Node.js, `jq`, a project install, or GNU
 ```sh
 curl --fail --location \
   --output rush-delivery-local \
-  https://github.com/BootstrapLaboratory/rush-delivery/releases/download/v0.9.0/rush-delivery-local
+  https://github.com/BootstrapLaboratory/rush-delivery/releases/download/v0.9.1/rush-delivery-local
 printf '%s  %s\n' \
-  '802ed18dc3bce89974d64884fe3c7ca64f3e206faa4c8c8eef237757101bd391' \
+  '35e60214455a84ee27078a0e71481565b1a6d8aab53ba90d511cf0d5970afc27' \
   rush-delivery-local | sha256sum --check --strict
 chmod 0755 rush-delivery-local
 ```
@@ -26,7 +26,7 @@ Keep the launcher and module on the same release:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. \
   -- \
   workflow \
@@ -40,6 +40,13 @@ Keep the launcher and module on the same release:
 The launcher accepts `workflow`, `validate`, and `release-packages`. It owns the
 local `repo` and source-mode arguments; passing `--repo`, `--source-mode`, or
 Git source coordinates after `--` is rejected.
+
+For bounded Dagger Shell calls, the launcher converts `--workflow-env-file`,
+`--deploy-env-file`, `--release-env-file`, `--runtime-files`, and
+`--docker-socket` host paths into typed `host.file`, `host.directory`, and
+`host.unix-socket` objects. This keeps absolute host paths stable when the
+module checkout and runner temporary directory have different roots. Paths are
+escaped as data and are never evaluated as Dagger Shell source.
 
 ## Default Boundary
 
@@ -106,7 +113,7 @@ default:
   with:
     fetch-depth: 0
 
-- uses: BootstrapLaboratory/rush-delivery@v0.9.0
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     source-mode: local_copy
     repo: .
@@ -162,7 +169,7 @@ Run once with plain progress and inspect the first source operation:
 
 ```sh
 DAGGER_NO_NAG=1 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. \
   -- validate \
   --git-sha="$(git rev-parse HEAD)" \

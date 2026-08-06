@@ -55,7 +55,7 @@ frontend assets are the common case.
 Use an OCI artifact when the deploy platform consumes a container image:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-target.schema.json
 name: server
 
 artifact:

@@ -11,7 +11,7 @@ Run the full workflow without publishing provider artifacts or deploying:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. -- workflow \
   --git-sha="$(git rev-parse HEAD)" \
   --event-name=manual \
@@ -32,7 +32,7 @@ To exercise one target, force it:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. -- workflow \
   --git-sha="$(git rev-parse HEAD)" \
   --event-name=manual \
@@ -54,7 +54,7 @@ To validate local changes against your main branch:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. -- validate \
   --event-name=pull_request \
   --pr-base-sha="$(git merge-base HEAD origin/main)"
@@ -68,7 +68,7 @@ To test npm release metadata inside the composed workflow without publishing:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. -- workflow \
   --git-sha="$(git rev-parse HEAD)" \
   --event-name=manual \
@@ -82,7 +82,7 @@ To test only the standalone npm release entrypoint:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. -- release-packages \
   --git-sha="$(git rev-parse HEAD)" \
   --dry-run=true \

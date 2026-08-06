@@ -109,7 +109,7 @@ The complete package target is
 [`control-plane-api.yaml`](../../../examples/oci-application-image-rush-repo/.dagger/package/targets/control-plane-api.yaml):
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-target.schema.json
 name: control-plane-api
 artifact:
   kind: oci_image
@@ -168,7 +168,7 @@ one contained Dockerfile, one image suffix, one platform, trusted source labels,
 and the documented scan policy. Do not infer support for metadata-driven build
 arguments, secrets, SSH forwarding, extra contexts, multi-platform indexes, or
 custom Dockerfile frontends. See the
-[package-target schema](../../../schemas/v0.9.0/package-target.schema.json) and
+[package-target schema](../../../schemas/v0.9.1/package-target.schema.json) and
 [OCI application-image contract](../../oci-application-images.md) for the
 bounded surface.
 

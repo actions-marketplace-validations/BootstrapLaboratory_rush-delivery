@@ -193,6 +193,21 @@ rush_delivery_reject_adapter_arguments() {
 	done
 }
 
+rush_delivery_host_object_kind() {
+	case "$1" in
+	--workflow-env-file | --deploy-env-file | --release-env-file)
+		printf 'file'
+		;;
+	--runtime-files)
+		printf 'directory'
+		;;
+	--docker-socket)
+		printf 'unix-socket'
+		;;
+	*) ;;
+	esac
+}
+
 rush_delivery_build_shell() {
 	local repo="$1"
 	local entrypoint="$2"
@@ -201,17 +216,53 @@ rush_delivery_build_shell() {
 	local script
 	local pattern
 	local argument
+	local argument_name
+	local argument_value
+	local host_object_kind
+	local host_object_index=0
+	local host_object_name
+	local invocation=""
+	local -a function_arguments=("$@")
+	local index
 
 	script="repo=\$(host | directory $(rush_delivery_shell_literal "${repo}")"
 	for pattern in "${RUSH_DELIVERY_EXCLUDES[@]}"; do
 		script+=" --exclude=$(rush_delivery_shell_literal "${pattern}")"
 	done
 	script+=")"
-	script+=$'\n'
-	script+="local-source --repo=\$repo | ${entrypoint}"
-	for argument in "$@"; do
-		script+=" $(rush_delivery_shell_literal "${argument}")"
+
+	for ((index = 0; index < ${#function_arguments[@]}; index += 1)); do
+		argument="${function_arguments[index]}"
+		argument_name="${argument%%=*}"
+		argument_value=""
+
+		host_object_kind="$(rush_delivery_host_object_kind "${argument_name}")"
+		if [[ -n ${host_object_kind} ]]; then
+			if [[ ${argument} == *=* ]]; then
+				argument_value="${argument#*=}"
+			elif ((index + 1 < ${#function_arguments[@]})); then
+				index=$((index + 1))
+				argument_value="${function_arguments[index]}"
+			else
+				rush_delivery_local_die "${argument_name} requires a value"
+			fi
+
+			if [[ -n ${argument_value} ]]; then
+				host_object_name="rush_delivery_input_${host_object_index}"
+				host_object_index=$((host_object_index + 1))
+				script+=$'\n'
+				script+="${host_object_name}=\$(host | ${host_object_kind} $(rush_delivery_shell_literal "${argument_value}"))"
+				invocation+=" ${argument_name}=\$${host_object_name}"
+			else
+				invocation+=" $(rush_delivery_shell_literal "${argument_name}=")"
+			fi
+		else
+			invocation+=" $(rush_delivery_shell_literal "${argument}")"
+		fi
 	done
+
+	script+=$'\n'
+	script+="local-source --repo=\$repo | ${entrypoint}${invocation}"
 	if [[ -n ${trusted_extra_args} ]]; then
 		script+=" ${trusted_extra_args}"
 	fi

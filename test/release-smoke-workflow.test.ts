@@ -11,7 +11,7 @@ const workflowPath = path.join(
   "../.github/workflows/release-smoke.yml",
 );
 
-test("release smoke takes an exact ref/commit and covers v0.9.0 consumer paths", async () => {
+test("release smoke takes an exact ref/commit and covers v0.9.1 consumer paths", async () => {
   const source = await readFile(workflowPath, "utf8");
   const workflow = parseYaml(source) as {
     env: Record<string, string>;
@@ -42,16 +42,28 @@ test("release smoke takes an exact ref/commit and covers v0.9.0 consumer paths",
   assert.deepEqual(workflow.env, {
     RELEASE_SMOKE_EXPECTED_SHA: "${{ inputs.expected_commit }}",
     RELEASE_SMOKE_REF: "${{ inputs.target_ref }}",
+    RELEASE_SMOKE_VERIFY_ASSET: "${{ inputs.verify_release_asset }}",
   });
 
-  assert.match(source, /target_ref:[\s\S]+default: v0\.9\.0/u);
+  assert.match(source, /target_ref:[\s\S]+default: v0\.9\.1/u);
   assert.match(source, /expected_commit:[\s\S]+required: true/u);
+  assert.match(
+    source,
+    /verify_release_asset:[\s\S]+default: true[\s\S]+type: boolean/u,
+  );
   assert.match(source, /ref: \$\{\{ env\.RELEASE_SMOKE_REF \}\}/u);
   assert.match(source, /uses: \.\/release-source/u);
   assert.match(source, /source-import-policy:/u);
   assert.match(source, /github-action-legacy/u);
   assert.match(source, /--source-import-policy=bounded/u);
   assert.match(source, /gh release download "\$\{RELEASE_SMOKE_REF\}"/u);
+  assert.ok(
+    source.includes("if [[ ${RELEASE_SMOKE_VERIFY_ASSET} == true ]]; then"),
+  );
+  assert.match(
+    source,
+    /else[\s\S]+cp[\s\S]+release-source\/github-action\/rush-delivery-local/u,
+  );
   assert.match(source, /cmp[\s\S]+github-action\/rush-delivery-local/u);
   assert.match(
     source,

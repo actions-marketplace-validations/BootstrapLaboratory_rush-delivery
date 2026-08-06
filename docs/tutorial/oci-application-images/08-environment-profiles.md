@@ -16,7 +16,7 @@ repository keeps the same provider and coordinate-only env files under the
 [deployment compatibility examples](../../../examples/deployment-environment-compatibility):
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
 providers:
   release:
     kind: oci_registry
@@ -84,7 +84,7 @@ APP_IMAGE_REPOSITORY_PREFIX=example-inc/staging
 ```
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   call build-and-package-deploy-targets \
   --repo=. \
   --ci-plan-file=ci/oci-plan.json \
@@ -128,7 +128,7 @@ Load staging coordinates and credentials through the selected CI environment,
 then run live Package:
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   call build-and-package-deploy-targets \
   --repo=. \
   --ci-plan-file=ci/oci-plan.json \
@@ -151,7 +151,7 @@ Pass the packaged workspace and its manifest to Deploy. Do not supply a new
 provider or ask Deploy to read the production profile:
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   call deploy-release \
   --repo=staging-package \
   --git-sha="$(git rev-parse HEAD)" \

@@ -352,6 +352,7 @@ releasePackages | release-packages)
 esac
 
 dagger_shell=""
+dagger_verb="call"
 if [[ ${bounded_local_copy} == "true" ]]; then
 	bounded_repo="${repo_input:-${GITHUB_WORKSPACE:-.}}"
 	launcher_args=(
@@ -366,7 +367,11 @@ if [[ ${bounded_local_copy} == "true" ]]; then
 	fi
 	launcher_args+=("--" "${args[@]}")
 	dagger_shell="$("${GITHUB_ACTION_PATH}/github-action/rush-delivery-local" "${launcher_args[@]}")"
-	call_args=""
+	dagger_shell_file="${action_temp}/dagger-shell"
+	printf '%s\n' "${dagger_shell}" >"${dagger_shell_file}"
+	chmod 0600 "${dagger_shell_file}"
+	dagger_verb="shell"
+	call_args="${dagger_shell_file}"
 else
 	call_args="$(shell_quote_args "${args[@]}")"
 	if [[ -n ${INPUT_EXTRA_ARGS-} ]]; then
@@ -375,8 +380,8 @@ else
 fi
 
 write_output module "${module}"
+write_output verb "${dagger_verb}"
 write_output args "${call_args}"
-write_output shell "${dagger_shell}"
 write_output workflow-env-file "${workflow_env_file}"
 write_output deploy-env-file "${deploy_env_file}"
 write_output release-env-file "${release_env_file}"

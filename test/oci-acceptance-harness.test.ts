@@ -1563,12 +1563,12 @@ test("OCI acceptance verifier enforces the bundle, image, and Deploy contracts w
   const provenance = `${JSON.stringify({
     buildDefinition: {
       buildType:
-        "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.0",
+        "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.1",
       resolvedDependencies: [{ digest: { gitCommit: gitSha } }],
     },
     runDetails: {
       builder: {
-        id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.0",
+        id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.1",
       },
       metadata: { invocationId: `control-plane-api:${gitSha}:${imageDigest}` },
     },

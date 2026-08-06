@@ -1,6 +1,6 @@
 # Deployment Environment Compatibility Examples
 
-These are credential-free `v0.9.0` configuration fragments for the three
+These are credential-free `v0.9.1` configuration fragments for the three
 opt-in contracts:
 
 - copy `application-image-providers.yaml` to

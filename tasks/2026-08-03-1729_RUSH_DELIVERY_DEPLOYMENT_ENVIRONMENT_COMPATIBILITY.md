@@ -1,8 +1,9 @@
 # Rush Delivery Deployment Environment Compatibility
 
-Status: release candidate for `v0.9.0`; local, clean-checkout, and credentialed
-acceptance pass, while merge, tag, release, and remote-tag verification remain
-pending. Implementation began after `v0.8.1` was released and verified through
+Status: `v0.9.0` was published, but exact-tag consumer smoke found the bounded
+GitHub Action transport failed before Dagger execution. The immutable tag is
+preserved and corrective patch `v0.9.1` is in progress. Implementation began
+after `v0.8.1` was released and verified through
 [`2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md`](completed/2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md).
 
 Historical customer-requirement baseline: `BootstrapLaboratory/rush-delivery`
@@ -15,7 +16,7 @@ the remote-smoke correction and archives the completed hardening task. All
 compatibility goldens come from the immutable released tag; implementation
 starts from the working baseline.
 
-Target release: `v0.9.0`.
+Feature release: `v0.9.0`. Corrective release: `v0.9.1`.
 
 This task adds two opt-in public metadata contracts and one local-copy import
 contract: environment-selected application image coordinates, caller-side
@@ -357,9 +358,14 @@ Preserve this activation table:
 - [x] Keep the composite Action on the pinned `dagger/dagger-for-github`
       `v8.4.1` implementation unless a separately justified dependency update is
       required. For bounded local copy, make `prepare-workflow.sh` emit the
-      launcher's generated Dagger Shell script and pass it through the pinned
-      Action's supported `shell` input; preserve output and trace URL contracts.
-      Git source mode and `legacy` local copy retain the existing `call` path.
+      launcher's generated Dagger Shell script. Exact-tag smoke proved that the
+      pinned Action's `shell` input cannot safely transport the script's quoted
+      exclusion literals, so `v0.9.1` writes the script to an owner-only file
+      and invokes the pinned Action's `shell` verb with that file operand.
+      Preserve output, trace URL, Git source mode, and the `legacy` call path.
+      Materialize typed host file/directory/socket arguments in the generated
+      script so file execution cannot rebase runner-temporary paths under the
+      module workdir.
 - [x] Implement one shared parser/composer used by the release-asset local
       launcher and Action wrapper; do not maintain two subtly different pattern
       engines.
@@ -533,7 +539,7 @@ Do not begin this phase while an earlier checkbox or exit gate is incomplete.
 
 - [x] Review for unrelated changes, credentials, mutable pins, generated-file
       mistakes, and changes to `v0.8.1` or older immutable artifacts.
-- [ ] Build the local launcher release asset reproducibly, publish its SHA-256 in
+- [x] Build the local launcher release asset reproducibly, publish its SHA-256 in
       the release, and verify the Action-bundled and release-asset implementations
       are generated from or byte-match the same source.
 - [x] Generalize the released-consumer smoke workflow before the release
@@ -542,16 +548,57 @@ Do not begin this phase while an earlier checkbox or exit gate is incomplete.
       bounded local launcher, and opt-out compatibility paths. Do not require a
       post-tag source commit merely to hard-code a SHA that was unknowable in the
       release candidate.
-- [ ] Commit in semantic, reviewable slices; push the implementation branch and
+- [x] Commit in semantic, reviewable slices; push the implementation branch and
       follow the repository's normal review/merge flow.
-- [ ] Re-run every release-candidate gate on the exact merged release commit.
-- [ ] Create and push annotated tag `v0.9.0` on that commit and publish a GitHub
+- [x] Re-run every release-candidate gate on the exact merged release commit.
+- [x] Create and push annotated tag `v0.9.0` on that commit and publish a GitHub
       Release with compatibility, upgrade, examples, limitations, and recovery
       links.
 - [ ] Verify Pages, every public `schemas/v0.9.0` URL, the remote Dagger module,
       and the GitHub Action from the tag.
 - [ ] Move this task to `tasks/completed` only after every remote verification
       passes; commit/push that archive move without retargeting the tag.
+
+`v0.9.0` release evidence: merge commit
+`b84f7be11831b47234806dc43dcf1a401034ed74`, annotated tag `v0.9.0`, and
+[GitHub Release](https://github.com/BootstrapLaboratory/rush-delivery/releases/tag/v0.9.0).
+Exact-merge credentialed acceptance passed in
+[run 31058467092](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31058467092).
+Exact-tag [consumer smoke 31059454313](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31059454313)
+passed six of eight jobs and exposed the bounded Action failure in both
+filesystem-only and provider-off OCI scenarios. The failure was deterministic:
+the pinned Action's assembly step rejected quoted Dagger Shell input before the
+engine started. The tag and release must never be moved to hide this result.
+
+## Phase 8: Correct And Release `v0.9.1`
+
+- [x] Preserve the `v0.9.0` tag, release, schemas, docs snapshot, and launcher
+      asset; add byte-immutability coverage for the released schemas.
+- [x] Reproduce and classify the exact-tag bounded Action failure without
+      weakening exclusions, quoting, or the shared launcher contract.
+- [x] Pass generated Dagger Shell through an owner-only file operand supported by
+      the pinned Action, retaining its stdout, trace, summary, workdir, flags, and
+      cloud-token behavior.
+- [x] Convert workflow/deploy/release env files, runtime directories, and Docker
+      sockets to typed host objects before the local-source call; cover both
+      `--name=value` and `--name value` forms.
+- [x] Add focused regression tests and execute a real local bounded workflow from
+      the generated script file with Action-created env/runtime inputs.
+- [x] Freeze Docusaurus documentation from immutable `v0.9.0`, create the
+      byte-equivalent `schemas/v0.9.1` snapshot, advance current operational
+      pins/provenance/sites, publish a patch upgrade guide, and update the new
+      launcher checksum.
+- [ ] Run the complete local, clean-checkout, site, lint, Dagger, provider-off,
+      source-import, toolchain, Cosign/evidence, and credentialed OCI gates on
+      the patch candidate.
+- [ ] Commit/push in reviewable semantic slices, merge through normal review, and
+      repeat required gates on the exact merged patch commit.
+- [ ] Create and push annotated tag `v0.9.1`; publish release notes and the
+      byte-matched `rush-delivery-local` asset with SHA-256.
+- [ ] Verify exact-tag Action bounded/legacy, remote module, downloaded launcher,
+      Pages, and every public `schemas/v0.9.1` URL before completing this task.
+- [ ] Move this task to `tasks/completed` only after every `v0.9.1` remote gate
+      passes; commit/push the archive move without retargeting either tag.
 
 ## Explicit Non-Goals
 
@@ -582,5 +629,8 @@ Do not begin this phase while an earlier checkbox or exit gate is incomplete.
 - [ ] A mixed Node/Python repository deterministically extends the shared Rush
       toolchain without package bootstrap workarounds or credential exposure.
 - [ ] Root docs, both sites, schemas, examples, provenance, Action/module pins,
-      release tag, GitHub Release, and Pages agree on `v0.9.0`.
+      release tag, GitHub Release, and Pages agree on `v0.9.1`; the immutable
+      `v0.9.0` archive continues to describe the original release.
 - [ ] All released `v0.8.1` and older artifacts remain immutable.
+- [ ] All released `v0.9.0` artifacts remain immutable, and its failed bounded
+      Action smoke remains linked as historical release evidence.

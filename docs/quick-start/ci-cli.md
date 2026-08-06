@@ -9,7 +9,7 @@ need to mount the repository into the module.
 For pull-request validation:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 DEPLOY_ENV_FILE="${RUNNER_TEMP}/dagger-validate.env"
 SOURCE_REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
 
@@ -45,7 +45,7 @@ files.
 For release workflow runs:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 RUNTIME_FILES_DIR="${RUNNER_TEMP}/rush-delivery-runtime-files"
 WORKFLOW_ENV_FILE="${RUNNER_TEMP}/dagger-workflow.env"
 DEPLOY_ENV_FILE="${RUNNER_TEMP}/dagger-deploy.env"
@@ -103,7 +103,7 @@ packaging does not need a host Docker socket.
 For package release/versioning:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 RELEASE_ENV_FILE="${RUNNER_TEMP}/dagger-release.env"
 SOURCE_REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
 

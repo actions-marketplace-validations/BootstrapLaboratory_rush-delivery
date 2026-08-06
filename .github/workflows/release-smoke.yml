@@ -7,12 +7,17 @@ on:
       target_ref:
         description: Released tag or immutable ref to verify.
         required: true
-        default: v0.9.0
+        default: v0.9.1
         type: string
       expected_commit:
         description: Expected full peeled commit SHA for target_ref.
         required: true
         type: string
+      verify_release_asset:
+        description: Download the launcher from the GitHub release instead of the checked-out candidate.
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -20,6 +25,7 @@ permissions:
 env:
   RELEASE_SMOKE_REF: ${{ inputs.target_ref }}
   RELEASE_SMOKE_EXPECTED_SHA: ${{ inputs.expected_commit }}
+  RELEASE_SMOKE_VERIFY_ASSET: ${{ inputs.verify_release_asset }}
 
 jobs:
   released-consumer-smoke:
@@ -136,7 +142,7 @@ jobs:
             > "${result_file}"
           printf 'RELEASE_SMOKE_RESULT_FILE=%s\n' "${result_file}" >> "${GITHUB_ENV}"
 
-      - name: Download and exercise released bounded launcher
+      - name: Obtain and exercise bounded launcher
         if: ${{ matrix.surface == 'release-launcher-bounded' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -145,10 +151,16 @@ jobs:
           set -euo pipefail
           asset_dir="${RUNNER_TEMP}/rush-delivery-release-asset"
           mkdir -p "${asset_dir}"
-          gh release download "${RELEASE_SMOKE_REF}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --pattern rush-delivery-local \
-            --dir "${asset_dir}"
+          if [[ ${RELEASE_SMOKE_VERIFY_ASSET} == true ]]; then
+            gh release download "${RELEASE_SMOKE_REF}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --pattern rush-delivery-local \
+              --dir "${asset_dir}"
+          else
+            cp \
+              "${GITHUB_WORKSPACE}/release-source/github-action/rush-delivery-local" \
+              "${asset_dir}/rush-delivery-local"
+          fi
           cmp \
             "${GITHUB_WORKSPACE}/release-source/github-action/rush-delivery-local" \
             "${asset_dir}/rush-delivery-local"

@@ -29,6 +29,10 @@ items:
     source: ../docs/rush-toolchain.md
     id: rush-toolchain
     description: Add digest-pinned, checksummed tools to the shared Rush image.
+  - title: Upgrade To v0.9.1
+    source: ../docs/upgrade-v0.9.1.md
+    id: upgrade-v0-9-1
+    description: Apply the bounded GitHub Action compatibility patch.
   - title: Upgrade To v0.9.0
     source: ../docs/upgrade-v0.9.0.md
     id: upgrade-v0-9-0

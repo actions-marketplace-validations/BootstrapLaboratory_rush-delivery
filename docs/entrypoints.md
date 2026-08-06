@@ -4,7 +4,7 @@ When consuming this module from CI, prefer Git source mode so Dagger clones the
 Rush repository internally:
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 ```
 
 ## `workflow`

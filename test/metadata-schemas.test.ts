@@ -342,7 +342,48 @@ test("released v0.8.1 schema snapshots remain byte-immutable", async () => {
   }
 });
 
-test("current root schemas match the complete v0.9.0 snapshot", async () => {
+test("released v0.9.0 schema snapshots remain byte-immutable", async () => {
+  const expectedDigests: Record<string, string> = {
+    "application-image-providers.schema.json":
+      "47936098454afbfc31bee4dbfd036c2c8fcb2e26ee58663ca3044003dbe20bdf",
+    "deploy-services-mesh.schema.json":
+      "10ad5614b4e7a2b743440a82bf3a65191770da2a115a18846716b8b300f30547",
+    "deploy-target.schema.json":
+      "bc81dcd4558a24f0f0ee8e959f323a576a1bf3ffc2586dc8ed0970b63ec86663",
+    "npm-release.schema.json":
+      "7ab1872347b124510e60b31d581728031566ecf8a1ad816b2557db13355cff10",
+    "package-manifest.schema.json":
+      "eceb63524a87cf2d3f88d76c38128423b3d6947c2741280e26142c49be1de757",
+    "package-target.schema.json":
+      "6f0f3232a64679161db8119b937941750e2fe855b9506adf30f42fcfac450733",
+    "rush-cache-providers.schema.json":
+      "2909539df502c058b22ba2cd71fba3a5e6adffb54b1cbffb8e9db6098ab5f1fd",
+    "rush-toolchain.schema.json":
+      "9295e0dc513be186ea9fe7c1e8dd22835171da4b5b8ef49f805e4c07f5c624d2",
+    "toolchain-image-providers.schema.json":
+      "3872b6aaf4d607638746f07fafd5e8fd2b9faf5f0586b4fc973323c479aee922",
+    "validation-target.schema.json":
+      "7e8f9f914082629a1e0553706b3dced73d5dcd84ac572ff893212876f8ea29d5",
+  };
+  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.9.0")))
+    .filter((entry) => entry.endsWith(".schema.json"))
+    .sort();
+
+  assert.deepEqual(snapshotNames, Object.keys(expectedDigests).sort());
+
+  for (const schemaName of snapshotNames) {
+    const contents = await readFile(
+      path.join(repoRoot, "schemas/v0.9.0", schemaName),
+    );
+    assert.equal(
+      createHash("sha256").update(contents).digest("hex"),
+      expectedDigests[schemaName],
+      `${schemaName} must remain byte-identical to the released v0.9.0 snapshot`,
+    );
+  }
+});
+
+test("current root schemas match the complete v0.9.1 snapshot", async () => {
   const rootNames = (
     await readdir(path.join(repoRoot, "schemas"), {
       withFileTypes: true,
@@ -351,7 +392,7 @@ test("current root schemas match the complete v0.9.0 snapshot", async () => {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".schema.json"))
     .map((entry) => entry.name)
     .sort();
-  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.9.0")))
+  const snapshotNames = (await readdir(path.join(repoRoot, "schemas/v0.9.1")))
     .filter((entry) => entry.endsWith(".schema.json"))
     .sort();
 
@@ -362,13 +403,13 @@ test("current root schemas match the complete v0.9.0 snapshot", async () => {
       "utf8",
     );
     const snapshotSchema = await readFile(
-      path.join(repoRoot, "schemas/v0.9.0", schemaName),
+      path.join(repoRoot, "schemas/v0.9.1", schemaName),
       "utf8",
     );
     assert.equal(
-      snapshotSchema.replace("/schemas/v0.9.0/", "/schemas/"),
+      snapshotSchema.replace("/schemas/v0.9.1/", "/schemas/"),
       rootSchema,
-      `${schemaName} must differ only by the immutable v0.9.0 $id`,
+      `${schemaName} must differ only by the immutable v0.9.1 $id`,
     );
   }
 });

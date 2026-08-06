@@ -1,6 +1,6 @@
 # OCI Application-Image Troubleshooting
 
-Use this runbook for Rush Delivery `v0.9.0` OCI Package and digest-only Deploy
+Use this runbook for Rush Delivery `v0.9.1` OCI Package and digest-only Deploy
 failures. The central rule is simple: once registry mutation may have started,
 do not automatically replay the whole workflow. Inspect the subject, navigation
 tag, signatures, and attestations first.

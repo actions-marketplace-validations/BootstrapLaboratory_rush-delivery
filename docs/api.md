@@ -5,7 +5,7 @@ Rush repository internally. For a checked-out worktree, use the versioned
 `rush-delivery-local` launcher so exclusions apply before source transfer.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 ```
 
 GitHub Actions can use the root action wrapper instead of assembling the raw

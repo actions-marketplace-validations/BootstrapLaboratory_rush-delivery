@@ -245,7 +245,7 @@ function formatProvenance(
     {
       buildDefinition: {
         buildType:
-          "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.0",
+          "https://bootstraplaboratory.github.io/rush-delivery/build-types/oci-image/v0.9.1",
         externalParameters: {
           context: prepared.context,
           dockerfile: prepared.dockerfile,
@@ -266,7 +266,7 @@ function formatProvenance(
       },
       runDetails: {
         builder: {
-          id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.0",
+          id: "https://github.com/BootstrapLaboratory/rush-delivery@v0.9.1",
         },
         metadata: {
           invocationId: `${prepared.target}:${prepared.gitSha}:${imageDigest}`,

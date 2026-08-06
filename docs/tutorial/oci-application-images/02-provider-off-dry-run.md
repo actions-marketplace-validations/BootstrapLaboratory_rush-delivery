@@ -15,7 +15,7 @@ shape-wise but is deliberately not a production source identity.
 ```bash
 set -euo pipefail
 
-export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
+export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.1"
 export TUTORIAL_DRY_SHA="0123456789abcdef0123456789abcdef01234567"
 test "${#TUTORIAL_DRY_SHA}" -eq 40
 ```

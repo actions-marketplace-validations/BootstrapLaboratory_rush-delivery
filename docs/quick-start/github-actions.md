@@ -33,7 +33,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: validate
           toolchain-image-provider: github
@@ -69,7 +69,7 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Rush Delivery
-        uses: BootstrapLaboratory/rush-delivery@v0.9.0
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           dry-run: "false"
           force-targets-json: ${{ inputs.force_targets_json || '[]' }}
@@ -132,7 +132,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: release-packages
           dry-run: "false"

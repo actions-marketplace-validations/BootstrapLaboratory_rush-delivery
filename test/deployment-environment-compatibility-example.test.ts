@@ -23,7 +23,7 @@ async function readJson(relativePath: string): Promise<unknown> {
   return JSON.parse(await readFile(path.join(repoRoot, relativePath), "utf8"));
 }
 
-test("v0.9.0 compatibility fragments satisfy current and immutable schemas", async () => {
+test("v0.9.1 compatibility fragments satisfy current and immutable schemas", async () => {
   const ajv = new Ajv2020({ allErrors: true });
   for (const [exampleName, schemaName] of [
     [
@@ -37,7 +37,7 @@ test("v0.9.0 compatibility fragments satisfy current and immutable schemas", asy
     );
     for (const schemaPath of [
       `schemas/${schemaName}`,
-      `schemas/v0.9.0/${schemaName}`,
+      `schemas/v0.9.1/${schemaName}`,
     ]) {
       const validate = ajv.compile((await readJson(schemaPath)) as AnySchema);
       assert.equal(
@@ -119,7 +119,7 @@ test("documented launcher digest matches the executable bundled by the Action", 
 
   assert.equal(
     digest,
-    "802ed18dc3bce89974d64884fe3c7ca64f3e206faa4c8c8eef237757101bd391",
+    "35e60214455a84ee27078a0e71481565b1a6d8aab53ba90d511cf0d5970afc27",
   );
   assert.match(localCopyGuide, new RegExp(digest, "u"));
   assert.match(tutorial, new RegExp(digest, "u"));

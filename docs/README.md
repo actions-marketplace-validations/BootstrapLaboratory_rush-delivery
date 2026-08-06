@@ -22,6 +22,8 @@ extension surface for validation, packaging, deployment, caches, and toolchains.
   worktree data before Dagger uploads it, with tested inclusion and recovery.
 - [Project-owned Rush toolchain](rush-toolchain.md): safely add digest-pinned,
   checksummed executables to every Rush lifecycle.
+- [Upgrade to v0.9.1](upgrade-v0.9.1.md): required patch for bounded local-copy
+  runs through the GitHub Action.
 - [Upgrade to v0.9.0](upgrade-v0.9.0.md): compatibility, canary, and recovery
   guidance for v0.8.1 users.
 - [OCI application images tutorial](tutorial/oci-application-images/README.md):
@@ -51,7 +53,7 @@ contract. These docs explain intent and usage; schemas define file shape.
 Published schemas are available from the documentation site:
 
 - `https://bootstraplaboratory.github.io/rush-delivery/schemas/<schema>.schema.json`
-- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/<schema>.schema.json`
+- `https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/<schema>.schema.json`
 
 Use exact versioned schema URLs in project metadata editor hints so older
 projects keep the schema contract they were written against. The root
