@@ -1,10 +1,10 @@
 # Rush Delivery Deployment Environment Compatibility
 
-Status: `v0.9.0` was published, but exact-tag consumer smoke found the bounded
-GitHub Action transport failed before Dagger execution. The immutable tag is
-preserved and corrective patch `v0.9.1` is in progress. Implementation began
-after `v0.8.1` was released and verified through
-[`2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md`](completed/2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md).
+Status: completed and released as `v0.9.0`, with the bounded GitHub Action
+transport corrected and released as `v0.9.1`. The immutable `v0.9.0` failure
+evidence remains preserved. Implementation began after `v0.8.1` was released
+and verified through
+[`2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md`](2026-08-05-0051_HARDEN_OCI_APPLICATION_IMAGES_AND_COMPLETE_PRODUCTION_GUIDES.md).
 
 Historical customer-requirement baseline: `BootstrapLaboratory/rush-delivery`
 tag `v0.8.0`, commit `d98d666e17845a5d7089571fe7c8b256484e6a25`.
@@ -57,7 +57,7 @@ and therefore require a minor release.
       changes, new inputs, or changed default toolchain/cache identity. Provide
       an explicit pre-import inclusion migration for every required path that
       would otherwise match a new default exclusion.
-- [ ] Version code, schemas, examples, docs, sites, provenance, Action/module
+- [x] Version code, schemas, examples, docs, sites, provenance, Action/module
       references, release notes, and tags through the normal upgrade flow.
 
 ## Release And Compatibility Decision
@@ -81,7 +81,7 @@ and therefore require a minor release.
 - [x] Preserve Git source-mode behavior and the GitHub Action Docker-socket
       compatibility default.
 - [x] Preserve directory/archive manifest and deploy-result shapes and behavior.
-- [x] Create a complete immutable [`../schemas/v0.9.0`](../schemas/v0.9.0)
+- [x] Create a complete immutable [`../../schemas/v0.9.0`](../../schemas/v0.9.0)
       snapshot after root schemas are final; never edit released snapshots.
 - [x] If implementation needs a manifest-v3 contract, a provider kind, arbitrary
       project secret injection, an engine upgrade, or a signed portable bundle,
@@ -246,7 +246,7 @@ Preserve this activation table:
 ### Project-Owned Rush Toolchain
 
 - [x] Add `.dagger/toolchains/rush.yaml`, validated by new root schema
-      [`../schemas/rush-toolchain.schema.json`](../schemas/rush-toolchain.schema.json).
+      [`../../schemas/rush-toolchain.schema.json`](../../schemas/rush-toolchain.schema.json).
       Require `version: rush-delivery-rush-toolchain/v1`, `base_image`,
       `platform`, and `downloads`; reject every unknown field. Do not overload
       deploy-executor metadata or hardcode customer project names.
@@ -418,7 +418,7 @@ Preserve this activation table:
       root Rush-toolchain metadata plus any source-import editor contract that is
       schema-expressible.
 - [x] After root schemas are final, copy every root schema into
-      [`../schemas/v0.9.0`](../schemas/v0.9.0) and change only snapshot `$id`
+      [`../../schemas/v0.9.0`](../../schemas/v0.9.0) and change only snapshot `$id`
       values to immutable `v0.9.0` URLs.
 - [x] Add schema-snapshot tests requiring every root schema to have an exact
       `v0.9.0` counterpart and never modify `v0.8.1` or older snapshots.
@@ -554,10 +554,11 @@ Do not begin this phase while an earlier checkbox or exit gate is incomplete.
 - [x] Create and push annotated tag `v0.9.0` on that commit and publish a GitHub
       Release with compatibility, upgrade, examples, limitations, and recovery
       links.
-- [ ] Verify Pages, every public `schemas/v0.9.0` URL, the remote Dagger module,
-      and the GitHub Action from the tag.
-- [ ] Move this task to `tasks/completed` only after every remote verification
-      passes; commit/push that archive move without retargeting the tag.
+- [x] Verify Pages, every public `schemas/v0.9.0` URL, the remote Dagger module,
+      and the GitHub Action from the tag. This verification intentionally
+      recorded the bounded Action failure instead of moving the immutable tag.
+- [x] Keep this task active after the `v0.9.0` remote verification failed, then
+      archive it only after the corrective `v0.9.1` remote gates pass.
 
 `v0.9.0` release evidence: merge commit
 `b84f7be11831b47234806dc43dcf1a401034ed74`, annotated tag `v0.9.0`, and
@@ -588,17 +589,40 @@ engine started. The tag and release must never be moved to hide this result.
       byte-equivalent `schemas/v0.9.1` snapshot, advance current operational
       pins/provenance/sites, publish a patch upgrade guide, and update the new
       launcher checksum.
-- [ ] Run the complete local, clean-checkout, site, lint, Dagger, provider-off,
+- [x] Run the complete local, clean-checkout, site, lint, Dagger, provider-off,
       source-import, toolchain, Cosign/evidence, and credentialed OCI gates on
       the patch candidate.
-- [ ] Commit/push in reviewable semantic slices, merge through normal review, and
+- [x] Commit/push in reviewable semantic slices, merge through normal review, and
       repeat required gates on the exact merged patch commit.
-- [ ] Create and push annotated tag `v0.9.1`; publish release notes and the
+- [x] Create and push annotated tag `v0.9.1`; publish release notes and the
       byte-matched `rush-delivery-local` asset with SHA-256.
-- [ ] Verify exact-tag Action bounded/legacy, remote module, downloaded launcher,
+- [x] Verify exact-tag Action bounded/legacy, remote module, downloaded launcher,
       Pages, and every public `schemas/v0.9.1` URL before completing this task.
-- [ ] Move this task to `tasks/completed` only after every `v0.9.1` remote gate
+- [x] Move this task to `tasks/completed` only after every `v0.9.1` remote gate
       passes; commit/push the archive move without retargeting either tag.
+
+`v0.9.1` release evidence: pull request
+[#6](https://github.com/BootstrapLaboratory/rush-delivery/pull/6), merge commit
+`db35bb8eefef173aa052b1264b973bdb0794912d`, annotated tag `v0.9.1`, and
+[GitHub Release](https://github.com/BootstrapLaboratory/rush-delivery/releases/tag/v0.9.1).
+The exact candidate passed all eight consumer surfaces in
+[run 31061026377](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31061026377)
+and both credentialed OCI jobs in
+[run 31061027694](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31061027694).
+The exact merged commit passed all eight consumer surfaces in
+[run 31061783086](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31061783086),
+both credentialed OCI jobs in
+[run 31061784510](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31061784510),
+and Pages build/deploy in
+[run 31061759521](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31061759521).
+Exact-tag
+[consumer smoke 31062513462](https://github.com/BootstrapLaboratory/rush-delivery/actions/runs/31062513462)
+passed all eight Action/module/downloaded-launcher jobs. The remote tag module
+returned `rush-delivery ready`; every public `schemas/v0.9.1` URL byte-matched
+the release tree; and every release-linked production guide returned
+successfully. The published `rush-delivery-local` asset byte-matched the Action
+copy with SHA-256
+`35e60214455a84ee27078a0e71481565b1a6d8aab53ba90d511cf0d5970afc27`.
 
 ## Explicit Non-Goals
 
@@ -616,21 +640,21 @@ engine started. The tag and release must never be moved to hide this result.
 
 ## Final Completion Criteria
 
-- [ ] Existing static-provider, provider-off, filesystem-only, and default
+- [x] Existing static-provider, provider-off, filesystem-only, and default
       Node-toolchain projects that do not intentionally transfer a newly excluded
       disposable path can upgrade from `v0.8.1` without configuration changes or
       cache churn; affected local-copy users have a tested inclusion or `legacy`
       migration.
-- [ ] One unchanged provider definition publishes through two deployment-selected
+- [x] One unchanged provider definition publishes through two deployment-selected
       registry coordinates while credentials remain isolated and Deploy uses only
       the packaged digest.
-- [ ] Local-copy calls avoid excluded dependency/cache traversal without breaking
+- [x] Local-copy calls avoid excluded dependency/cache traversal without breaking
       Git planning or split-stage output handoff.
-- [ ] A mixed Node/Python repository deterministically extends the shared Rush
+- [x] A mixed Node/Python repository deterministically extends the shared Rush
       toolchain without package bootstrap workarounds or credential exposure.
-- [ ] Root docs, both sites, schemas, examples, provenance, Action/module pins,
+- [x] Root docs, both sites, schemas, examples, provenance, Action/module pins,
       release tag, GitHub Release, and Pages agree on `v0.9.1`; the immutable
       `v0.9.0` archive continues to describe the original release.
-- [ ] All released `v0.8.1` and older artifacts remain immutable.
-- [ ] All released `v0.9.0` artifacts remain immutable, and its failed bounded
+- [x] All released `v0.8.1` and older artifacts remain immutable.
+- [x] All released `v0.9.0` artifacts remain immutable, and its failed bounded
       Action smoke remains linked as historical release evidence.
