@@ -27,7 +27,7 @@ tutorial destination:
 
 ```yaml
 # GHCR tutorial template: replace "example" with a normalized owner before use.
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
 providers:
   ghcr:
     kind: oci_registry
@@ -79,7 +79,7 @@ grep -F "repository_prefix: ${GHCR_OWNER}/rush-delivery-tutorial" \
 If the owner check fails, normalize the account/organization spelling rather
 than adding uppercase or an unsupported path to metadata. If validation later
 reports an invalid provider, compare the complete file with the
-[v0.9.0 provider schema](../../../schemas/v0.9.0/application-image-providers.schema.json).
+[v0.9.1 provider schema](../../../schemas/v0.9.1/application-image-providers.schema.json).
 `GHCR_OWNER` is the destination user or organization namespace;
 `GHCR_USERNAME` is the user that authenticates the token. They are often
 different when publishing to an organization.

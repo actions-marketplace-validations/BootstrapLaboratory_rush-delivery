@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-manifest.schema.json",
+  "title": "Rush Delivery package manifest v2",
+  "type": "object",
+  "required": ["schema_version", "artifacts"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "rush-delivery-package-manifest/v2"
+    },
+    "artifacts": {
+      "type": "object",
+      "patternProperties": {
+        "^(?:\\.{1,2}|(?![A-Za-z0-9@._-]+$).*)$": {
+          "not": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "const": "oci_image"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/filesystemArtifact"
+          },
+          {
+            "$ref": "#/$defs/plannedOciArtifact"
+          },
+          {
+            "$ref": "#/$defs/publishedOciArtifact"
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "evidenceDocument": {
+      "type": "object",
+      "required": ["digest", "format", "path", "subject_digest"],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "$ref": "#/$defs/evidencePath"
+        },
+        "subject_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "filesystemArtifact": {
+      "type": "object",
+      "required": ["deploy_path", "kind", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "deploy_path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "kind": {
+          "enum": ["archive", "directory"]
+        },
+        "path": {
+          "$ref": "#/$defs/repositoryPath"
+        }
+      }
+    },
+    "evidencePath": {
+      "type": "string",
+      "pattern": "^(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\)\\.dagger/runtime/evidence/(?!\\.{1,2}(?:/|$))[A-Za-z0-9@._-]+/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+    },
+    "image": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+/[a-z0-9_]+(?:/[a-z0-9._-]+)?$"
+      }
+    },
+    "plannedOciArtifact": {
+      "type": "object",
+      "required": ["image", "kind", "platforms", "source_revision", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/image"
+        },
+        "kind": {
+          "const": "oci_image"
+        },
+        "platforms": {
+          "$ref": "#/$defs/platforms"
+        },
+        "repository": {
+          "$ref": "#/$defs/repository"
+        },
+        "source_revision": {
+          "$ref": "#/$defs/sourceRevision"
+        },
+        "status": {
+          "const": "planned"
+        }
+      }
+    },
+    "publishedOciArtifact": {
+      "type": "object",
+      "required": [
+        "digest",
+        "evidence",
+        "image",
+        "kind",
+        "platforms",
+        "reference",
+        "repository",
+        "source_revision",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "evidence": {
+          "$ref": "#/$defs/publishedEvidence"
+        },
+        "image": {
+          "$ref": "#/$defs/image"
+        },
+        "kind": {
+          "const": "oci_image"
+        },
+        "platforms": {
+          "$ref": "#/$defs/platforms"
+        },
+        "reference": {
+          "type": "string",
+          "pattern": "^[^@]+@sha256:[a-f0-9]{64}$"
+        },
+        "repository": {
+          "$ref": "#/$defs/repository"
+        },
+        "source_revision": {
+          "$ref": "#/$defs/sourceRevision"
+        },
+        "status": {
+          "const": "published"
+        }
+      }
+    },
+    "publishedEvidence": {
+      "type": "object",
+      "required": ["provenance", "sbom", "scan", "signature"],
+      "additionalProperties": false,
+      "properties": {
+        "provenance": {
+          "$ref": "#/$defs/provenanceEvidenceDocument"
+        },
+        "sbom": {
+          "$ref": "#/$defs/sbomEvidenceDocument"
+        },
+        "scan": {
+          "$ref": "#/$defs/scanEvidence"
+        },
+        "signature": {
+          "$ref": "#/$defs/signatureEvidence"
+        }
+      }
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[1-9][0-9]{0,4})?/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\)(?!.*\\/$).+$"
+    },
+    "provenanceEvidenceDocument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceDocument"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "format": {
+              "const": "slsa-provenance-v1"
+            }
+          }
+        }
+      ]
+    },
+    "scanEvidence": {
+      "type": "object",
+      "required": ["digest", "path", "policy", "result", "scanner"],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "path": {
+          "$ref": "#/$defs/evidencePath"
+        },
+        "policy": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["critical", "high", "medium", "low", "negligible"]
+          }
+        },
+        "result": {
+          "const": "passed"
+        },
+        "scanner": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "signatureEvidence": {
+      "type": "object",
+      "required": ["kind", "reference", "verified"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "sigstore"
+        },
+        "reference": {
+          "type": "string",
+          "pattern": "^[^@]+@sha256:[a-f0-9]{64}$"
+        },
+        "verified": {
+          "const": true
+        }
+      }
+    },
+    "sbomEvidenceDocument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceDocument"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "format": {
+              "const": "spdx-json"
+            }
+          }
+        }
+      ]
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    }
+  }
+}

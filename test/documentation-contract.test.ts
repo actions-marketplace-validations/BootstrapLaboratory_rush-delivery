@@ -25,8 +25,8 @@ import { parsePackageManifest } from "../src/stages/package-stage/package-manife
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "..");
-const currentRelease = "v0.9.0";
-const previousRelease = "v0.8.1";
+const currentRelease = "v0.9.1";
+const previousRelease = "v0.9.0";
 const daggerVersion = "v0.20.7";
 
 type MarkdownFence = {
@@ -425,8 +425,8 @@ test("current release, Dagger, schema, provenance, and tool pins agree", async (
     "website-docusaurus/src/pages/index.tsx",
   ]) {
     const source = await readRepoFile(homepage);
-    assert.match(source, /BootstrapLaboratory\/rush-delivery@v0\.9\.0/u);
-    assert.match(source, /\/schemas\/v0\.9\.0\//u);
+    assert.match(source, /BootstrapLaboratory\/rush-delivery@v0\.9\.1/u);
+    assert.match(source, /\/schemas\/v0\.9\.1\//u);
   }
 
   const packageImageSource = await readRepoFile(
@@ -434,11 +434,11 @@ test("current release, Dagger, schema, provenance, and tool pins agree", async (
   );
   assert.match(
     packageImageSource,
-    /https:\/\/bootstraplaboratory\.github\.io\/rush-delivery\/build-types\/oci-image\/v0\.9\.0/u,
+    /https:\/\/bootstraplaboratory\.github\.io\/rush-delivery\/build-types\/oci-image\/v0\.9\.1/u,
   );
   assert.match(
     packageImageSource,
-    /https:\/\/github\.com\/BootstrapLaboratory\/rush-delivery@v0\.9\.0/u,
+    /https:\/\/github\.com\/BootstrapLaboratory\/rush-delivery@v0\.9\.1/u,
   );
 
   const cosignSource = await readRepoFile("src/application-images/cosign.ts");

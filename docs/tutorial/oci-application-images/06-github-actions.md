@@ -11,7 +11,7 @@ GitHub treats only a full 40-character commit SHA as an immutable action
 reference. The third-party actions below are pinned to reviewed full SHAs and
 retain a release-version comment for dependency updates. Enable Dependabot (or
 an equivalent reviewed updater) for those pins. Rush Delivery references remain
-`@v0.9.0` here so every example states the release contract being taught; a
+`@v0.9.1` here so every example states the release contract being taught; a
 strict production repository should resolve that reviewed release tag,
 verify it against the release record, and replace the tag with its full commit
 SHA before merging the workflow. This is required when the repository or
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Plan Rush Delivery
-        uses: BootstrapLaboratory/rush-delivery@v0.9.0
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           git-sha: ${{ github.event.pull_request.head.sha }}
           event-name: workflow_call
@@ -105,7 +105,7 @@ jobs:
       contents: write
     steps:
       - name: Publish and deploy verified OCI image
-        uses: BootstrapLaboratory/rush-delivery@v0.9.0
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           git-sha: ${{ github.sha }}
           event-name: workflow_call
@@ -159,7 +159,7 @@ repository guard was not trusted; that is expected on PRs and forks.
 
 The composite Action does not expose `package-deploy-targets` or
 `build-and-package-deploy-targets` as `entrypoint` values. A split-stage job must
-install the pinned Dagger CLI, then invoke the `v0.9.0` module directly. This
+install the pinned Dagger CLI, then invoke the `v0.9.1` module directly. This
 complete job publishes and exports the package directory without running
 Deploy:
 
@@ -214,7 +214,7 @@ jobs:
           } > "${DEPLOY_ENV_FILE}"
 
           dagger \
-            -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+            -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
             call build-and-package-deploy-targets \
             --repo=. \
             --ci-plan-file=ci/oci-plan.json \

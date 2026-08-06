@@ -11,7 +11,7 @@ separation.
 Select package release explicitly:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.9.0
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -63,7 +63,7 @@ jobs:
       contents: write
     steps:
       - name: Run Rush Delivery package release
-        uses: BootstrapLaboratory/rush-delivery@v0.9.0
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -112,7 +112,7 @@ permissions:
   packages: read
 
 steps:
-  - uses: BootstrapLaboratory/rush-delivery@v0.9.0
+  - uses: BootstrapLaboratory/rush-delivery@v0.9.1
     with:
       entrypoint: validate
       toolchain-image-provider: github
@@ -129,7 +129,7 @@ Use local-copy source mode to test metadata and release behavior before pushing:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. -- release-packages \
   --git-sha="$(git rev-parse HEAD)" \
   --dry-run=true \

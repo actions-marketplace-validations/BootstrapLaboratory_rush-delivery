@@ -10,11 +10,11 @@ For editor integration in external projects, prefer exact versioned schema
 URLs. For example:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/deploy-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/deploy-target.schema.json
 ```
 
 The root `https://bootstraplaboratory.github.io/rush-delivery/schemas/` URLs
-track the current release. Exact paths such as `/schemas/v0.9.0/...` are the
+track the current release. Exact paths such as `/schemas/v0.9.1/...` are the
 stable contract for projects pinned to that Rush Delivery version.
 
 ## Package Release
@@ -32,7 +32,7 @@ source of truth for package selection, version changes, changelogs, and
 publishable package rules.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/npm-release.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/npm-release.schema.json
 
 kind: npm
 
@@ -258,7 +258,7 @@ inside that context, a relative image name, one explicit `platform`, and a
 scanner policy:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-target.schema.json
 name: control-plane-api
 
 artifact:
@@ -289,7 +289,7 @@ Illustrative provider metadata (replace the example registry and namespace with
 an accepted registry recipe):
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
 providers:
   release:
     kind: oci_registry

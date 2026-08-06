@@ -12,7 +12,7 @@ download, extraction, and cache contract.
 Create `.dagger/toolchains/rush.yaml`:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/rush-toolchain.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/rush-toolchain.schema.json
 version: rush-delivery-rush-toolchain/v1
 base_image: node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
 platform: linux/amd64
@@ -51,7 +51,7 @@ project also locks and verifies its own dependencies.
 ## 3. Validate Before Downloading
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   call validate-metadata-contract --repo=.
 ```
 
@@ -64,7 +64,7 @@ Run the same validation lifecycle without a toolchain registry:
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. \
   -- \
   validate \
@@ -86,7 +86,7 @@ After provider-off succeeds, a trusted release job can populate the normal
 content-addressed toolchain cache:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.9.0
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     toolchain-image-provider: github
     toolchain-image-policy: lazy
@@ -97,7 +97,7 @@ content-addressed toolchain cache:
 Pull requests should keep read-only behavior:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.9.0
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     entrypoint: validate
     toolchain-image-provider: github

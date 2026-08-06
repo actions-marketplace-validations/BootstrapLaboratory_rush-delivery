@@ -47,17 +47,17 @@ evidence explicitly.
 Update Action and module references:
 
 ```yaml
-uses: BootstrapLaboratory/rush-delivery@v0.9.0
+uses: BootstrapLaboratory/rush-delivery@v0.9.1
 ```
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 ```
 
-Use exact v0.9.0 editor schemas:
+Use exact `v0.9.1` editor schemas when adopting the current patch:
 
 ```text
-https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/<schema>.schema.json
+https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/<schema>.schema.json
 ```
 
 If local worktrees are used, install the checksummed launcher exactly as shown

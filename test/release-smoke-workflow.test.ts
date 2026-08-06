@@ -11,7 +11,7 @@ const workflowPath = path.join(
   "../.github/workflows/release-smoke.yml",
 );
 
-test("release smoke takes an exact ref/commit and covers v0.9.0 consumer paths", async () => {
+test("release smoke takes an exact ref/commit and covers v0.9.1 consumer paths", async () => {
   const source = await readFile(workflowPath, "utf8");
   const workflow = parseYaml(source) as {
     env: Record<string, string>;
@@ -44,7 +44,7 @@ test("release smoke takes an exact ref/commit and covers v0.9.0 consumer paths",
     RELEASE_SMOKE_REF: "${{ inputs.target_ref }}",
   });
 
-  assert.match(source, /target_ref:[\s\S]+default: v0\.9\.0/u);
+  assert.match(source, /target_ref:[\s\S]+default: v0\.9\.1/u);
   assert.match(source, /expected_commit:[\s\S]+required: true/u);
   assert.match(source, /ref: \$\{\{ env\.RELEASE_SMOKE_REF \}\}/u);
   assert.match(source, /uses: \.\/release-source/u);

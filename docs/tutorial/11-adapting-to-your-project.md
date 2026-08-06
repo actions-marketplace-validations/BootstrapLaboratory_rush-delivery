@@ -141,7 +141,7 @@ Next: [NPM Package Release Baseline](12-npm-package-release-baseline.md).
 
 For editor validation, point metadata files at exact published schema versions
 such as
-`https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/deploy-target.schema.json`.
+`https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/deploy-target.schema.json`.
 
 For an OCI project shape, continue with the
 [OCI application images tutorial](oci-application-images/README.md),

@@ -1,6 +1,6 @@
 # OCI Application Images
 
-Rush Delivery `v0.9.0` can package a deploy target as a single-platform OCI
+Rush Delivery `v0.9.1` can package a deploy target as a single-platform OCI
 image, publish it, sign and attest the immutable digest, and hand that digest to
 project-owned Deploy code. This page is the production contract and operator
 runbook. Follow the [end-to-end tutorial](tutorial/oci-application-images/README.md)
@@ -81,10 +81,10 @@ There are three separate trust claims:
 Declare one artifact in `.dagger/package/targets/<target>.yaml`. The target name
 must agree with the Rush project, services mesh, package filename, and Deploy
 target. The complete constraints are in the immutable
-[`v0.9.0` package-target schema](../schemas/v0.9.0/package-target.schema.json).
+[`v0.9.1` package-target schema](../schemas/v0.9.1/package-target.schema.json).
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/package-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-target.schema.json
 name: control-plane-api
 artifact:
   kind: oci_image
@@ -138,10 +138,10 @@ Deploy never consumes that tag.
 Providers live only at `.dagger/application-images/providers.yaml`. They are
 independent of source, toolchain-image, Rush-cache, npm, and deployment-platform
 authentication. See the immutable
-[`v0.9.0` provider schema](../schemas/v0.9.0/application-image-providers.schema.json).
+[`v0.9.1` provider schema](../schemas/v0.9.1/application-image-providers.schema.json).
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
 providers:
   release:
     kind: oci_registry
@@ -556,7 +556,7 @@ registry query and no Cosign operation.
 ## Manifest Examples
 
 The exact schema is
-[`package-manifest.schema.json`](../schemas/v0.9.0/package-manifest.schema.json).
+[`package-manifest.schema.json`](../schemas/v0.9.1/package-manifest.schema.json).
 All hashes below are synthetic but full length.
 
 ### Legacy filesystem-only manifest
@@ -702,7 +702,7 @@ A planned OCI dry-run result has `artifactImage` and `artifactKind` but omits
 
 Before the first live publication:
 
-- Pin the Action/module and editor schemas to `v0.9.0`.
+- Pin the Action/module and editor schemas to `v0.9.1`.
 - Validate metadata with `validate-metadata-contract`, then run provider-off and
   named-provider dry runs.
 - Use a trusted-TLS registry whose image, signature, and attestation behavior

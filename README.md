@@ -51,7 +51,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: validate
           toolchain-image-provider: github
@@ -80,7 +80,7 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Rush Delivery
-        uses: BootstrapLaboratory/rush-delivery@v0.9.0
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           dry-run: "false"
           environment: prod
@@ -110,7 +110,7 @@ source SHA; Rush package release pushes its generated version commit to the
 metadata `target_branch`.
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.9.0
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -150,7 +150,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.9.0
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -172,7 +172,7 @@ This mode clones the target repository inside Dagger, so the CI runner does not
 need to mount the repository into the module.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.0
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 RUNTIME_FILES_DIR="${RUNNER_TEMP}/rush-delivery-runtime-files"
 WORKFLOW_ENV_FILE="${RUNNER_TEMP}/dagger-workflow.env"
 DEPLOY_ENV_FILE="${RUNNER_TEMP}/dagger-deploy.env"
@@ -240,7 +240,7 @@ your latest changes.
 
 ```sh
 ./rush-delivery-local \
-  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. \
   -- \
   workflow \
@@ -269,6 +269,7 @@ installation, inclusion rules, and the `legacy` recovery path.
 - [Provider adapters](docs/providers.md)
 - [Bounded local-copy imports](docs/local-copy-source-imports.md)
 - [Project-owned Rush toolchain](docs/rush-toolchain.md)
+- [Upgrade to v0.9.1](docs/upgrade-v0.9.1.md)
 - [Upgrade to v0.9.0](docs/upgrade-v0.9.0.md)
 - [OCI application images tutorial](docs/tutorial/oci-application-images/README.md)
 - [OCI application images](docs/oci-application-images.md)

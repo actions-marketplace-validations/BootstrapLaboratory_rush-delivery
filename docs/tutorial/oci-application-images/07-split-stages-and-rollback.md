@@ -33,7 +33,7 @@ Run these commands from the exact committed source revision:
 ```bash
 set -euo pipefail
 
-export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.0"
+export RUSH_DELIVERY_MODULE="github.com/BootstrapLaboratory/rush-delivery@v0.9.1"
 export SOURCE_SHA="$(git rev-parse HEAD)"
 test "${#SOURCE_SHA}" -eq 40
 test "$(git status --porcelain)" = ""

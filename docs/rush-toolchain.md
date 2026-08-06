@@ -1,6 +1,6 @@
 # Project-Owned Rush Toolchain
 
-Rush Delivery `v0.9.0` lets a repository add deterministic executables to the
+Rush Delivery `v0.9.1` lets a repository add deterministic executables to the
 shared Rush workflow image through `.dagger/toolchains/rush.yaml`. The contract
 is intentionally narrow: immutable base image, checksummed HTTPS downloads, and
 fixed executable destinations. It is not a general container build script.
@@ -11,12 +11,12 @@ hash, provider cache reference, and provider-off behavior.
 ## Contract
 
 Use the exact versioned
-[`rush-toolchain` schema](../schemas/v0.9.0/rush-toolchain.schema.json). The same
+[`rush-toolchain` schema](../schemas/v0.9.1/rush-toolchain.schema.json). The same
 metadata is available as a tested
 [configuration fragment](../examples/deployment-environment-compatibility/rush-toolchain.yaml):
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/rush-toolchain.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/rush-toolchain.schema.json
 version: rush-delivery-rush-toolchain/v1
 base_image: node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
 platform: linux/amd64
@@ -98,7 +98,7 @@ They do not become toolchain environment variables and are never hashed.
 5. Validate metadata before a build:
 
    ```sh
-   dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.0 \
+   dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
      call validate-metadata-contract --repo=.
    ```
 

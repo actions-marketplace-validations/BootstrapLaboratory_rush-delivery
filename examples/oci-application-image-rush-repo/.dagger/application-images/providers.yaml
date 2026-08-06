@@ -1,5 +1,5 @@
 # GHCR tutorial template: replace "example" with a normalized owner before use.
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.0/application-image-providers.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
 providers:
   ghcr:
     kind: oci_registry
