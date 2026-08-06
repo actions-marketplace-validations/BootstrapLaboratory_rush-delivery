@@ -58,7 +58,10 @@ test("action metadata defines a composite action over dagger-for-github", () => 
   ) as {
     inputs: Record<string, { default?: string }>;
     runs: {
-      steps: Array<{ uses?: string }>;
+      steps: Array<{
+        uses?: string;
+        with?: Record<string, string>;
+      }>;
       using: string;
     };
   };
@@ -86,6 +89,12 @@ test("action metadata defines a composite action over dagger-for-github", () => 
         "dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77",
     ),
   );
+  const daggerStep = metadata.runs.steps.find(
+    (step) => step.uses !== undefined,
+  );
+  assert.equal(daggerStep?.with?.verb, "${{ steps.prepare.outputs.verb }}");
+  assert.equal(daggerStep?.with?.args, "${{ steps.prepare.outputs.args }}");
+  assert.equal(daggerStep?.with?.shell, undefined);
 });
 
 test("prepare workflow emits bounded local-copy Dagger Shell through the shared launcher", async () => {
@@ -116,15 +125,25 @@ test("prepare workflow emits bounded local-copy Dagger Shell through the shared 
 
   assert.equal(result.status, 0, result.stderr);
   const outputs = parseGithubOutput(await readFile(outputPath, "utf8"));
-  assert.equal(outputs.args, "");
-  assert.match(outputs.shell, /^repo=\$\(host \| directory /u);
-  assert.match(outputs.shell, /--exclude='\*\*\/node_modules'/u);
-  assert.match(outputs.shell, /--exclude='\*\*\/generated'/u);
-  assert.match(outputs.shell, /--exclude='!apps\/api\/generated'/u);
-  assert.match(outputs.shell, /local-source --repo=\$repo \| workflow/u);
-  assert.match(outputs.shell, /--host-workspace-dir=\/trusted\/workspace$/u);
-  assert.doesNotMatch(outputs.shell, /--source-mode/u);
-  assert.doesNotMatch(outputs.shell, /--source-repository-url/u);
+  assert.equal(outputs.verb, "shell");
+  assert.equal(
+    outputs.args,
+    path.join(tempDir, "rush-delivery-action/dagger-shell"),
+  );
+  const daggerShell = await readFile(outputs.args, "utf8");
+  assert.match(daggerShell, /^repo=\$\(host \| directory /u);
+  assert.match(daggerShell, /--exclude='\*\*\/node_modules'/u);
+  assert.match(daggerShell, /--exclude='\*\*\/generated'/u);
+  assert.match(daggerShell, /--exclude='!apps\/api\/generated'/u);
+  assert.match(daggerShell, /rush_delivery_input_0=\$\(host \| file /u);
+  assert.match(daggerShell, /rush_delivery_input_1=\$\(host \| file /u);
+  assert.match(daggerShell, /rush_delivery_input_2=\$\(host \| directory /u);
+  assert.match(daggerShell, /rush_delivery_input_3=\$\(host \| unix-socket /u);
+  assert.match(daggerShell, /local-source --repo=\$repo \| workflow/u);
+  assert.match(daggerShell, /--host-workspace-dir=\/trusted\/workspace\n$/u);
+  assert.doesNotMatch(daggerShell, /--source-mode/u);
+  assert.doesNotMatch(daggerShell, /--source-repository-url/u);
+  assert.equal((await stat(outputs.args)).mode & 0o777, 0o600);
 
   await rm(tempDir, { force: true, recursive: true });
 });
@@ -151,7 +170,7 @@ test("Git source mode never reads local-copy ignore settings", async () => {
     "[source-import] bounded local-copy settings are ignored in Git source mode",
   );
   const outputs = parseGithubOutput(await readFile(outputPath, "utf8"));
-  assert.equal(outputs.shell, "");
+  assert.equal(outputs.verb, "call");
   assert.match(outputs.args, /--source-mode=git/u);
 
   await rm(tempDir, { force: true, recursive: true });

@@ -90,6 +90,65 @@ test("bounded launcher emits ordered caller-side filters and preserves inclusion
   rmSync(repository, { force: true, recursive: true });
 });
 
+test("bounded launcher passes host paths as typed Dagger Shell objects", () => {
+  const repository = createRepository();
+  const workflowEnv = path.join(repository, "workflow env");
+  const deployEnv = path.join(repository, "deploy.env");
+  const releaseEnv = path.join(repository, "release.env");
+  const runtimeFiles = path.join(repository, "runtime files");
+  const dockerSocket = path.join(repository, "docker.sock");
+  const result = runLauncher([
+    "--emit-shell",
+    `--repo=${repository}`,
+    "--",
+    "workflow",
+    `--workflow-env-file=${workflowEnv}`,
+    "--deploy-env-file",
+    deployEnv,
+    `--release-env-file=${releaseEnv}`,
+    "--runtime-files",
+    runtimeFiles,
+    `--docker-socket=${dockerSocket}`,
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    new RegExp(
+      `rush_delivery_input_0=\\$\\(host \\| file '${workflowEnv}'\\)`,
+      "u",
+    ),
+  );
+  assert.match(
+    result.stdout,
+    new RegExp(
+      `rush_delivery_input_1=\\$\\(host \\| file '${deployEnv}'\\)`,
+      "u",
+    ),
+  );
+  assert.match(result.stdout, /rush_delivery_input_2=\$\(host \| file /u);
+  assert.match(result.stdout, /rush_delivery_input_3=\$\(host \| directory /u);
+  assert.match(
+    result.stdout,
+    /rush_delivery_input_4=\$\(host \| unix-socket /u,
+  );
+  for (const [name, index] of [
+    ["workflow-env-file", 0],
+    ["deploy-env-file", 1],
+    ["release-env-file", 2],
+    ["runtime-files", 3],
+    ["docker-socket", 4],
+  ] as const) {
+    assert.match(
+      result.stdout,
+      new RegExp(`--${name}=\\$rush_delivery_input_${index}`, "u"),
+    );
+  }
+  assert.doesNotMatch(result.stdout, /'--workflow-env-file=\//u);
+
+  rmSync(repository, { force: true, recursive: true });
+});
+
 test("bounded launcher rejects unsafe patterns and mandatory path removal", () => {
   const invalidPatterns = [
     "../outside",
@@ -169,7 +228,7 @@ test("legacy launcher preserves the top-level call path without reading ignores"
     [
       "--source-import-policy=legacy",
       `--repo=${repository}`,
-      "--module=github.com/example/rush-delivery@v0.9.0",
+      "--module=github.com/example/rush-delivery@v0.9.1",
       "--",
       "validate",
       "--event-name=pull_request",
@@ -184,7 +243,7 @@ test("legacy launcher preserves the top-level call path without reading ignores"
   assert.deepEqual(readFileSync(capturePath, "utf8").trim().split("\n"), [
     "call",
     "-m",
-    "github.com/example/rush-delivery@v0.9.0",
+    "github.com/example/rush-delivery@v0.9.1",
     "validate",
     "--event-name=pull_request",
     "--source-mode=local_copy",

@@ -266,10 +266,9 @@ runs:
         DAGGER_NO_NAG: ${{ inputs.dagger-no-nag }}
       with:
         version: ${{ inputs.dagger-version }}
-        verb: call
+        verb: ${{ steps.prepare.outputs.verb }}
         module: ${{ steps.prepare.outputs.module }}
         args: ${{ steps.prepare.outputs.args }}
-        shell: ${{ steps.prepare.outputs.shell }}
         workdir: ${{ inputs.workdir }}
         dagger-flags: ${{ inputs.dagger-flags }}
         cloud-token: ${{ inputs.dagger-cloud-token }}
