@@ -1,0 +1,25 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
+pnpmfileChecksum: fm2bgttvmfglngapbjspr7zf2u
+
+importers:
+
+  .:
+    dependencies:
+      '@rush-temp/control-plane-api':
+        specifier: file:./projects/control-plane-api.tgz
+        version: file:projects/control-plane-api.tgz
+
+packages:
+
+  '@rush-temp/control-plane-api@file:projects/control-plane-api.tgz':
+    resolution: {integrity: sha512-tJm1cp+Y6SoKHtclH387sCYuFV81UoDMPIQQMukjE7Z+qml4UzJ6jUjmdQT65rNtYihGPG0GEKGLoEEPx1LYkQ==, tarball: file:projects/control-plane-api.tgz}
+    version: 0.0.0
+
+snapshots:
+
+  '@rush-temp/control-plane-api@file:projects/control-plane-api.tgz': {}

@@ -95,6 +95,55 @@ test("builds package plan for a Rush deploy archive artifact", () => {
   );
 });
 
+test("builds a typed OCI image package plan", () => {
+  assert.deepStrictEqual(
+    buildPackageActionPlan(
+      "server",
+      {
+        artifact: {
+          context: "apps/server",
+          dockerfile: "apps/server/Dockerfile",
+          image: "services/server",
+          kind: "oci_image",
+          platform: "linux/amd64",
+          scan: {
+            fail_on: ["high", "critical"],
+            ignore_file: ".dagger/application-images/grype.yaml",
+          },
+        },
+        build: {
+          dry_run_defaults: {},
+          map_env: {},
+          pass_env: [],
+        },
+        name: "server",
+      },
+      "deploy-target",
+    ),
+    {
+      commands: [],
+      oci: {
+        context: "apps/server",
+        dockerfile: "apps/server/Dockerfile",
+        image: "services/server",
+        platform: "linux/amd64",
+        scan: {
+          fail_on: ["high", "critical"],
+          ignore_file: ".dagger/application-images/grype.yaml",
+        },
+      },
+      validations: [
+        { kind: "directory", path: "apps/server" },
+        { kind: "file", path: "apps/server/Dockerfile" },
+        {
+          kind: "file",
+          path: ".dagger/application-images/grype.yaml",
+        },
+      ],
+    },
+  );
+});
+
 test("fails when package metadata name does not match target", () => {
   assert.throws(
     () =>
@@ -115,5 +164,59 @@ test("fails when package metadata name does not match target", () => {
         "deploy-target",
       ),
     /Package target metadata for "server" must declare name "server", got "webapp"\./,
+  );
+});
+
+test("rejects direct action-plan Dockerfiles outside their context", () => {
+  assert.throws(
+    () =>
+      buildPackageActionPlan(
+        "server",
+        {
+          artifact: {
+            context: "apps/server",
+            dockerfile: "deploy/server.Dockerfile",
+            image: "server",
+            kind: "oci_image",
+            platform: "linux/amd64",
+            scan: { fail_on: ["critical"] },
+          },
+          build: {
+            dry_run_defaults: {},
+            map_env: {},
+            pass_env: [],
+          },
+          name: "server",
+        },
+        "deploy-target",
+      ),
+    /Dockerfile must stay inside its build context/,
+  );
+});
+
+test("rejects an unsafe OCI target before returning an action plan", () => {
+  assert.throws(
+    () =>
+      buildPackageActionPlan(
+        "nested/server",
+        {
+          artifact: {
+            context: "apps/server",
+            dockerfile: "apps/server/Dockerfile",
+            image: "server",
+            kind: "oci_image",
+            platform: "linux/amd64",
+            scan: { fail_on: ["critical"] },
+          },
+          build: {
+            dry_run_defaults: {},
+            map_env: {},
+            pass_env: [],
+          },
+          name: "nested/server",
+        },
+        "deploy-target",
+      ),
+    /cannot be used as an evidence directory name/,
   );
 });

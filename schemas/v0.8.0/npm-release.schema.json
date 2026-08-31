@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.8.0/npm-release.schema.json",
+  "title": "Rush Delivery NPM release",
+  "type": "object",
+  "required": ["auth", "kind", "versioning"],
+  "additionalProperties": false,
+  "properties": {
+    "auth": {
+      "type": "object",
+      "required": ["kind", "token_env"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "token"
+        },
+        "token_env": {
+          "$ref": "#/$defs/envName"
+        }
+      }
+    },
+    "kind": {
+      "const": "npm"
+    },
+    "publish": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "enum": ["public", "restricted"]
+        },
+        "provenance": {
+          "default": false,
+          "type": "boolean"
+        },
+        "registry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "$ref": "#/$defs/safeCliValue"
+        }
+      }
+    },
+    "versioning": {
+      "type": "object",
+      "required": ["strategy", "target_branch"],
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "const": "rush-change-files"
+        },
+        "target_branch": {
+          "$ref": "#/$defs/safeGitBranch"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "safeCliValue": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "\\s"
+          },
+          {
+            "type": "string",
+            "pattern": "^-"
+          }
+        ]
+      }
+    },
+    "safeGitBranch": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/safeCliValue"
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "\\.\\."
+              },
+              {
+                "type": "string",
+                "pattern": "\\.lock$"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# GHCR tutorial template: replace "example" with a normalized owner before use.
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
+providers:
+  ghcr:
+    kind: oci_registry
+    registry: ghcr.io
+    repository_prefix: example/rush-delivery-tutorial
+    username_env: RD_OCI_GHCR_USERNAME
+    token_env: RD_OCI_GHCR_TOKEN
+    signing_key_env: RD_OCI_COSIGN_PRIVATE_KEY
+    signing_password_env: RD_OCI_COSIGN_PASSWORD
+    verification_key_env: RD_OCI_COSIGN_PUBLIC_KEY

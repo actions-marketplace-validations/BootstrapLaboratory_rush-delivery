@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/deploy-target.schema.json
+name: control-plane-api
+deploy_script: deploy/consume-image.sh
+runtime:
+  image: node:24-bookworm-slim
+  workspace:
+    files:
+      - deploy/consume-image.sh

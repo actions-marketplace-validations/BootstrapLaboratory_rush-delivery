@@ -8,6 +8,9 @@ A full Rush Delivery repository can use this layout:
 
 ```text
 .dagger/
+├── application-images/
+│   ├── grype.yaml
+│   └── providers.yaml
 ├── deploy/
 │   ├── services-mesh.yaml
 │   └── targets/
@@ -47,8 +50,21 @@ The example says `webapp` waits for `server`.
 `.dagger/package/targets/*.yaml` answers:
 
 - What artifact does this target need?
-- Is the artifact a Rush deploy archive or a built directory?
+- Is the artifact a Rush deploy archive, a built directory, or an OCI image?
 - Which Rush project and deploy scenario produce it?
+
+## Application Images
+
+`.dagger/application-images/providers.yaml` answers:
+
+- Which registry namespace receives application images?
+- Which environment variable names supply registry and key-backed Cosign
+  credentials?
+
+An OCI package target can also reference
+`.dagger/application-images/grype.yaml` as its explicit scanner ignore policy.
+Filesystem-only repositories omit this directory. Provider `off` remains the
+default and requires no application-image metadata.
 
 ## Deploy Targets
 
@@ -92,6 +108,8 @@ decides which packages are publishable and how change files affect versions.
 
 - Keep `.dagger` metadata small and declarative.
 - Put provider credentials in CI env, not in metadata.
+- Keep OCI registry and Cosign credentials in the Package environment; never
+  place them in runtime files or deploy runtime allowlists.
 - Put npm release credentials in release env, not deploy env.
 - Put executable deployment behavior in scripts.
 - Use metadata to connect Rush projects, package artifacts, and deploy targets.

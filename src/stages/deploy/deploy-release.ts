@@ -1,9 +1,11 @@
 import { Directory, File, Socket } from "@dagger.io/dagger";
+import { activateApplicationImageCredentialBoundaryForDeploy } from "../../application-images/activation.ts";
 import type { DeployReleaseResult } from "../../model/deploy-result.ts";
 import type { ToolchainImageProvidersDefinition } from "../../model/toolchain-image.ts";
 import { buildDeploymentPlan } from "../../planning/build-deployment-plan.ts";
 import { logSection } from "../../logging/sections.ts";
 import { parseReleaseTargets } from "../../planning/parse-release-targets.ts";
+import { assertFrameworkRuntimePathsAreCanonical } from "../../runtime/framework-runtime.ts";
 import {
   parseToolchainImagePolicy,
   parseToolchainImageProvider,
@@ -14,6 +16,10 @@ import { executeDeploymentPlan } from "./execute-deployment-plan.ts";
 import { loadServicesMesh } from "./load-deploy-metadata.ts";
 import { parsePackageManifest } from "../package-stage/package-manifest.ts";
 import { parseDeployEnvFile } from "./runtime-env.ts";
+import {
+  assertPackageManifestDeployPreflight,
+  assertPackageManifestEvidenceIntegrity,
+} from "./package-manifest-preflight.ts";
 
 async function buildReleasePlan(
   repo: Directory,
@@ -45,6 +51,7 @@ export async function deployRelease(
 ): Promise<string> {
   logSection("Deploy release");
 
+  await assertFrameworkRuntimePathsAreCanonical(repo);
   const hostEnv =
     hostEnvOverride ??
     (deployEnvFile ? parseDeployEnvFile(await deployEnvFile.contents()) : {});
@@ -84,6 +91,26 @@ export async function deployRelease(
     );
   }
 
+  assertPackageManifestDeployPreflight(
+    deploymentPlan.selectedTargets,
+    packageManifest,
+    gitSha,
+    dryRun,
+  );
+  const protectedApplicationImageCredentials =
+    await activateApplicationImageCredentialBoundaryForDeploy(
+      repo,
+      packageManifest,
+      deploymentPlan.selectedTargets,
+    );
+  if (!dryRun) {
+    await assertPackageManifestEvidenceIntegrity(
+      deploymentPlan.selectedTargets,
+      packageManifest,
+      (path) => repo.file(path).contents(),
+    );
+  }
+
   console.log(
     `[deploy-release] selected targets: ${deploymentPlan.selectedTargets.join(", ")} | environment=${environment} | dryRun=${dryRun}`,
   );
@@ -105,6 +132,7 @@ export async function deployRelease(
     dockerSocket,
     deployTagTokenEnv,
     runtimeFiles,
+    protectedApplicationImageCredentials,
   );
   const deployResult: DeployReleaseResult = {
     dryRun,

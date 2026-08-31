@@ -44,6 +44,28 @@ test("parses a flat deploy env file into a host env map", () => {
   });
 });
 
+test("flat env diagnostics redact malformed values and actual-newline PEM input", () => {
+  const sentinel = "SENTINEL_FLAT_ENV_SECRET_d280e4";
+
+  for (const contents of [
+    `OCI_TOKEN=${sentinel}\n${sentinel}`,
+    `OCI_SIGNING_KEY=-----BEGIN ENCRYPTED SIGSTORE PRIVATE KEY-----\n${sentinel}\n-----END ENCRYPTED SIGSTORE PRIVATE KEY-----`,
+    `${sentinel.toLowerCase()}=value`,
+  ]) {
+    let message = "";
+
+    assert.throws(
+      () => parseDeployEnvFile(contents),
+      (error) => {
+        message = error instanceof Error ? error.message : String(error);
+        return true;
+      },
+    );
+    assert.match(message, /line contents were redacted/);
+    assert.equal(message.includes(sentinel), false);
+  }
+});
+
 test("resolves pass-through env from host env and static env values", () => {
   const resolvedEnv = resolveSpecEnvironment(
     webappLikeSpec,
@@ -250,6 +272,53 @@ test("keeps an already repo-relative file mount source unchanged", () => {
       "/home/runner/work/beltapp/beltapp",
     ),
     "secrets/gha-creds.json",
+  );
+});
+
+test("rejects host-path mounts that bypass target-scoped evidence isolation", () => {
+  for (const sourcePath of [
+    ".dagger/runtime/evidence",
+    ".dagger/runtime/evidence/other/scan.json",
+    ".dagger/./runtime/evidence/other/scan.json",
+    ".dagger/runtime/./evidence/other/scan.json",
+  ]) {
+    assert.throws(
+      () =>
+        getRequiredRepoRelativeHostPathSource(
+          { EVIDENCE_SOURCE: sourcePath },
+          "EVIDENCE_SOURCE",
+          "current",
+        ),
+      /consume the current target's verified evidence through ARTIFACT_EVIDENCE_DIR/,
+    );
+  }
+
+  assert.throws(
+    () =>
+      getRequiredRepoRelativeHostPathSource(
+        {
+          EVIDENCE_SOURCE:
+            "/runner/work/repo/.dagger/runtime/evidence/other/scan.json",
+        },
+        "EVIDENCE_SOURCE",
+        "current",
+        "/runner/work/repo",
+      ),
+    /consume the current target's verified evidence through ARTIFACT_EVIDENCE_DIR/,
+  );
+
+  assert.throws(
+    () =>
+      getRequiredRepoRelativeHostPathSource(
+        {
+          EVIDENCE_SOURCE:
+            "/runner/work/repo/.dagger/./runtime/evidence/other/scan.json",
+        },
+        "EVIDENCE_SOURCE",
+        "current",
+        "/runner/work/repo",
+      ),
+    /consume the current target's verified evidence through ARTIFACT_EVIDENCE_DIR/,
   );
 });
 

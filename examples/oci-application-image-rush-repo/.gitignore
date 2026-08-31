@@ -1,0 +1,15 @@
+common/temp/
+**/.rush/temp/
+**/node_modules/
+**/rush-logs/
+apps/control-plane-api/dist/
+.dagger/runtime/
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.pub
+oci-package/
+oci-package.tar
+oci-package.tar.sha256

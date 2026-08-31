@@ -1,11 +1,11 @@
 # Public Dagger API
 
 When consuming this module from CI, prefer Git source mode so Dagger clones the
-Rush repository internally. Use `--repo=.` only for local-copy runs against a
-checked-out working tree.
+Rush repository internally. For a checked-out worktree, use the versioned
+`rush-delivery-local` launcher so exclusions apply before source transfer.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/OWNER/rush-delivery@VERSION
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 ```
 
 GitHub Actions can use the root action wrapper instead of assembling the raw
@@ -59,8 +59,8 @@ dagger -m "$RUSH_DELIVERY_MODULE" call validate \
   --source-auth-token-env=GITHUB_TOKEN
 ```
 
-For local validation against unpushed changes, use `--repo=.` with
-`--source-mode=local_copy`.
+For local validation against unpushed changes, use the bounded launcher from
+the [local-copy guide](local-copy-source-imports.md).
 
 `releasePackages` runs the package release/versioning flow from
 `.dagger/release/npm.yaml`. The first supported strategy is Rush change-file
@@ -101,7 +101,10 @@ and diagnostic entrypoints.
 ## Key Inputs
 
 `repo` is the caller's Rush repository directory for `sourceMode=local_copy`.
-Git source mode does not require it.
+Git source mode does not require it. Existing top-level entrypoints keep their
+released static filter. `localSource(repo)` is the additive object used by the
+launcher after it has composed an already-filtered Directory; its constructor
+does not apply a second filter.
 
 `gitSha` is the commit being validated or released. It is required for Git
 source mode.
@@ -112,6 +115,11 @@ detection. Forced targets are used by manual deploy wrappers.
 `deployEnvFile` is a newline-delimited environment file for workflow, validate,
 build, and deploy paths. The framework reads it once, then passes only package-
 or deploy-target-allowed variables to build and runtime containers.
+Application-image publishing may resolve the selected provider's public
+registry coordinates and protected registry/signing values from the
+workflow-plus-deploy overlay. Coordinate values remain ordinary routing data;
+credentials become Dagger secrets and neither class is projected to project
+code. Deploy receives only the packaged digest handoff.
 
 `workflowEnvFile` is a newline-delimited environment file shared by the
 composed `workflow`. Use it for source/provider values that may be needed
@@ -128,17 +136,39 @@ write credentials such as `GITHUB_TOKEN`.
 Currently `["npm"]` is supported. The default `[]` keeps deploy-only workflow
 behavior unchanged.
 
-`runtimeFiles` is an optional directory of deploy-only files such as cloud
-credentials, kubeconfig files, or signing material. Deploy target metadata can
-mount files from this bundle without making them part of source, package
-artifacts, Rush install cache, or toolchain image hashes.
+`runtimeFiles` is an optional directory of deploy-platform files such as cloud
+credentials, kubeconfig files, or generated deployment certificates. Deploy
+target metadata can mount files from this bundle without making them part of
+source, package artifacts, Rush install cache, or toolchain image hashes. Do
+not put OCI registry tokens, Cosign private keys, signing passwords, or Cosign
+public keys there; application-image credentials are Package-only environment
+inputs selected by provider metadata.
 
 `sourceMode` is `git` or `local_copy`. Git mode is the recommended CI path and
 uses provider-neutral source coordinates. Local-copy mode needs `repo` and is
-intended for local tests, offline runs, and unpushed changes.
+intended for local tests, offline runs, and unpushed changes. The Action adds
+`source-import-policy` (`bounded` by default, `legacy` for recovery) and
+`source-import-ignore-file`. The portable launcher exposes equivalent flags.
 
 `toolchainImageProvider` and `rushCacheProvider` are `off` by default. Provider
 `github` enables GHCR-backed toolchain images or Rush install cache.
+Optional `.dagger/toolchains/rush.yaml` extends the Rush workflow image with
+digest-pinned, checksummed executables. Its absence preserves the exact default
+toolchain identity. See the [toolchain guide](rush-toolchain.md).
+
+`applicationImageProvider` is `off` by default. A live selection containing an
+`oci_image` package target must choose a provider declared in
+`.dagger/application-images/providers.yaml`. Named-provider dry runs validate
+repository intent without requiring or resolving provider credentials. A
+supplied aggregate env file is still parsed for other configured capabilities;
+omit live OCI values from dry/no-OCI calls. Filesystem-only projects do not
+need the metadata or a configuration change after upgrading; when no selected
+target is OCI, workflow/package planning ignores the application provider
+input, provider file, and provider credentials.
+Provider coordinates may be static or selected by `registry_env` and
+`repository_prefix_env`. Named dry runs resolve only the public coordinate
+values; live credentials remain deferred until Package is ready. See the
+[environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md).
 
 For `workflow`, `toolchainImagePolicy` and `rushCachePolicy` default to `lazy`,
 which is the trusted release behavior: pull first, build or install on miss, and
@@ -146,10 +176,17 @@ publish refreshed provider artifacts after success. For `validate`, both
 policies default to `pull-or-build`, which pulls existing artifacts and builds
 or installs locally on miss without publishing.
 
-`dockerSocket` is optional. Live Cloud Run image builds need it; dry-runs and
-non-Docker targets do not.
+`dockerSocket` is an optional compatibility input for project-owned deploy
+targets that invoke Docker. First-class OCI package artifacts use Dagger-native
+build and publication and do not require it.
 
 ## Defaults
 
 Local defaults favor portability: provider-off, dry-run enabled, and
 `local_copy` source mode. CI should opt into provider adapters explicitly.
+
+For OCI adoption, follow the
+[OCI application images tutorial](tutorial/oci-application-images/README.md),
+then use the [production guide](oci-application-images.md),
+[registry recipes](oci-registry-recipes.md), and
+[troubleshooting guide](oci-application-image-troubleshooting.md).

@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { resolveService } from "../src/model/service-mesh.ts";
 import { parseServicesMesh } from "../src/planning/parse-services-mesh.ts";
 
 test("parses service metadata and normalizes duplicate dependencies", () => {
@@ -37,5 +38,12 @@ services:
     deploy_after: webapp
 `),
     /Service mesh deploy_after for "server" must be an array\./,
+  );
+});
+
+test("service resolution requires an own service definition", () => {
+  assert.throws(
+    () => resolveService({ services: {} }, "constructor"),
+    /Unknown release target "constructor" in services mesh\./,
   );
 });

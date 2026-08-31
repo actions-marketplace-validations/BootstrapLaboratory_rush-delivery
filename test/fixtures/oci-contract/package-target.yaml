@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-target.schema.json
+name: control-plane-api
+artifact:
+  kind: oci_image
+  context: apps/control-plane-api
+  dockerfile: apps/control-plane-api/Dockerfile
+  image: platform/control-plane-api
+  platform: linux/amd64
+  scan:
+    fail_on:
+      - high
+      - critical
+    ignore_file: .dagger/application-images/grype.yaml

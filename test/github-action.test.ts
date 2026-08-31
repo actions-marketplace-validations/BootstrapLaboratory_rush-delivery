@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -58,7 +58,10 @@ test("action metadata defines a composite action over dagger-for-github", () => 
   ) as {
     inputs: Record<string, { default?: string }>;
     runs: {
-      steps: Array<{ uses?: string }>;
+      steps: Array<{
+        uses?: string;
+        with?: Record<string, string>;
+      }>;
       using: string;
     };
   };
@@ -71,21 +74,118 @@ test("action metadata defines a composite action over dagger-for-github", () => 
   assert.equal(metadata.inputs["release-env-file"].default, "");
   assert.equal(metadata.inputs["release-targets-json"].default, "[]");
   assert.equal(metadata.inputs["validate-targets-json"].default, "[]");
+  assert.equal(metadata.inputs["application-image-provider"].default, "off");
+  assert.equal(metadata.inputs["source-import-policy"].default, "bounded");
+  assert.equal(
+    metadata.inputs["source-import-ignore-file"].default,
+    ".dagger/source-import.ignore",
+  );
+  assert.equal(metadata.inputs["dagger-version"].default, "v0.20.7");
   assert.equal(metadata.runs.using, "composite");
   assert.ok(
     metadata.runs.steps.some(
-      (step) => step.uses === "dagger/dagger-for-github@v8.4.1",
+      (step) =>
+        step.uses ===
+        "dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77",
     ),
   );
+  const daggerStep = metadata.runs.steps.find(
+    (step) => step.uses !== undefined,
+  );
+  assert.equal(daggerStep?.with?.verb, "${{ steps.prepare.outputs.verb }}");
+  assert.equal(daggerStep?.with?.args, "${{ steps.prepare.outputs.args }}");
+  assert.equal(daggerStep?.with?.shell, undefined);
+});
+
+test("prepare workflow emits bounded local-copy Dagger Shell through the shared launcher", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "rush-delivery-action-"));
+  const repository = path.join(tempDir, "repo with spaces");
+  const outputPath = path.join(tempDir, "github-output");
+  await mkdir(path.join(repository, ".dagger"), { recursive: true });
+  await mkdir(path.join(repository, ".git"), { recursive: true });
+  writeFileSync(path.join(repository, "rush.json"), "{}\n");
+  writeFileSync(
+    path.join(repository, ".dagger/source-import.ignore"),
+    "**/generated\n!apps/api/generated\n",
+  );
+
+  const result = runPrepare({
+    GITHUB_ACTION_PATH: repoRoot,
+    GITHUB_OUTPUT: outputPath,
+    GITHUB_SHA: "1234567890abcdef1234567890abcdef12345678",
+    GITHUB_WORKSPACE: repository,
+    INPUT_DRY_RUN: "true",
+    INPUT_EXTRA_ARGS: "--host-workspace-dir=/trusted/workspace",
+    INPUT_REPO: repository,
+    INPUT_SOURCE_IMPORT_IGNORE_FILE: ".dagger/source-import.ignore",
+    INPUT_SOURCE_IMPORT_POLICY: "bounded",
+    INPUT_SOURCE_MODE: "local_copy",
+    RUNNER_TEMP: tempDir,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const outputs = parseGithubOutput(await readFile(outputPath, "utf8"));
+  assert.equal(outputs.verb, "shell");
+  assert.equal(
+    outputs.args,
+    path.join(tempDir, "rush-delivery-action/dagger-shell"),
+  );
+  const daggerShell = await readFile(outputs.args, "utf8");
+  assert.match(daggerShell, /^repo=\$\(host \| directory /u);
+  assert.match(daggerShell, /--exclude='\*\*\/node_modules'/u);
+  assert.match(daggerShell, /--exclude='\*\*\/generated'/u);
+  assert.match(daggerShell, /--exclude='!apps\/api\/generated'/u);
+  assert.match(daggerShell, /rush_delivery_input_0=\$\(host \| file /u);
+  assert.match(daggerShell, /rush_delivery_input_1=\$\(host \| file /u);
+  assert.match(daggerShell, /rush_delivery_input_2=\$\(host \| directory /u);
+  assert.match(daggerShell, /rush_delivery_input_3=\$\(host \| unix-socket /u);
+  assert.match(daggerShell, /local-source --repo=\$repo \| workflow/u);
+  assert.match(daggerShell, /--host-workspace-dir=\/trusted\/workspace\n$/u);
+  assert.doesNotMatch(daggerShell, /--source-mode/u);
+  assert.doesNotMatch(daggerShell, /--source-repository-url/u);
+  assert.equal((await stat(outputs.args)).mode & 0o777, 0o600);
+
+  await rm(tempDir, { force: true, recursive: true });
+});
+
+test("Git source mode never reads local-copy ignore settings", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "rush-delivery-action-"));
+  const outputPath = path.join(tempDir, "github-output");
+  const result = runPrepare({
+    GITHUB_ACTION_PATH: repoRoot,
+    GITHUB_OUTPUT: outputPath,
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_REPOSITORY: "owner/repo",
+    GITHUB_SERVER_URL: "https://github.example",
+    GITHUB_SHA: "1234567890abcdef1234567890abcdef12345678",
+    INPUT_SOURCE_IMPORT_IGNORE_FILE: "../../must-not-be-read",
+    INPUT_SOURCE_IMPORT_POLICY: "invalid-but-ignored",
+    INPUT_SOURCE_MODE: "git",
+    RUNNER_TEMP: tempDir,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    result.stderr.trim(),
+    "[source-import] bounded local-copy settings are ignored in Git source mode",
+  );
+  const outputs = parseGithubOutput(await readFile(outputPath, "utf8"));
+  assert.equal(outputs.verb, "call");
+  assert.match(outputs.args, /--source-mode=git/u);
+
+  await rm(tempDir, { force: true, recursive: true });
 });
 
 test("prepare workflow writes deploy env, runtime files, and Dagger args", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "rush-delivery-action-"));
   const outputPath = path.join(tempDir, "github-output");
   const sourceCredential = path.join(tempDir, "gha-creds.json");
+  const sourceExecutable = path.join(tempDir, "deploy-helper.sh");
   const deployEnvFile = path.join(tempDir, "base.env");
 
   writeFileSync(sourceCredential, '{"ok":true}\n');
+  writeFileSync(sourceExecutable, "#!/usr/bin/env bash\nexit 0\n");
+  chmodSync(sourceExecutable, 0o755);
   writeFileSync(deployEnvFile, "BASE_VALUE=from-file\n");
 
   const result = runPrepare({
@@ -98,6 +198,7 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
     GITHUB_SHA: "1234567890abcdef1234567890abcdef12345678",
     GITHUB_WORKSPACE: "/home/runner/work/repo/repo",
     INPUT_ARTIFACT_PREFIX: "artifact",
+    INPUT_APPLICATION_IMAGE_PROVIDER: "release",
     INPUT_DEPLOY_ENV:
       "GCP_PROJECT_ID=test-project\nCLOUD_RUN_REGION=us-central1",
     INPUT_DEPLOY_ENV_FILE: deployEnvFile,
@@ -110,7 +211,7 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
     INPUT_INCLUDE_GITHUB_ENV: "true",
     INPUT_MODULE: "",
     INPUT_PR_BASE_SHA: "",
-    INPUT_RUNTIME_FILE_MAP: `${sourceCredential}=>gcp-credentials.json\n=>ignored.json`,
+    INPUT_RUNTIME_FILE_MAP: `${sourceCredential}=>gcp-credentials.json\n${sourceExecutable}=>bin/deploy-helper.sh\n=>ignored.json`,
     INPUT_RUNTIME_FILES: "",
     INPUT_RUSH_CACHE_POLICY: "lazy",
     INPUT_RUSH_CACHE_PROVIDER: "github",
@@ -137,6 +238,7 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
   );
   assert.match(outputs.args, /--dry-run=false/);
   assert.match(outputs.args, /--release-targets-json=/);
+  assert.match(outputs.args, /--application-image-provider=release/);
   assert.match(outputs.args, /--workflow-env-file=/);
   assert.match(outputs.args, /--source-mode=git/);
   assert.match(
@@ -159,13 +261,29 @@ test("prepare workflow writes deploy env, runtime files, and Dagger args", async
   const releaseEnv = await readFile(outputs["release-env-file"], "utf8");
   assert.equal(releaseEnv, "");
 
+  for (const envFile of [
+    outputs["workflow-env-file"],
+    outputs["deploy-env-file"],
+    outputs["release-env-file"],
+  ]) {
+    assert.equal((await stat(envFile)).mode & 0o777, 0o600);
+  }
+
+  const copiedRuntimeCredential = path.join(
+    outputs["runtime-files"],
+    "gcp-credentials.json",
+  );
   assert.equal(
-    await readFile(
-      path.join(outputs["runtime-files"], "gcp-credentials.json"),
-      "utf8",
-    ),
+    await readFile(copiedRuntimeCredential, "utf8"),
     '{"ok":true}\n',
   );
+  assert.equal((await stat(copiedRuntimeCredential)).mode & 0o777, 0o600);
+  assert.equal(
+    (await stat(path.join(outputs["runtime-files"], "bin/deploy-helper.sh")))
+      .mode & 0o777,
+    0o700,
+  );
+  assert.equal((await stat(outputs["runtime-files"])).mode & 0o777, 0o700);
 
   await assert.rejects(
     stat(path.join(outputs["runtime-files"], "ignored.json")),

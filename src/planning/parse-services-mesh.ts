@@ -9,7 +9,7 @@ export function parseServicesMesh(servicesMeshYaml: string): ServiceMesh {
   if (
     typeof parsedValue !== "object" ||
     parsedValue === null ||
-    !("services" in parsedValue) ||
+    !Object.hasOwn(parsedValue, "services") ||
     typeof parsedValue.services !== "object" ||
     parsedValue.services === null ||
     Array.isArray(parsedValue.services)
@@ -25,7 +25,7 @@ export function parseServicesMesh(servicesMeshYaml: string): ServiceMesh {
     "services-mesh.yaml",
   );
 
-  const normalizedServices: Record<string, ServiceDefinition> = {};
+  const normalizedServices: Array<[string, ServiceDefinition]> = [];
 
   for (const [target, rawService] of Object.entries(parsedValue.services)) {
     if (typeof target !== "string" || target.length === 0) {
@@ -40,14 +40,17 @@ export function parseServicesMesh(servicesMeshYaml: string): ServiceMesh {
       throw new Error(`Service mesh entry for "${target}" must be a mapping.`);
     }
 
+    const rawServiceRecord = rawService as Record<string, unknown>;
+
     assertKnownKeys(
-      rawService as Record<string, unknown>,
+      rawServiceRecord,
       ["deploy_after"],
       `Service mesh entry for "${target}"`,
     );
 
-    const rawDeployAfter =
-      "deploy_after" in rawService ? rawService.deploy_after : [];
+    const rawDeployAfter = Object.hasOwn(rawServiceRecord, "deploy_after")
+      ? rawServiceRecord.deploy_after
+      : [];
 
     if (!Array.isArray(rawDeployAfter)) {
       throw new Error(
@@ -68,10 +71,13 @@ export function parseServicesMesh(servicesMeshYaml: string): ServiceMesh {
       }
     }
 
-    normalizedServices[target] = {
-      deploy_after: normalizedDeployAfter,
-    };
+    normalizedServices.push([
+      target,
+      {
+        deploy_after: normalizedDeployAfter,
+      },
+    ]);
   }
 
-  return { services: normalizedServices };
+  return { services: Object.fromEntries(normalizedServices) };
 }

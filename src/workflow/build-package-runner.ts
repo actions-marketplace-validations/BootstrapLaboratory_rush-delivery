@@ -1,18 +1,17 @@
 import { Container, Directory } from "@dagger.io/dagger";
 
 import type { CiPlan } from "../model/ci-plan.ts";
-import type { PackageManifestArtifact } from "../model/package-manifest.ts";
+import type { NpmReleaseDefinition } from "../model/npm-release.ts";
+import { activateApplicationImageProvider } from "../application-images/activation.ts";
 import { buildRushBuildSteps } from "../stages/build-stage/rush-build-plan.ts";
 import { createCiPlan, formatCiPlan } from "../ci-plan/parse-ci-plan.ts";
 import { computeCiPlan } from "../stages/detect/compute-ci-plan.ts";
-import { loadPackageTargetDefinition } from "../stages/package-stage/load-package-metadata.ts";
-import { buildPackageActionPlan } from "../stages/package-stage/package-action-plan.ts";
-import { assertPackageValidation } from "../stages/package-stage/package-validation.ts";
 import {
-  createEmptyPackageManifest,
-  formatPackageManifest,
-} from "../stages/package-stage/package-manifest.ts";
+  executePackagePlans,
+  type ExecutePackagePlansOptions,
+} from "../stages/package-stage/execute-package-plans.ts";
 import { RUSH_WORKDIR } from "../rush/container.ts";
+import { canonicalizeFrameworkRuntime } from "../runtime/framework-runtime.ts";
 import {
   installRushWithCache,
   prepareRushWorkflowContainer,
@@ -20,14 +19,18 @@ import {
 } from "../rush/workflow-container.ts";
 import { buildRushAllProjectsLifecycleSteps } from "../rush/rush-command-plan.ts";
 import {
-  resolvePackageBuildEnvironment,
+  resolvePackageBuildEnvironmentFromDefinitions,
   withBuildEnvironment,
 } from "../stages/build-stage/build-env.ts";
-import { logSection, logSubsection } from "../logging/sections.ts";
+import { logSection } from "../logging/sections.ts";
+import {
+  preparePackageTargets,
+  type PreparedPackageTarget,
+} from "../stages/package-stage/package-planning.ts";
+import { writePackageRuntimeMetadata } from "../stages/package-stage/package-runtime-metadata.ts";
 
 const CI_PLAN_PATH = ".dagger/runtime/ci-plan.json";
 const CI_PLAN_CONTAINER_PATH = `${RUSH_WORKDIR}/${CI_PLAN_PATH}`;
-const PACKAGE_MANIFEST_PATH = ".dagger/runtime/package-manifest.json";
 
 function buildDetectedContainer(
   container: Container,
@@ -84,57 +87,26 @@ async function runPackageStage(
   repo: Directory,
   container: Container,
   ciPlan: CiPlan,
-  artifactPrefix: string,
+  packageTargets: PreparedPackageTarget[],
+  options: ExecutePackagePlansOptions,
 ): Promise<Directory> {
   logSection("Package deploy artifacts");
 
   if (ciPlan.deploy_targets.length === 0) {
     console.log("[package] no deploy targets selected");
-    return container
-      .directory(RUSH_WORKDIR)
-      .withNewFile(
-        PACKAGE_MANIFEST_PATH,
-        formatPackageManifest(createEmptyPackageManifest()),
-      );
-  }
-
-  const packagePlans = await Promise.all(
-    ciPlan.deploy_targets.map(async (target) => ({
-      plan: buildPackageActionPlan(
-        target,
-        await loadPackageTargetDefinition(repo, target),
-        artifactPrefix,
+    return writePackageRuntimeMetadata(
+      await canonicalizeFrameworkRuntime(
+        repo,
+        container.directory(RUSH_WORKDIR),
       ),
-      target,
-    })),
-  );
-  const artifacts: Record<string, PackageManifestArtifact> = Object.fromEntries(
-    packagePlans.map(({ plan, target }) => [target, plan.artifact]),
-  );
-  let nextContainer = container;
-
-  for (const { plan, target } of packagePlans) {
-    logSubsection(`Package target: ${target}`);
-    console.log(`[package] ${target}: ${plan.artifact.kind}`);
-
-    for (const validation of plan.validations) {
-      await assertPackageValidation(
-        nextContainer.directory(RUSH_WORKDIR),
-        validation,
-        target,
-      );
-    }
-
-    for (const { command, args } of plan.commands) {
-      nextContainer = nextContainer.withExec([command, ...args], {
-        expand: false,
-      });
-    }
+      [],
+      new Map(),
+      undefined,
+    );
   }
 
-  return nextContainer
-    .directory(RUSH_WORKDIR)
-    .withNewFile(PACKAGE_MANIFEST_PATH, formatPackageManifest({ artifacts }));
+  return (await executePackagePlans(repo, container, packageTargets, options))
+    .repo;
 }
 
 export type BuildPackageWorkflowResult = {
@@ -144,11 +116,40 @@ export type BuildPackageWorkflowResult = {
 };
 
 export type BuildPackageWorkflowOptions = RushWorkflowContainerOptions & {
+  applicationImageProvider?: string;
   buildHostEnv?: Record<string, string>;
   dryRun?: boolean;
+  gitSha?: string;
+  npmReleaseDefinition?: NpmReleaseDefinition;
+  protectedEnvironmentNames?: string[];
   releaseTargets?: string[];
   skipDeployPlanning?: boolean;
+  sourceRepositoryUrl?: string;
 };
+
+function collectCoordinateProtectedEnvironmentNames(
+  options: BuildPackageWorkflowOptions,
+): string[] {
+  const rushCacheProvider = options.rushCacheProviders.providers.github;
+  const toolchainImageProvider =
+    options.toolchainImageProviders?.providers.github;
+
+  return [
+    ...(options.protectedEnvironmentNames ?? []),
+    ...(options.npmReleaseDefinition === undefined
+      ? []
+      : [options.npmReleaseDefinition.auth.token_env]),
+    ...(rushCacheProvider === undefined
+      ? []
+      : [rushCacheProvider.username_env, rushCacheProvider.token_env]),
+    ...(toolchainImageProvider === undefined
+      ? []
+      : [
+          toolchainImageProvider.username_env,
+          toolchainImageProvider.token_env,
+        ]),
+  ];
+}
 
 export async function runBuildPackageWorkflow(
   repo: Directory,
@@ -195,6 +196,20 @@ export async function runBuildPackageWorkflow(
     : "deploy-targets";
   const needsRushLifecycle =
     buildMode === "all-projects" || ciPlan.deploy_targets.length > 0;
+  const packageTargets = await preparePackageTargets(
+    repo,
+    ciPlan.deploy_targets,
+    artifactPrefix,
+  );
+  const applicationImageProviderActivation =
+    await activateApplicationImageProvider(repo, packageTargets, {
+      applicationImageProvider: options.applicationImageProvider,
+      dryRun: options.dryRun ?? false,
+      hostEnv: options.buildHostEnv ?? options.hostEnv,
+      npmReleaseDefinition: options.npmReleaseDefinition,
+      protectedEnvironmentNames:
+        collectCoordinateProtectedEnvironmentNames(options),
+    });
 
   console.log(
     `[detect] mode=${ciPlan.mode} deploy_targets=${JSON.stringify(ciPlan.deploy_targets)} release_targets=${JSON.stringify(ciPlan.release_targets)} validate_targets=${JSON.stringify(ciPlan.validate_targets)}`,
@@ -205,7 +220,15 @@ export async function runBuildPackageWorkflow(
       repo,
       detectedContainer,
       ciPlan,
-      artifactPrefix,
+      packageTargets,
+      {
+        applicationImageProviderActivation,
+        applicationImageProvider: options.applicationImageProvider,
+        dryRun: options.dryRun,
+        gitSha: options.gitSha,
+        hostEnv: options.buildHostEnv ?? options.hostEnv,
+        sourceRepositoryUrl: options.sourceRepositoryUrl,
+      },
     );
 
     return {
@@ -222,12 +245,13 @@ export async function runBuildPackageWorkflow(
     detectedContainer,
     options,
   );
-  const buildEnv = await resolvePackageBuildEnvironment(
-    repo,
-    ciPlan.deploy_targets,
+  const buildEnv = resolvePackageBuildEnvironmentFromDefinitions(
+    packageTargets,
     options.buildHostEnv ?? options.hostEnv ?? {},
     {
       dryRun: options.dryRun ?? false,
+      protectedApplicationImageCredentials:
+        applicationImageProviderActivation?.protectedCredentials,
       requirePackageTargets: true,
       stage: "build",
     },
@@ -242,7 +266,15 @@ export async function runBuildPackageWorkflow(
     repo,
     builtContainer,
     ciPlan,
-    artifactPrefix,
+    packageTargets,
+    {
+      applicationImageProviderActivation,
+      applicationImageProvider: options.applicationImageProvider,
+      dryRun: options.dryRun,
+      gitSha: options.gitSha,
+      hostEnv: options.buildHostEnv ?? options.hostEnv,
+      sourceRepositoryUrl: options.sourceRepositoryUrl,
+    },
   );
 
   return {

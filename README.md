@@ -11,7 +11,11 @@ local debugging:
 - detect affected deploy targets from repository metadata;
 - run validation and build work through Dagger with explicit metadata-selected
   environment;
-- package deploy artifacts;
+- package filesystem deploy artifacts or verified OCI application images;
+- route one OCI provider through environment-selected public registry
+  coordinates without exposing credentials to Build or Deploy;
+- bound local worktree transfer before Dagger uploads dependency/cache trees;
+- extend the shared Rush image with digest-pinned, checksummed project tools;
 - release npm packages through Rush change files;
 - mount deploy-only runtime files such as cloud credentials;
 - publish deploy tags and provider-backed cache or toolchain images.
@@ -47,7 +51,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.7.1
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: validate
           toolchain-image-provider: github
@@ -70,13 +74,13 @@ jobs:
     steps:
       - id: auth
         name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Rush Delivery
-        uses: BootstrapLaboratory/rush-delivery@v0.7.1
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           dry-run: "false"
           environment: prod
@@ -106,7 +110,7 @@ source SHA; Rush package release pushes its generated version commit to the
 metadata `target_branch`.
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.7.1
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -146,7 +150,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: BootstrapLaboratory/rush-delivery@v0.7.1
+      - uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -168,7 +172,7 @@ This mode clones the target repository inside Dagger, so the CI runner does not
 need to mount the repository into the module.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.7.1
+RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.9.1
 RUNTIME_FILES_DIR="${RUNNER_TEMP}/rush-delivery-runtime-files"
 WORKFLOW_ENV_FILE="${RUNNER_TEMP}/dagger-workflow.env"
 DEPLOY_ENV_FILE="${RUNNER_TEMP}/dagger-deploy.env"
@@ -210,9 +214,21 @@ dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
   --source-repository-url="${SOURCE_REPOSITORY_URL}" \
   --source-ref="${GITHUB_REF}" \
   --source-auth-token-env=GITHUB_TOKEN \
-  --runtime-files="${RUNTIME_FILES_DIR}" \
-  --docker-socket=/var/run/docker.sock
+  --runtime-files="${RUNTIME_FILES_DIR}"
 ```
+
+`application-image-provider` is opt-in. Existing projects using only directory
+or Rush deploy archive artifacts can leave it `off` and need no `.dagger`
+configuration change after upgrading. OCI image packaging uses Dagger-native
+build and registry APIs, records only a verified digest reference, and does not
+need a host Docker socket. Start with the
+[OCI application images tutorial](docs/tutorial/oci-application-images/README.md),
+then use the [production guide](docs/oci-application-images.md),
+[registry recipes](docs/oci-registry-recipes.md), and
+[troubleshooting guide](docs/oci-application-image-troubleshooting.md) for a
+live rollout. OCI-only Action jobs should set `docker-socket: ""`.
+Keep the compatibility socket only for trusted legacy Deploy scripts: access to
+the host Docker daemon can bypass Dagger workspace and secret-file isolation.
 
 See [CI using command line](docs/quick-start/ci-cli.md) for the guided version.
 
@@ -223,21 +239,24 @@ available to Dagger and avoids relying on a remote Git ref that does not contain
 your latest changes.
 
 ```sh
-RUSH_DELIVERY_MODULE=github.com/BootstrapLaboratory/rush-delivery@v0.7.1
-
-dagger -m "${RUSH_DELIVERY_MODULE}" call workflow \
+./rush-delivery-local \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
   --repo=. \
+  -- \
+  workflow \
   --git-sha="$(git rev-parse HEAD)" \
   --event-name=manual \
   --force-targets-json='[]' \
   --environment=prod \
   --dry-run=true \
   --toolchain-image-provider=off \
-  --rush-cache-provider=off \
-  --source-mode=local_copy
+  --rush-cache-provider=off
 ```
 
-See [local runs](docs/quick-start/local-run.md) for more context.
+The release launcher applies bounded caller-side excludes before Dagger uploads
+the worktree. See [local runs](docs/quick-start/local-run.md) and the
+[bounded local-copy guide](docs/local-copy-source-imports.md) for checksum
+installation, inclusion rules, and the `legacy` recovery path.
 
 ## Documentation
 
@@ -248,4 +267,12 @@ See [local runs](docs/quick-start/local-run.md) for more context.
 - [Workflow guide](docs/workflows.md)
 - [Metadata contracts](docs/metadata.md)
 - [Provider adapters](docs/providers.md)
+- [Bounded local-copy imports](docs/local-copy-source-imports.md)
+- [Project-owned Rush toolchain](docs/rush-toolchain.md)
+- [Upgrade to v0.9.1](docs/upgrade-v0.9.1.md)
+- [Upgrade to v0.9.0](docs/upgrade-v0.9.0.md)
+- [OCI application images tutorial](docs/tutorial/oci-application-images/README.md)
+- [OCI application images](docs/oci-application-images.md)
+- [OCI registry recipes](docs/oci-registry-recipes.md)
+- [OCI application image troubleshooting](docs/oci-application-image-troubleshooting.md)
 - [Development notes](docs/development.md)

@@ -1,0 +1,12 @@
+{
+  "name": "control-plane-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "node scripts/build.mjs --check",
+    "test": "node scripts/build.mjs --check",
+    "verify": "node scripts/build.mjs --check"
+  }
+}

@@ -1,6 +1,12 @@
 import { Directory, Socket } from "@dagger.io/dagger";
+import {
+  assertNoApplicationImageCredentialProjections,
+  collectDeployRuntimeCredentialProjectionIssues,
+  type ProtectedApplicationImageCredential,
+} from "../../application-images/environment-boundary.ts";
 
 import type { DeployTargetResult } from "../../model/deploy-result.ts";
+import { withFreshExecutionCache } from "../../execution/cache-buster.ts";
 import type { PackageManifestArtifact } from "../../model/package-manifest.ts";
 import type {
   ToolchainImagePolicy,
@@ -13,10 +19,16 @@ import {
   buildResolvedToolchainContainer,
   resolveToolchainImage,
 } from "../../toolchain-images/resolve.ts";
-import { applyRuntimeWorkspace } from "./runtime-workspace.ts";
+import {
+  applyRuntimeWorkspace,
+  assertRuntimeFileMountTargetsDoNotCollideWithFrameworkEvidence,
+  mountTargetEvidence,
+  withoutFrameworkEvidence,
+} from "./runtime-workspace.ts";
 import { loadDeployTargetDefinition } from "./load-deploy-metadata.ts";
 import {
   getRequiredRepoRelativeHostPathSource,
+  mergeProjectAndFrameworkDeployEnvironment,
   resolveSpecEnvironment,
   validateRuntimeFilesProvided,
   validateRequiredHostEnv,
@@ -24,9 +36,13 @@ import {
 import {
   buildDeployTargetCommand,
   deployTagName,
-  updateDeployTagWithGithubApi,
+  updateDeployTagWithGithubApiIfConfigured,
 } from "./deploy-tag.ts";
 import { formatDryRunSummary } from "./dry-run-summary.ts";
+import {
+  buildArtifactRuntimeHandoff,
+  buildSuccessfulDeployTargetResult,
+} from "./artifact-handoff.ts";
 
 export async function executeTarget(
   repo: Directory,
@@ -45,8 +61,19 @@ export async function executeTarget(
   dockerSocket?: Socket,
   deployTagTokenEnv: string = "",
   runtimeFiles?: Directory,
+  protectedApplicationImageCredentials: ProtectedApplicationImageCredential[] = [],
 ): Promise<DeployTargetResult> {
   const definition = await loadDeployTargetDefinition(repo, target);
+  assertRuntimeFileMountTargetsDoNotCollideWithFrameworkEvidence(
+    definition.runtime.file_mounts,
+  );
+  assertNoApplicationImageCredentialProjections(
+    collectDeployRuntimeCredentialProjectionIssues(
+      target,
+      definition.runtime,
+      protectedApplicationImageCredentials,
+    ),
+  );
   validateRequiredHostEnv(definition.runtime, hostEnv, dryRun, target);
   validateRuntimeFilesProvided(
     definition.runtime.file_mounts,
@@ -54,14 +81,44 @@ export async function executeTarget(
     dryRun,
     target,
   );
-  const artifactPath = `/workspace/${artifact.deploy_path}`;
+  if (
+    artifact.kind === "oci_image" &&
+    artifact.source_revision !== gitSha.toLowerCase()
+  ) {
+    throw new Error(
+      `OCI artifact source revision "${artifact.source_revision}" does not match deploy gitSha "${gitSha}".`,
+    );
+  }
+  if (
+    artifact.kind === "oci_image" &&
+    !dryRun &&
+    artifact.status !== "published"
+  ) {
+    throw new Error(
+      `Live deploy requires a published OCI artifact for target "${target}".`,
+    );
+  }
+
+  const artifactHandoff = buildArtifactRuntimeHandoff(target, artifact);
+  const artifactPath = artifactHandoff.artifactPath;
   const deployTag = deployTagName(environment, target);
-  const envVars = {
-    ARTIFACT_PATH: artifactPath,
+
+  const frameworkEnv: Record<string, string> = {
+    ...artifactHandoff.environment,
     DRY_RUN: dryRun ? "1" : "0",
     GIT_SHA: gitSha,
-    ...resolveSpecEnvironment(definition.runtime, hostEnv, dryRun, target),
   };
+  const projectEnv = resolveSpecEnvironment(
+    definition.runtime,
+    hostEnv,
+    dryRun,
+    target,
+  );
+  const envVars = mergeProjectAndFrameworkDeployEnvironment(
+    projectEnv,
+    frameworkEnv,
+    target,
+  );
   const command = buildDeployTargetCommand(definition.deploy_script);
 
   logSubsection(`Deploy target: ${target} (wave ${wave})`);
@@ -81,13 +138,13 @@ export async function executeTarget(
     });
     console.log(output.trimEnd());
 
-    return {
-      artifactPath: envVars.ARTIFACT_PATH,
+    return buildSuccessfulDeployTargetResult(
+      artifact,
+      artifactPath,
       output,
-      status: "success",
       target,
       wave,
-    };
+    );
   }
 
   const toolchainImage = await resolveToolchainImage(
@@ -99,11 +156,20 @@ export async function executeTarget(
       providers: toolchainImageProviders,
     },
   );
-  let container = applyRuntimeWorkspace(
-    buildResolvedToolchainContainer(toolchainImage),
-    repo,
-    definition.runtime.workspace,
+  let container = (
+    await applyRuntimeWorkspace(
+      buildResolvedToolchainContainer(toolchainImage),
+      repo,
+      definition.runtime.workspace,
+    )
   ).withWorkdir("/workspace");
+
+  if (artifact.kind === "oci_image" && artifact.status === "published") {
+    container = mountTargetEvidence(container, repo, target);
+  }
+
+  const runtimeMountSourceRepo =
+    await withoutFrameworkEvidence(runtimeMountRepo);
 
   for (const fileMount of definition.runtime.file_mounts) {
     if (fileMount.kind === "host_path") {
@@ -113,10 +179,17 @@ export async function executeTarget(
         target,
         hostWorkspaceDir,
       );
-      container = container.withMountedFile(
-        fileMount.target,
-        runtimeMountRepo.file(sourcePath),
-      );
+      const runtimeMountFile = runtimeMountSourceRepo.file(sourcePath);
+
+      try {
+        await runtimeMountFile.sync();
+      } catch {
+        throw new Error(
+          `Runtime host-path file for environment name "${fileMount.source_var}" and target "${target}" was not found outside the Rush Delivery evidence subtree.`,
+        );
+      }
+
+      container = container.withMountedFile(fileMount.target, runtimeMountFile);
       continue;
     }
 
@@ -149,10 +222,12 @@ export async function executeTarget(
     container = container.withEnvVariable(name, value);
   }
 
+  container = withFreshExecutionCache(container, "deploy-target");
+
   const deployOutput = await container
     .withExec(["bash", "-lc", command])
     .stdout();
-  const tagOutput = await updateDeployTagWithGithubApi(
+  const tagOutput = await updateDeployTagWithGithubApiIfConfigured(
     environment,
     target,
     gitSha,
@@ -163,11 +238,11 @@ export async function executeTarget(
 
   console.log(`[deploy-release] wave ${wave}: finished ${target}`);
 
-  return {
-    artifactPath: envVars.ARTIFACT_PATH,
+  return buildSuccessfulDeployTargetResult(
+    artifact,
+    artifactPath,
     output,
-    status: "success",
     target,
     wave,
-  };
+  );
 }

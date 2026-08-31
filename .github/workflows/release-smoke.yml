@@ -1,0 +1,202 @@
+name: Released consumer smoke
+
+on:
+  # checkov:skip=CKV_GHA_7:Release verification requires an exact ref and its expected peeled commit.
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Released tag or immutable ref to verify.
+        required: true
+        default: v0.9.1
+        type: string
+      expected_commit:
+        description: Expected full peeled commit SHA for target_ref.
+        required: true
+        type: string
+      verify_release_asset:
+        description: Download the launcher from the GitHub release instead of the checked-out candidate.
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SMOKE_REF: ${{ inputs.target_ref }}
+  RELEASE_SMOKE_EXPECTED_SHA: ${{ inputs.expected_commit }}
+  RELEASE_SMOKE_VERIFY_ASSET: ${{ inputs.verify_release_asset }}
+
+jobs:
+  released-consumer-smoke:
+    name: ${{ inputs.target_ref }} / ${{ matrix.surface }} / ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        surface:
+          - github-action-bounded
+          - github-action-legacy
+          - remote-module-legacy
+          - release-launcher-bounded
+        scenario:
+          - filesystem-only
+          - oci-provider-off
+    steps:
+      - name: Checkout exact released fixture source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.RELEASE_SMOKE_REF }}
+          path: release-source
+
+      - id: consumer
+        name: Prepare isolated consumer repository
+        env:
+          RELEASE_SMOKE_SCENARIO: ${{ matrix.scenario }}
+          RELEASE_SMOKE_SOURCE: ${{ github.workspace }}/release-source
+        run: |
+          set -euo pipefail
+          consumer_root="${RUNNER_TEMP}/rush-delivery-release-${RELEASE_SMOKE_SCENARIO}"
+          cp -a \
+            "${RELEASE_SMOKE_SOURCE}/examples/oci-application-image-rush-repo" \
+            "${consumer_root}"
+          if [[ ${RELEASE_SMOKE_SCENARIO} == filesystem-only ]]; then
+            node \
+              "${RELEASE_SMOKE_SOURCE}/test/scripts/build-oci-v081-matrix-fixture.mjs" \
+              filesystem "${consumer_root}"
+          fi
+          git -C "${consumer_root}" init --quiet
+          git -C "${consumer_root}" config user.name rush-delivery-smoke
+          git -C "${consumer_root}" config user.email smoke@invalid.example
+          git -C "${consumer_root}" add --all
+          git -C "${consumer_root}" commit --quiet -m "test: prepare release smoke consumer"
+          actual_release_sha="$(git -C "${RELEASE_SMOKE_SOURCE}" rev-parse HEAD)"
+          if [[ ${actual_release_sha} != "${RELEASE_SMOKE_EXPECTED_SHA}" ]]; then
+            printf 'Released consumer smoke checked out an unexpected commit\n' >&2
+            exit 1
+          fi
+          printf 'repo=%s\n' "${consumer_root}" >> "${GITHUB_OUTPUT}"
+
+      - id: action-smoke
+        name: Exercise released GitHub Action
+        if: ${{ startsWith(matrix.surface, 'github-action-') }}
+        uses: ./release-source
+        with:
+          application-image-provider: off
+          docker-socket: ""
+          dry-run: "true"
+          event-name: workflow_dispatch
+          force-targets-json: '["control-plane-api"]'
+          git-sha: 0123456789abcdef0123456789abcdef01234567
+          include-github-env: "false"
+          repo: ${{ steps.consumer.outputs.repo }}
+          rush-cache-provider: off
+          source-import-policy: ${{ matrix.surface == 'github-action-legacy' && 'legacy' || 'bounded' }}
+          source-mode: local_copy
+          toolchain-image-provider: off
+
+      - name: Verify released GitHub Action result
+        if: ${{ startsWith(matrix.surface, 'github-action-') }}
+        env:
+          RELEASE_SMOKE_OUTPUT: ${{ steps.action-smoke.outputs.output }}
+          RELEASE_SMOKE_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          node -e '
+            const result = JSON.parse(process.env.RELEASE_SMOKE_OUTPUT);
+            const target = result.results?.[0];
+            const isOci = process.env.RELEASE_SMOKE_SCENARIO === "oci-provider-off";
+            if (result.dryRun !== true || result.results?.length !== 1 ||
+                target?.target !== "control-plane-api" ||
+                (isOci ? target.artifactKind !== "oci_image" : typeof target.artifactPath !== "string") ||
+                target.artifactReference !== undefined) {
+              throw new Error("Released GitHub Action returned an unexpected dry-run contract.");
+            }
+          '
+
+      - name: Install pinned Dagger CLI for module surfaces
+        if: ${{ contains(matrix.surface, 'module') || contains(matrix.surface, 'launcher') }}
+        uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
+        with:
+          version: v0.20.7
+
+      - name: Exercise released remote module legacy path
+        if: ${{ matrix.surface == 'remote-module-legacy' }}
+        env:
+          RELEASE_SMOKE_REPO: ${{ steps.consumer.outputs.repo }}
+        run: |
+          set -euo pipefail
+          result_file="${RUNNER_TEMP}/rush-delivery-module-result.json"
+          dagger \
+            -m "github.com/BootstrapLaboratory/rush-delivery@${RELEASE_SMOKE_REF}" \
+            --silent call --json workflow \
+            --application-image-provider=off \
+            --dry-run=true \
+            --event-name=workflow_dispatch \
+            --force-targets-json='["control-plane-api"]' \
+            --git-sha=0123456789abcdef0123456789abcdef01234567 \
+            --repo="${RELEASE_SMOKE_REPO}" \
+            --rush-cache-provider=off \
+            --source-mode=local_copy \
+            --toolchain-image-provider=off \
+            > "${result_file}"
+          printf 'RELEASE_SMOKE_RESULT_FILE=%s\n' "${result_file}" >> "${GITHUB_ENV}"
+
+      - name: Obtain and exercise bounded launcher
+        if: ${{ matrix.surface == 'release-launcher-bounded' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SMOKE_REPO: ${{ steps.consumer.outputs.repo }}
+        run: |
+          set -euo pipefail
+          asset_dir="${RUNNER_TEMP}/rush-delivery-release-asset"
+          mkdir -p "${asset_dir}"
+          if [[ ${RELEASE_SMOKE_VERIFY_ASSET} == true ]]; then
+            gh release download "${RELEASE_SMOKE_REF}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --pattern rush-delivery-local \
+              --dir "${asset_dir}"
+          else
+            cp \
+              "${GITHUB_WORKSPACE}/release-source/github-action/rush-delivery-local" \
+              "${asset_dir}/rush-delivery-local"
+          fi
+          cmp \
+            "${GITHUB_WORKSPACE}/release-source/github-action/rush-delivery-local" \
+            "${asset_dir}/rush-delivery-local"
+          chmod 0755 "${asset_dir}/rush-delivery-local"
+          result_file="${RUNNER_TEMP}/rush-delivery-launcher-result.json"
+          DAGGER_NO_NAG=1 "${asset_dir}/rush-delivery-local" \
+            --module="github.com/BootstrapLaboratory/rush-delivery@${RELEASE_SMOKE_REF}" \
+            --repo="${RELEASE_SMOKE_REPO}" \
+            --source-import-policy=bounded \
+            -- \
+            workflow \
+            --application-image-provider=off \
+            --dry-run=true \
+            --event-name=workflow_dispatch \
+            --force-targets-json='["control-plane-api"]' \
+            --git-sha=0123456789abcdef0123456789abcdef01234567 \
+            --rush-cache-provider=off \
+            --toolchain-image-provider=off \
+            > "${result_file}"
+          printf 'RELEASE_SMOKE_RESULT_FILE=%s\n' "${result_file}" >> "${GITHUB_ENV}"
+
+      - name: Verify released module or launcher result
+        if: ${{ matrix.surface == 'remote-module-legacy' || matrix.surface == 'release-launcher-bounded' }}
+        env:
+          RELEASE_SMOKE_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          node -e '
+            const { readFileSync } = require("node:fs");
+            let result = JSON.parse(readFileSync(process.env.RELEASE_SMOKE_RESULT_FILE, "utf8"));
+            if (typeof result === "string") result = JSON.parse(result);
+            const target = result.results?.[0];
+            const isOci = process.env.RELEASE_SMOKE_SCENARIO === "oci-provider-off";
+            if (result.dryRun !== true || result.results?.length !== 1 ||
+                target?.target !== "control-plane-api" ||
+                (isOci ? target.artifactKind !== "oci_image" : typeof target.artifactPath !== "string") ||
+                target.artifactReference !== undefined) {
+              throw new Error("Released module surface returned an unexpected dry-run contract.");
+            }
+          '

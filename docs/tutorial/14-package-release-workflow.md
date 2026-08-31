@@ -11,7 +11,7 @@ separation.
 Select package release explicitly:
 
 ```yaml
-- uses: BootstrapLaboratory/rush-delivery@v0.7.1
+- uses: BootstrapLaboratory/rush-delivery@v0.9.1
   with:
     dry-run: "false"
     release-targets-json: '["npm"]'
@@ -63,7 +63,7 @@ jobs:
       contents: write
     steps:
       - name: Run Rush Delivery package release
-        uses: BootstrapLaboratory/rush-delivery@v0.7.1
+        uses: BootstrapLaboratory/rush-delivery@v0.9.1
         with:
           entrypoint: release-packages
           dry-run: "false"
@@ -91,7 +91,9 @@ The live release path is:
 3. Restore or prepare Rush install state.
 4. Run Rush `build`, `lint`, `test`, and `verify`.
 5. Configure npm token auth from release env.
-6. Configure Git push auth from source auth.
+6. Configure process-only Git push auth from source auth. The token stays in a
+   Dagger secret environment and a static askpass helper reads it only when Git
+   prompts; no token or derived Basic header is written to `.git/config`.
 7. Prepare the local target branch.
 8. Run `rush publish --apply --target-branch <branch> --publish`.
 
@@ -110,7 +112,7 @@ permissions:
   packages: read
 
 steps:
-  - uses: BootstrapLaboratory/rush-delivery@v0.7.1
+  - uses: BootstrapLaboratory/rush-delivery@v0.9.1
     with:
       entrypoint: validate
       toolchain-image-provider: github
@@ -126,13 +128,13 @@ cache from PRs. Package release credentials are not passed to PR validation.
 Use local-copy source mode to test metadata and release behavior before pushing:
 
 ```sh
-dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.7.1 call release-packages \
-  --repo=. \
+./rush-delivery-local \
+  --module=github.com/BootstrapLaboratory/rush-delivery@v0.9.1 \
+  --repo=. -- release-packages \
   --git-sha="$(git rev-parse HEAD)" \
   --dry-run=true \
   --toolchain-image-provider=off \
-  --rush-cache-provider=off \
-  --source-mode=local_copy
+  --rush-cache-provider=off
 ```
 
 The dry-run path reads release metadata and runs the release lifecycle, but it

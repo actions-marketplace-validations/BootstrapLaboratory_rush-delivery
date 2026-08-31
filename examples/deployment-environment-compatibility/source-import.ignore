@@ -1,0 +1,3 @@
+# Defaults are prepended by Rush Delivery; add project-specific rules here.
+apps/web/.cache
+!tools/python/.venv/bin/uv

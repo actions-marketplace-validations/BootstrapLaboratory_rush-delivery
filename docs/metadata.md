@@ -10,11 +10,11 @@ For editor integration in external projects, prefer exact versioned schema
 URLs. For example:
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/deploy-target.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/deploy-target.schema.json
 ```
 
 The root `https://bootstraplaboratory.github.io/rush-delivery/schemas/` URLs
-track the current release. Exact paths such as `/schemas/v0.7.0/...` are the
+track the current release. Exact paths such as `/schemas/v0.9.1/...` are the
 stable contract for projects pinned to that Rush Delivery version.
 
 ## Package Release
@@ -32,7 +32,7 @@ source of truth for package selection, version changes, changelogs, and
 publishable package rules.
 
 ```yaml
-# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/npm-release.schema.json
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/npm-release.schema.json
 
 kind: npm
 
@@ -155,12 +155,19 @@ Each target declares:
 - `runtime.env`: static container environment values.
 - `runtime.dry_run_defaults`: safe defaults used during dry-runs.
 - `runtime.required_host_env`: host environment keys required for live runs.
-- `runtime.file_mounts`: files mounted into the runtime container from the
-  deploy runtime files bundle, or from host env paths for compatibility.
+- `runtime.file_mounts`: deploy-platform files mounted into the runtime
+  container from the runtime files bundle, or from host env paths for
+  compatibility.
 - `runtime.workspace`: directories and files mounted under `/workspace`.
 
 If `runtime.workspace.mode` is `full`, the whole prepared repository is mounted.
 If mode is omitted, only listed `dirs` and `files` are mounted.
+
+The framework-owned `.dagger/runtime/evidence` subtree is excluded from both
+workspace modes. For a published OCI target, Rush Delivery validates that
+target's evidence and mounts only its directory at the framework-owned
+`ARTIFACT_EVIDENCE_DIR`. Deploy scripts must read evidence from that variable,
+not request the internal subtree as workspace metadata.
 
 Runtime file mounts use a `source` path relative to the `runtimeFiles` bundle.
 `target` is optional and defaults to `/runtime-files/<source>`.
@@ -197,6 +204,10 @@ keyed by the source variable name.
 environment namespace and have no precedence order. If they resolve the same
 output name with different values, Rush Delivery fails instead of silently
 overriding one value with another.
+
+`ARTIFACT_*`, `GIT_SHA`, and `DRY_RUN` are framework-owned runtime names.
+Deploy target metadata cannot project or define them. Exact field constraints
+remain in the schema linked below.
 
 Schema:
 [`../schemas/deploy-target.schema.json`](../schemas/deploy-target.schema.json)
@@ -239,9 +250,117 @@ Supported artifact types:
 
 - `directory`: an already-built repository directory.
 - `rush_deploy_archive`: a Rush deploy output packaged for a deploy target.
+- `oci_image`: a single-platform application image built, scanned, published,
+  signed, and handed to Deploy by immutable digest.
+
+An OCI artifact declares a repository-relative build `context`, a Dockerfile
+inside that context, a relative image name, one explicit `platform`, and a
+scanner policy:
+
+```yaml
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/package-target.schema.json
+name: control-plane-api
+
+artifact:
+  kind: oci_image
+  context: .
+  dockerfile: deploy/images/control-plane-api.Dockerfile
+  image: control-plane-api
+  platform: linux/amd64
+  scan:
+    fail_on: [high, critical]
+    ignore_file: .dagger/application-images/grype.yaml
+```
+
+OCI targets require a full source revision for packaging. Existing
+directory/archive-only projects do not require this artifact shape, provider
+metadata, or registry credentials and retain their legacy manifest output.
 
 Schema:
 [`../schemas/package-target.schema.json`](../schemas/package-target.schema.json)
+
+## Application Image Providers
+
+OCI registry and signing provider metadata lives at
+`.dagger/application-images/providers.yaml`. Provider names are selected by the
+`applicationImageProvider` API input; `off` is reserved and remains the default.
+
+Illustrative provider metadata (replace the example registry and namespace with
+an accepted registry recipe):
+
+```yaml
+# yaml-language-server: $schema=https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/application-image-providers.schema.json
+providers:
+  release:
+    kind: oci_registry
+    registry: registry.example.com
+    repository_prefix: product/images
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+```
+
+Only environment variable names belong in metadata. Every one of the five names
+must be globally unique across all declared providers. Selected values come
+from the workflow-plus-deploy environment overlay during live Package. Token,
+private key, password, public key, and derived Docker configuration become
+Dagger secrets; the registry username is a required non-secret Dagger auth
+input. None reach the image build or Deploy runtime. Multiline Cosign PEM values
+may use literal `\n` separators in flat env files.
+
+Registry coordinates may remain static as above or use one public environment
+name per role:
+
+```yaml
+providers:
+  release:
+    kind: oci_registry
+    registry_env: APP_IMAGE_REGISTRY
+    repository_prefix_env: APP_IMAGE_REPOSITORY_PREFIX
+    username_env: OCI_USERNAME
+    token_env: OCI_TOKEN
+    signing_key_env: OCI_SIGNING_KEY
+    signing_password_env: OCI_SIGNING_PASSWORD
+    verification_key_env: OCI_SIGNING_PUBLIC_KEY
+```
+
+Exactly one of `registry`/`registry_env` and exactly one of
+`repository_prefix`/`repository_prefix_env` is required. Mixed static/dynamic
+definitions are valid. Coordinate values are public Package routing inputs,
+not credentials. Their names must be distinct from one another and every
+repository/invocation credential capability. Workflow resolves them from the
+workflow-plus-deploy overlay; standalone Package entrypoints use
+`deployEnvFile`. Deploy never reloads them. Follow the
+[environment-profile tutorial](tutorial/oci-application-images/08-environment-profiles.md).
+
+Every credential name declared by every application-image provider is reserved
+from package build and deploy environment projections. This is a cross-file
+rule, so the metadata contract enforces it after schema validation rather than
+duplicating provider-specific names in static JSON Schema. Do not put registry
+tokens or Cosign key material in the deploy runtime files bundle.
+
+Schema:
+[`../schemas/application-image-providers.schema.json`](../schemas/application-image-providers.schema.json)
+
+## Package Manifest
+
+Directory/archive-only selections keep the existing unversioned manifest. Any
+selection containing an OCI artifact emits the strict
+`rush-delivery-package-manifest/v2` envelope. Published OCI artifacts require a
+canonical digest reference, full source revision, one platform, and verified
+SBOM, scan, provenance, and signature evidence. Deploy accepts both manifest
+contracts.
+
+Schema:
+[`../schemas/package-manifest.schema.json`](../schemas/package-manifest.schema.json)
+
+For the complete package and deploy flow, follow the
+[OCI application images tutorial](tutorial/oci-application-images/README.md),
+then use the [production guide](oci-application-images.md),
+[registry recipes](oci-registry-recipes.md), and
+[troubleshooting guide](oci-application-image-troubleshooting.md).
 
 ## Validation Targets
 
@@ -264,6 +383,19 @@ keys for repository, username, and token.
 
 Schema:
 [`../schemas/toolchain-image-providers.schema.json`](../schemas/toolchain-image-providers.schema.json)
+
+Project-owned Rush tool metadata is separate and optional at
+`.dagger/toolchains/rush.yaml`. It selects a digest-pinned Node 24 Debian base
+and 1–16 ordered, SHA-256-verified HTTPS downloads installed as fixed
+executables under `/usr/local/bin`. Unknown fields and generic commands are
+rejected. Absence preserves the default Rush toolchain spec and cache identity.
+
+Schema:
+[`../schemas/rush-toolchain.schema.json`](../schemas/rush-toolchain.schema.json)
+
+Use the [project-owned toolchain guide](rush-toolchain.md) and
+[mixed Node/Python tutorial](tutorial/15-mixed-node-python-toolchain.md) rather
+than duplicating schema restrictions in project scripts.
 
 ## Rush Cache
 

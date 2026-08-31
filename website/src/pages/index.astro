@@ -6,6 +6,11 @@ const baseUrl = base.endsWith("/") ? base : `${base}/`;
 const docsUrl = `${baseUrl}docs/quick-start/github-actions/`;
 const diagramUrl = `${baseUrl}img/rush-delivery-orbital-pipeline.svg`;
 const tutorialUrl = `${baseUrl}docs/tutorial/`;
+const ociTutorialUrl = `${baseUrl}docs/tutorial/oci-application-images/`;
+const ociGuideUrl = `${baseUrl}docs/oci-application-images/`;
+const ociRecipesUrl = `${baseUrl}docs/oci-registry-recipes/`;
+const ociTroubleshootingUrl =
+  `${baseUrl}docs/oci-application-image-troubleshooting/`;
 const examples = [
   {
     id: "github-action",
@@ -14,7 +19,7 @@ const examples = [
     languageLabel: "yaml",
     highlightLanguage: "yaml",
     code: [
-      "uses: BootstrapLaboratory/rush-delivery@v0.7.1",
+      "uses: BootstrapLaboratory/rush-delivery@v0.9.1",
       "with:",
       '  dry-run: "false"',
       "  toolchain-image-provider: github",
@@ -35,7 +40,7 @@ const examples = [
     languageLabel: "sh",
     highlightLanguage: "shellscript",
     code: [
-      "dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.7.1 call workflow \\",
+      "dagger -m github.com/BootstrapLaboratory/rush-delivery@v0.9.1 call workflow \\",
       '  --git-sha="${GITHUB_SHA}" \\',
       '  --event-name="${GITHUB_EVENT_NAME}" \\',
       "  --release-targets-json='[\"npm\"]' \\",
@@ -54,7 +59,7 @@ const examples = [
     languageLabel: "yaml",
     highlightLanguage: "yaml",
     code: [
-      "uses: BootstrapLaboratory/rush-delivery@v0.7.1",
+      "uses: BootstrapLaboratory/rush-delivery@v0.9.1",
       "with:",
       "  entrypoint: validate",
       "  toolchain-image-provider: github",
@@ -71,7 +76,7 @@ const examples = [
     languageLabel: "yaml",
     highlightLanguage: "yaml",
     code: [
-      "# schemas: https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.7.0/",
+      "# schemas: https://bootstraplaboratory.github.io/rush-delivery/schemas/v0.9.1/",
       "",
       "# .dagger/deploy/services-mesh.yaml",
       "services:",
@@ -99,6 +104,15 @@ const examples = [
       "  map_env:",
       "    VITE_GRAPHQL_HTTP: WEBAPP_VITE_GRAPHQL_HTTP",
       "    VITE_GRAPHQL_WS: WEBAPP_VITE_GRAPHQL_WS",
+      "",
+      "# Illustrative OCI alternative: build once, deploy by digest",
+      "# artifact:",
+      "#   kind: oci_image",
+      "#   context: .",
+      "#   dockerfile: deploy/images/webapp.Dockerfile",
+      "#   image: webapp",
+      "#   platform: linux/amd64",
+      "#   scan: { fail_on: [high, critical] }",
       "",
       "# .dagger/release/npm.yaml",
       "kind: npm",
@@ -246,6 +260,45 @@ const highlightedExamples = await Promise.all(
             <p>
               Keep deploy scripts, workspace mounts, runtime env, package targets,
               cache providers, and service order with the product repo.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="details" aria-labelledby="oci-resources-heading">
+        <div>
+          <p class="eyebrow">Opt-in application images</p>
+          <h2 id="oci-resources-heading">
+            Learn OCI safely, then operate it deliberately.
+          </h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3><a href={ociTutorialUrl}>Runnable tutorial</a></h3>
+            <p>
+              Start provider-off, then publish, inspect, and deploy a verified
+              digest.
+            </p>
+          </article>
+          <article>
+            <h3><a href={ociGuideUrl}>Production guide</a></h3>
+            <p>
+              Understand trust boundaries, evidence, failure semantics, and
+              rollout.
+            </p>
+          </article>
+          <article>
+            <h3><a href={ociRecipesUrl}>Registry recipes</a></h3>
+            <p>
+              Map provider metadata, permissions, retention, and cleanup to a
+              registry.
+            </p>
+          </article>
+          <article>
+            <h3><a href={ociTroubleshootingUrl}>Troubleshooting</a></h3>
+            <p>
+              Diagnose failures by phase without leaking credentials or losing
+              evidence.
             </p>
           </article>
         </div>

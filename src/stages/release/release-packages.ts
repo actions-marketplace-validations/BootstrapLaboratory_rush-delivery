@@ -5,6 +5,7 @@ import {
   type File,
 } from "@dagger.io/dagger";
 
+import { withFreshExecutionCache } from "../../execution/cache-buster.ts";
 import type { NpmReleaseDefinition } from "../../model/npm-release.ts";
 import type { GitSourcePlan, SourcePlan } from "../../model/source.ts";
 import { formatMetadataContractValidationResult } from "../../metadata/metadata-contract.ts";
@@ -28,6 +29,10 @@ import {
   RELEASE_GIT_TOKEN_ENV,
   RELEASE_GIT_USERNAME_ENV,
 } from "./git-auth-env.ts";
+import {
+  RELEASE_GIT_ASKPASS_PATH,
+  releaseGitAskpassScript,
+} from "./git-askpass.ts";
 import { parseEnvFileContents } from "../../env/env-file.ts";
 import { loadOptionalNpmReleaseMetadata } from "./load-release-metadata.ts";
 import { buildNpmReleaseExecutionPlan } from "./release-command-plan.ts";
@@ -182,8 +187,11 @@ function withGitPushAuth(container: Container, auth: GitPushAuth): Container {
   const tokenSecret = dag.setSecret("rush-delivery-git-push-token", auth.token);
 
   return container
-    .withSecretVariable(RELEASE_GIT_TOKEN_ENV, tokenSecret)
-    .withEnvVariable(RELEASE_GIT_USERNAME_ENV, auth.username)
+    .withNewFile(
+      RELEASE_GIT_ASKPASS_PATH,
+      releaseGitAskpassScript(RELEASE_GIT_USERNAME_ENV, RELEASE_GIT_TOKEN_ENV),
+    )
+    .withExec(["chmod", "0500", RELEASE_GIT_ASKPASS_PATH])
     .withEnvVariable(RELEASE_GIT_REPOSITORY_URL_ENV, auth.repositoryUrl)
     .withExec(
       [
@@ -192,14 +200,16 @@ function withGitPushAuth(container: Container, auth: GitPushAuth): Container {
         [
           `case "\${${RELEASE_GIT_REPOSITORY_URL_ENV}}" in http://*|https://*) ;; *) echo "NPM package release requires an HTTP(S) Git source URL for token push auth." >&2; exit 1 ;; esac`,
           `if git remote get-url origin >/dev/null 2>&1; then git remote set-url origin "\${${RELEASE_GIT_REPOSITORY_URL_ENV}}"; else git remote add origin "\${${RELEASE_GIT_REPOSITORY_URL_ENV}}"; fi`,
-          `encoded="$(printf "%s:%s" "\${${RELEASE_GIT_USERNAME_ENV}}" "\${${RELEASE_GIT_TOKEN_ENV}}" | base64 | tr -d "\\n")"`,
-          `git config --local "http.\${${RELEASE_GIT_REPOSITORY_URL_ENV}}.extraheader" "AUTHORIZATION: basic \${encoded}"`,
         ].join(" && "),
       ],
       {
         expand: false,
       },
-    );
+    )
+    .withSecretVariable(RELEASE_GIT_TOKEN_ENV, tokenSecret)
+    .withEnvVariable(RELEASE_GIT_USERNAME_ENV, auth.username)
+    .withEnvVariable("GIT_ASKPASS", RELEASE_GIT_ASKPASS_PATH)
+    .withEnvVariable("GIT_TERMINAL_PROMPT", "0");
 }
 
 function withGitTargetBranch(
@@ -273,6 +283,7 @@ function runNpmRelease(
     hostEnv,
     dryRun,
   );
+  nextContainer = withFreshExecutionCache(nextContainer, "npm-release");
 
   for (const step of buildNpmReleaseExecutionPlan(definition, dryRun)) {
     switch (step.kind) {
@@ -387,6 +398,7 @@ export async function releasePackages(
         require_rush_cache_metadata: requiresRushCacheProviderMetadata({
           rushCacheProvider,
         }),
+        validate_application_image_provider_metadata: false,
       }),
     ),
   );

@@ -22,7 +22,7 @@ inputs:
   dagger-version:
     description: Dagger CLI version.
     required: false
-    default: v0.20.6
+    default: v0.20.7
   dagger-flags:
     description: Additional Dagger CLI flags.
     required: false
@@ -143,11 +143,23 @@ inputs:
     description: "Rush cache policy: lazy or pull-or-build. Defaults to lazy for workflow and pull-or-build for validate."
     required: false
     default: ""
+  application-image-provider:
+    description: Named OCI application-image publishing provider, or off.
+    required: false
+    default: "off"
 
   source-mode:
     description: Source acquisition mode.
     required: false
     default: git
+  source-import-policy:
+    description: "Local-copy import policy: bounded or legacy. Ignored in Git source mode."
+    required: false
+    default: bounded
+  source-import-ignore-file:
+    description: Repository-relative ordered ignore file used by bounded local-copy imports.
+    required: false
+    default: .dagger/source-import.ignore
   source-repository-url:
     description: Source repository Git URL. Defaults to the current GitHub repository URL.
     required: false
@@ -170,7 +182,7 @@ inputs:
     required: false
     default: ""
   docker-socket:
-    description: Docker socket path. Set empty to omit.
+    description: Legacy deploy-script compatibility socket. OCI image packaging does not require it; set empty for OCI-only jobs.
     required: false
     default: /var/run/docker.sock
   extra-args:
@@ -231,7 +243,10 @@ runs:
         INPUT_TOOLCHAIN_IMAGE_POLICY: ${{ inputs.toolchain-image-policy }}
         INPUT_RUSH_CACHE_PROVIDER: ${{ inputs.rush-cache-provider }}
         INPUT_RUSH_CACHE_POLICY: ${{ inputs.rush-cache-policy }}
+        INPUT_APPLICATION_IMAGE_PROVIDER: ${{ inputs.application-image-provider }}
         INPUT_SOURCE_MODE: ${{ inputs.source-mode }}
+        INPUT_SOURCE_IMPORT_POLICY: ${{ inputs.source-import-policy }}
+        INPUT_SOURCE_IMPORT_IGNORE_FILE: ${{ inputs.source-import-ignore-file }}
         INPUT_SOURCE_REPOSITORY_URL: ${{ inputs.source-repository-url }}
         INPUT_SOURCE_REF: ${{ inputs.source-ref }}
         INPUT_SOURCE_AUTH_TOKEN_ENV: ${{ inputs.source-auth-token-env }}
@@ -246,12 +261,12 @@ runs:
 
     - id: dagger
       name: Run Rush Delivery
-      uses: dagger/dagger-for-github@v8.4.1
+      uses: dagger/dagger-for-github@27b130bf0f79a7f6fbbbe0fbca6760dc9bb40a77 # v8.4.1
       env:
         DAGGER_NO_NAG: ${{ inputs.dagger-no-nag }}
       with:
         version: ${{ inputs.dagger-version }}
-        verb: call
+        verb: ${{ steps.prepare.outputs.verb }}
         module: ${{ steps.prepare.outputs.module }}
         args: ${{ steps.prepare.outputs.args }}
         workdir: ${{ inputs.workdir }}

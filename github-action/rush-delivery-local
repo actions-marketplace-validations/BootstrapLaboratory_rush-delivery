@@ -1,0 +1,376 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly RUSH_DELIVERY_DEFAULT_IGNORE_FILE=".dagger/source-import.ignore"
+readonly -a RUSH_DELIVERY_DEFAULT_EXCLUDES=(
+	"**/node_modules"
+	"**/.venv"
+	"**/__pycache__"
+	"**/.rush"
+	"**/rush-logs"
+	".trunk/out"
+	".trunk/logs"
+)
+
+rush_delivery_local_die() {
+	printf 'rush-delivery-local: %s\n' "$*" >&2
+	exit 1
+}
+
+rush_delivery_local_usage() {
+	cat <<'EOF'
+Usage:
+  rush-delivery-local [OPTIONS] -- ENTRYPOINT [DAGGER_FUNCTION_ARGUMENT ...]
+
+Options:
+  --module REF                         Dagger module reference (default: .)
+  --repo PATH                          Local repository directory (default: .)
+  --source-import-policy POLICY        bounded or legacy (default: bounded)
+  --source-import-ignore-file PATH     Repository-relative ignore file
+  --emit-shell                         Print bounded Dagger Shell instead of running it
+  --trusted-extra-args SOURCE          Append trusted raw Dagger function arguments
+  --help                               Show this help
+
+Supported entrypoints: workflow, validate, release-packages.
+EOF
+}
+
+rush_delivery_shell_literal() {
+	local value="$1"
+	local escaped="${value//\'/\'\\\'\'}"
+	printf "'%s'" "${escaped}"
+}
+
+rush_delivery_reject_control_characters() {
+	local value="$1"
+	local name="$2"
+
+	if [[ ${value} =~ [[:cntrl:]] ]]; then
+		rush_delivery_local_die "${name} must not contain control characters"
+	fi
+}
+
+rush_delivery_validate_ignore_file_path() {
+	local value="$1"
+	local segment
+
+	rush_delivery_reject_control_characters "${value}" "source import ignore file"
+	if [[ -z ${value} || ${value} == /* || ${value} =~ ^[A-Za-z]:[/\\] ]]; then
+		rush_delivery_local_die "source import ignore file must be repository-relative"
+	fi
+	if [[ ${value} == . || ${value} == ./* || ${value} == */ || ${value} == *//* ]]; then
+		rush_delivery_local_die "source import ignore file must be normalized"
+	fi
+	if [[ ${value} == *\\* || ${value} == *\** || ${value} == *\?* || ${value} == *\[* ]]; then
+		rush_delivery_local_die "source import ignore file must be a literal path"
+	fi
+
+	IFS='/' read -r -a rush_delivery_path_segments <<<"${value}"
+	for segment in "${rush_delivery_path_segments[@]}"; do
+		if [[ -z ${segment} || ${segment} == . || ${segment} == .. ]]; then
+			rush_delivery_local_die "source import ignore file must stay inside the repository"
+		fi
+	done
+}
+
+rush_delivery_validate_pattern() {
+	local value="$1"
+	local line_number="$2"
+	local pattern="${value}"
+	local inclusion="false"
+	local segment
+	local index
+	local character
+
+	rush_delivery_reject_control_characters "${pattern}" "source import pattern on line ${line_number}"
+	if [[ ${pattern} == '!'* ]]; then
+		inclusion="true"
+		pattern="${pattern#!}"
+		if [[ -z ${pattern} || ${pattern} == '!'* ]]; then
+			rush_delivery_local_die "source import pattern on line ${line_number} has a lone or repeated !"
+		fi
+	fi
+
+	if [[ -z ${pattern} || ${pattern} == /* || ${pattern} =~ ^[A-Za-z]:[/\\] ]]; then
+		rush_delivery_local_die "source import pattern on line ${line_number} must be repository-relative"
+	fi
+	if [[ ${pattern} == . || ${pattern} == ./* || ${pattern} == */ || ${pattern} == *//* ]]; then
+		rush_delivery_local_die "source import pattern on line ${line_number} must be normalized"
+	fi
+	if [[ ${pattern} == [[:space:]]* || ${pattern} == *[[:space:]] ]]; then
+		rush_delivery_local_die "source import pattern on line ${line_number} must not have surrounding whitespace"
+	fi
+
+	for ((index = 0; index < ${#pattern}; index += 1)); do
+		character="${pattern:index:1}"
+		case "${character}" in
+		\\ | "'" | '"' | '$' | '`' | ';' | '&' | '|' | '<' | '>' | '(' | ')' | '{' | '}')
+			rush_delivery_local_die "source import pattern on line ${line_number} contains an unsupported escape or expression character"
+			;;
+		*) ;;
+		esac
+	done
+
+	IFS='/' read -r -a rush_delivery_pattern_segments <<<"${pattern}"
+	for segment in "${rush_delivery_pattern_segments[@]}"; do
+		if [[ -z ${segment} || ${segment} == . || ${segment} == .. ]]; then
+			rush_delivery_local_die "source import pattern on line ${line_number} must stay inside the repository"
+		fi
+		if [[ ${inclusion} == "false" && (${segment} == .git || ${segment} == .dagger || ${segment} == rush.json) ]]; then
+			rush_delivery_local_die "source import pattern on line ${line_number} removes a mandatory contract path"
+		fi
+	done
+}
+
+rush_delivery_resolve_repo() {
+	local repo="$1"
+
+	rush_delivery_reject_control_characters "${repo}" "repository path"
+	[[ -d ${repo} ]] || rush_delivery_local_die "repository directory does not exist: ${repo}"
+	(
+		cd "${repo}"
+		pwd -P
+	)
+}
+
+rush_delivery_resolve_ignore_file() {
+	local repo="$1"
+	local relative_path="$2"
+	local parent="${relative_path%/*}"
+	local basename="${relative_path##*/}"
+	local resolved_parent
+	local candidate
+
+	if [[ ${parent} == "${relative_path}" ]]; then
+		parent="."
+	fi
+	if [[ ! -e ${repo}/${relative_path} && ! -L ${repo}/${relative_path} ]]; then
+		return 2
+	fi
+	[[ -d ${repo}/${parent} ]] || rush_delivery_local_die "source import ignore file parent is not a directory"
+	resolved_parent="$(cd "${repo}/${parent}" && pwd -P)"
+	case "${resolved_parent}" in
+	"${repo}" | "${repo}"/*) ;;
+	*) rush_delivery_local_die "source import ignore file resolves outside the repository" ;;
+	esac
+	candidate="${resolved_parent}/${basename}"
+	[[ ! -L ${candidate} ]] || rush_delivery_local_die "source import ignore file must not be a symlink"
+	[[ -f ${candidate} ]] || rush_delivery_local_die "source import ignore file is not a regular file"
+	printf '%s' "${candidate}"
+}
+
+rush_delivery_read_patterns() {
+	local ignore_file="$1"
+	local line
+	local line_number=0
+
+	RUSH_DELIVERY_EXCLUDES=("${RUSH_DELIVERY_DEFAULT_EXCLUDES[@]}")
+	if [[ -z ${ignore_file} ]]; then
+		return 0
+	fi
+
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		line_number=$((line_number + 1))
+		line="${line%$'\r'}"
+		if [[ -z ${line} || ${line} == \#* ]]; then
+			continue
+		fi
+		rush_delivery_validate_pattern "${line}" "${line_number}"
+		RUSH_DELIVERY_EXCLUDES+=("${line}")
+	done <"${ignore_file}"
+}
+
+rush_delivery_reject_adapter_arguments() {
+	local argument
+
+	for argument in "$@"; do
+		case "${argument}" in
+		--repo | --repo=* | --source-mode | --source-mode=* | --source-repository-url | --source-repository-url=* | --source-ref | --source-ref=* | --source-auth-token-env | --source-auth-token-env=* | --source-auth-username | --source-auth-username=*)
+			rush_delivery_local_die "${argument%%=*} is owned by the local source adapter"
+			;;
+		*) ;;
+		esac
+	done
+}
+
+rush_delivery_host_object_kind() {
+	case "$1" in
+	--workflow-env-file | --deploy-env-file | --release-env-file)
+		printf 'file'
+		;;
+	--runtime-files)
+		printf 'directory'
+		;;
+	--docker-socket)
+		printf 'unix-socket'
+		;;
+	*) ;;
+	esac
+}
+
+rush_delivery_build_shell() {
+	local repo="$1"
+	local entrypoint="$2"
+	local trusted_extra_args="$3"
+	shift 3
+	local script
+	local pattern
+	local argument
+	local argument_name
+	local argument_value
+	local host_object_kind
+	local host_object_index=0
+	local host_object_name
+	local invocation=""
+	local -a function_arguments=("$@")
+	local index
+
+	script="repo=\$(host | directory $(rush_delivery_shell_literal "${repo}")"
+	for pattern in "${RUSH_DELIVERY_EXCLUDES[@]}"; do
+		script+=" --exclude=$(rush_delivery_shell_literal "${pattern}")"
+	done
+	script+=")"
+
+	for ((index = 0; index < ${#function_arguments[@]}; index += 1)); do
+		argument="${function_arguments[index]}"
+		argument_name="${argument%%=*}"
+		argument_value=""
+
+		host_object_kind="$(rush_delivery_host_object_kind "${argument_name}")"
+		if [[ -n ${host_object_kind} ]]; then
+			if [[ ${argument} == *=* ]]; then
+				argument_value="${argument#*=}"
+			elif ((index + 1 < ${#function_arguments[@]})); then
+				index=$((index + 1))
+				argument_value="${function_arguments[index]}"
+			else
+				rush_delivery_local_die "${argument_name} requires a value"
+			fi
+
+			if [[ -n ${argument_value} ]]; then
+				host_object_name="rush_delivery_input_${host_object_index}"
+				host_object_index=$((host_object_index + 1))
+				script+=$'\n'
+				script+="${host_object_name}=\$(host | ${host_object_kind} $(rush_delivery_shell_literal "${argument_value}"))"
+				invocation+=" ${argument_name}=\$${host_object_name}"
+			else
+				invocation+=" $(rush_delivery_shell_literal "${argument_name}=")"
+			fi
+		else
+			invocation+=" $(rush_delivery_shell_literal "${argument}")"
+		fi
+	done
+
+	script+=$'\n'
+	script+="local-source --repo=\$repo | ${entrypoint}${invocation}"
+	if [[ -n ${trusted_extra_args} ]]; then
+		script+=" ${trusted_extra_args}"
+	fi
+	printf '%s' "${script}"
+}
+
+rush_delivery_module="."
+rush_delivery_repo="."
+rush_delivery_policy="bounded"
+rush_delivery_ignore_file="${RUSH_DELIVERY_DEFAULT_IGNORE_FILE}"
+rush_delivery_ignore_file_set="false"
+rush_delivery_emit_shell="false"
+rush_delivery_trusted_extra_args=""
+
+while (($# > 0)); do
+	case "$1" in
+	--module=*) rush_delivery_module="${1#*=}" ;;
+	--module)
+		(($# > 1)) || rush_delivery_local_die "--module requires a value"
+		shift
+		rush_delivery_module="$1"
+		;;
+	--repo=*) rush_delivery_repo="${1#*=}" ;;
+	--repo)
+		(($# > 1)) || rush_delivery_local_die "--repo requires a value"
+		shift
+		rush_delivery_repo="$1"
+		;;
+	--source-import-policy=*) rush_delivery_policy="${1#*=}" ;;
+	--source-import-policy)
+		(($# > 1)) || rush_delivery_local_die "--source-import-policy requires a value"
+		shift
+		rush_delivery_policy="$1"
+		;;
+	--source-import-ignore-file=*)
+		rush_delivery_ignore_file="${1#*=}"
+		rush_delivery_ignore_file_set="true"
+		;;
+	--source-import-ignore-file)
+		(($# > 1)) || rush_delivery_local_die "--source-import-ignore-file requires a value"
+		shift
+		rush_delivery_ignore_file="$1"
+		rush_delivery_ignore_file_set="true"
+		;;
+	--emit-shell) rush_delivery_emit_shell="true" ;;
+	--trusted-extra-args=*) rush_delivery_trusted_extra_args="${1#*=}" ;;
+	--trusted-extra-args)
+		(($# > 1)) || rush_delivery_local_die "--trusted-extra-args requires a value"
+		shift
+		rush_delivery_trusted_extra_args="$1"
+		;;
+	--help)
+		rush_delivery_local_usage
+		exit 0
+		;;
+	--)
+		shift
+		break
+		;;
+	*) rush_delivery_local_die "unknown launcher option: $1" ;;
+	esac
+	shift
+done
+
+(($# > 0)) || rush_delivery_local_die "an entrypoint is required after --"
+rush_delivery_entrypoint="$1"
+shift
+case "${rush_delivery_entrypoint}" in
+workflow | validate | release-packages) ;;
+releasePackages) rush_delivery_entrypoint="release-packages" ;;
+*) rush_delivery_local_die "unsupported entrypoint: ${rush_delivery_entrypoint}" ;;
+esac
+rush_delivery_reject_adapter_arguments "$@"
+
+case "${rush_delivery_policy}" in
+bounded | legacy) ;;
+*) rush_delivery_local_die "source import policy must be bounded or legacy" ;;
+esac
+
+rush_delivery_repo="$(rush_delivery_resolve_repo "${rush_delivery_repo}")"
+
+if [[ ${rush_delivery_policy} == "legacy" ]]; then
+	[[ ${rush_delivery_ignore_file_set} == "false" ]] || rush_delivery_local_die "legacy policy cannot use a source import ignore file"
+	[[ ${rush_delivery_emit_shell} == "false" ]] || rush_delivery_local_die "legacy policy cannot emit bounded Dagger Shell"
+	[[ -z ${rush_delivery_trusted_extra_args} ]] || rush_delivery_local_die "legacy policy cannot use trusted raw extra arguments"
+	exec dagger call -m "${rush_delivery_module}" "${rush_delivery_entrypoint}" "$@" --source-mode=local_copy --repo="${rush_delivery_repo}"
+fi
+
+rush_delivery_validate_ignore_file_path "${rush_delivery_ignore_file}"
+rush_delivery_resolved_ignore_file=""
+rush_delivery_ignore_status=0
+# Missing default files are optional; every other resolver status is classified below.
+# shellcheck disable=SC2310
+rush_delivery_resolved_ignore_file="$(rush_delivery_resolve_ignore_file "${rush_delivery_repo}" "${rush_delivery_ignore_file}")" || rush_delivery_ignore_status="$?"
+if [[ ${rush_delivery_ignore_status} -ne 0 ]]; then
+	if [[ ${rush_delivery_ignore_status} -ne 2 ]]; then
+		exit "${rush_delivery_ignore_status}"
+	fi
+	if [[ ${rush_delivery_ignore_file} != "${RUSH_DELIVERY_DEFAULT_IGNORE_FILE}" ]]; then
+		rush_delivery_local_die "source import ignore file does not exist: ${rush_delivery_ignore_file}"
+	fi
+fi
+rush_delivery_read_patterns "${rush_delivery_resolved_ignore_file}"
+rush_delivery_shell="$(rush_delivery_build_shell "${rush_delivery_repo}" "${rush_delivery_entrypoint}" "${rush_delivery_trusted_extra_args}" "$@")"
+
+if [[ ${rush_delivery_emit_shell} == "true" ]]; then
+	printf '%s\n' "${rush_delivery_shell}"
+	exit 0
+fi
+
+exec dagger shell -m "${rush_delivery_module}" -c "${rush_delivery_shell}"

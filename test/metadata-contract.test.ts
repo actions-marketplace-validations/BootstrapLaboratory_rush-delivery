@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,14 @@ class LocalMetadataRepository implements MetadataContractRepository {
     try {
       const entry = await stat(path.join(this.root, relativePath));
       return expectedType === "file" ? entry.isFile() : entry.isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
+  async isSymlink(relativePath: string): Promise<boolean> {
+    try {
+      return (await lstat(path.join(this.root, relativePath))).isSymbolicLink();
     } catch {
       return false;
     }
@@ -78,12 +86,20 @@ class MemoryMetadataRepository implements MetadataContractRepository {
       return relativePath in this.files;
     }
 
+    if (relativePath === ".") {
+      return true;
+    }
+
     const prefix = relativePath.endsWith("/")
       ? relativePath
       : `${relativePath}/`;
     return Object.keys(this.files).some((filePath) =>
       filePath.startsWith(prefix),
     );
+  }
+
+  async isSymlink(_relativePath: string): Promise<boolean> {
+    return false;
   }
 
   async readTextFile(relativePath: string): Promise<string> {
@@ -98,6 +114,10 @@ class MemoryMetadataRepository implements MetadataContractRepository {
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDirectory, "fixtures/rush-repo");
+const ociExampleRoot = path.resolve(
+  testDirectory,
+  "../examples/oci-application-image-rush-repo",
+);
 
 function validMetadataFiles(): Record<string, string> {
   return {
@@ -249,6 +269,16 @@ test("validates the fixture repository metadata contract", async () => {
   assert.ok(result.rush_projects.includes("webapp"));
 });
 
+test("validates the canonical OCI example metadata contract", async () => {
+  const result = await validateMetadataContractRepository(
+    new LocalMetadataRepository(ociExampleRoot),
+  );
+
+  assert.deepEqual(result.deploy_targets, ["control-plane-api"]);
+  assert.deepEqual(result.package_targets, ["control-plane-api"]);
+  assert.deepEqual(result.rush_projects, ["control-plane-api"]);
+});
+
 test("accepts a complete framework metadata contract", async () => {
   const result = await validateMetadataContractRepository(
     new MemoryMetadataRepository(validMetadataFiles()),
@@ -258,6 +288,79 @@ test("accepts a complete framework metadata contract", async () => {
   assert.deepEqual(result.package_targets, ["server", "webapp"]);
   assert.deepEqual(result.release_targets, ["npm"]);
   assert.deepEqual(result.validation_targets, ["server"]);
+});
+
+test("validates OCI package files and optional application image provider metadata", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/package/targets/server.yaml"] = [
+    "name: server",
+    "artifact:",
+    "  kind: oci_image",
+    "  context: apps/server",
+    "  dockerfile: apps/server/Dockerfile",
+    "  image: platform/server",
+    "  platform: linux/amd64",
+    "  scan:",
+    "    fail_on: [high, critical]",
+    "    ignore_file: .dagger/application-images/grype.yaml",
+    "",
+  ].join("\n");
+  files["apps/server/Dockerfile"] = "FROM scratch\n";
+  files[".dagger/application-images/grype.yaml"] = "ignore: []\n";
+  files[".dagger/application-images/providers.yaml"] = [
+    "providers:",
+    "  release:",
+    "    kind: oci_registry",
+    "    registry: registry.example",
+    "    repository_prefix: example/platform",
+    "    username_env: OCI_USERNAME",
+    "    token_env: OCI_TOKEN",
+    "    signing_key_env: OCI_SIGNING_KEY",
+    "    signing_password_env: OCI_SIGNING_PASSWORD",
+    "    verification_key_env: OCI_SIGNING_PUBLIC_KEY",
+    "",
+  ].join("\n");
+
+  const result = await validateMetadataContractRepository(
+    new MemoryMetadataRepository(files),
+    { require_application_image_provider_metadata: true },
+  );
+
+  assert.ok(result.package_targets.includes("server"));
+});
+
+test("does not require application image provider metadata for existing projects", async () => {
+  const result = await validateMetadataContractRepository(
+    new MemoryMetadataRepository(validMetadataFiles()),
+    { require_application_image_provider_metadata: false },
+  );
+
+  assert.deepEqual(result.package_targets, ["server", "webapp"]);
+});
+
+test("explicit metadata validation rejects an OCI Dockerfile outside its context", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/package/targets/server.yaml"] = [
+    "name: server",
+    "artifact:",
+    "  kind: oci_image",
+    "  context: apps/server",
+    "  dockerfile: deploy/server.Dockerfile",
+    "  image: server",
+    "  platform: linux/amd64",
+    "  scan:",
+    "    fail_on: [critical]",
+    "",
+  ].join("\n");
+  files["deploy/server.Dockerfile"] = "FROM scratch\n";
+
+  await assert.rejects(
+    () =>
+      validateMetadataContractRepository(new MemoryMetadataRepository(files), {
+        require_application_image_provider_metadata: false,
+      }),
+    /OCI image dockerfile must be inside its context/,
+  );
 });
 
 test("accepts release-only metadata without deploy or cache metadata when scoped for package release", async () => {
@@ -522,4 +625,138 @@ test("reports unsafe deploy runtime workspace paths", async () => {
       return true;
     },
   );
+});
+
+test("execution-scoped validation can skip an invalid unused application provider file", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/application-images/providers.yaml"] = "not: valid\n";
+
+  const result = await validateMetadataContractRepository(
+    new MemoryMetadataRepository(files),
+    { validate_application_image_provider_metadata: false },
+  );
+
+  assert.deepEqual(result.package_targets, ["server", "webapp"]);
+
+  await assert.rejects(
+    () =>
+      validateMetadataContractRepository(new MemoryMetadataRepository(files)),
+    /Application image provider metadata file.+is invalid/,
+  );
+});
+
+test("repository-wide validation reports provider credential projections across metadata files", async () => {
+  const files = validMetadataFiles();
+  files[".dagger/application-images/providers.yaml"] = [
+    "providers:",
+    "  release:",
+    "    kind: oci_registry",
+    "    registry: registry.example",
+    "    repository_prefix: example/release",
+    "    username_env: RELEASE_USERNAME",
+    "    token_env: RELEASE_TOKEN",
+    "    signing_key_env: RELEASE_SIGNING_KEY",
+    "    signing_password_env: RELEASE_SIGNING_PASSWORD",
+    "    verification_key_env: RELEASE_VERIFICATION_KEY",
+    "",
+  ].join("\n");
+  files[".dagger/package/targets/webapp.yaml"] = [
+    "name: webapp",
+    "build:",
+    "  pass_env: [RELEASE_USERNAME]",
+    "  map_env:",
+    "    APP_TOKEN: RELEASE_TOKEN",
+    "  dry_run_defaults:",
+    "    RELEASE_USERNAME: dry-user",
+    "    RELEASE_TOKEN: dry-token",
+    "artifact:",
+    "  kind: directory",
+    "  path: apps/webapp/dist",
+    "",
+  ].join("\n");
+  files[".dagger/deploy/targets/server.yaml"] = [
+    "name: server",
+    "deploy_script: deploy/server.sh",
+    "runtime:",
+    "  image: node:24-bookworm-slim",
+    "  required_host_env: [RELEASE_SIGNING_KEY]",
+    "  file_mounts:",
+    "    - source_var: RELEASE_SIGNING_KEY",
+    "      target: /run/signing-key",
+    "",
+  ].join("\n");
+  files[".dagger/release/npm.yaml"] = files[".dagger/release/npm.yaml"].replace(
+    "token_env: NPM_TOKEN",
+    "token_env: RELEASE_VERIFICATION_KEY",
+  );
+
+  await assert.rejects(
+    () =>
+      validateMetadataContractRepository(new MemoryMetadataRepository(files)),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(
+        error.message,
+        /provider "release" credential field "username_env" protects environment variable "RELEASE_USERNAME".+package target "webapp".+build.pass_env/,
+      );
+      assert.match(
+        error.message,
+        /provider "release" credential field "token_env" protects environment variable "RELEASE_TOKEN".+package target "webapp".+build.map_env source/,
+      );
+      assert.match(
+        error.message,
+        /provider "release" credential field "signing_key_env" protects environment variable "RELEASE_SIGNING_KEY".+deploy target "server".+required_host_env/,
+      );
+      assert.match(
+        error.message,
+        /provider "release" credential field "verification_key_env" protects environment variable "RELEASE_VERIFICATION_KEY".+npm release "npm".+auth.token_env/,
+      );
+      return true;
+    },
+  );
+});
+
+test("repository-wide validation rejects coordinate aliases from composed provider metadata", async () => {
+  for (const [coordinateName, extraFiles] of [
+    ["NPM_TOKEN", {}],
+    ["GITHUB_TOKEN", {}],
+    [
+      "TOOLCHAIN_TOKEN",
+      {
+        ".dagger/toolchain-images/providers.yaml": [
+          "providers:",
+          "  github:",
+          "    kind: github_container_registry",
+          "    repository_env: TOOLCHAIN_REPOSITORY",
+          "    token_env: TOOLCHAIN_TOKEN",
+          "    username_env: TOOLCHAIN_USERNAME",
+          "",
+        ].join("\n"),
+      },
+    ],
+  ] as const) {
+    const files: Record<string, string> = {
+      ...validMetadataFiles(),
+      ...extraFiles,
+    };
+    files[".dagger/application-images/providers.yaml"] = [
+      "providers:",
+      "  release:",
+      "    kind: oci_registry",
+      `    registry_env: ${coordinateName}`,
+      "    repository_prefix: example/release",
+      "    username_env: RELEASE_USERNAME",
+      "    token_env: RELEASE_TOKEN",
+      "    signing_key_env: RELEASE_SIGNING_KEY",
+      "    signing_password_env: RELEASE_SIGNING_PASSWORD",
+      "    verification_key_env: RELEASE_VERIFICATION_KEY",
+      "",
+    ].join("\n");
+
+    await assert.rejects(
+      () =>
+        validateMetadataContractRepository(new MemoryMetadataRepository(files)),
+      new RegExp(`protected environment name "${coordinateName}"`),
+    );
+  }
 });

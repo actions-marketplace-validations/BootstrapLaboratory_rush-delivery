@@ -21,6 +21,34 @@ items:
   - title: Providers
     source: ../docs/providers.md
     id: providers
+  - title: Bounded Local-Copy Imports
+    source: ../docs/local-copy-source-imports.md
+    id: local-copy-source-imports
+    description: Bound local worktree transfer before Dagger uploads source.
+  - title: Project-Owned Rush Toolchain
+    source: ../docs/rush-toolchain.md
+    id: rush-toolchain
+    description: Add digest-pinned, checksummed tools to the shared Rush image.
+  - title: Upgrade To v0.9.1
+    source: ../docs/upgrade-v0.9.1.md
+    id: upgrade-v0-9-1
+    description: Apply the bounded GitHub Action compatibility patch.
+  - title: Upgrade To v0.9.0
+    source: ../docs/upgrade-v0.9.0.md
+    id: upgrade-v0-9-0
+    description: Upgrade and recover safely from v0.8.1.
+  - title: OCI Application Images
+    source: ../docs/oci-application-images.md
+    id: oci-application-images
+    description: Publish verified application images and deploy immutable digests.
+  - title: OCI Registry Recipes
+    source: ../docs/oci-registry-recipes.md
+    id: oci-registry-recipes
+    description: Configure registry permissions, retention, and cleanup.
+  - title: OCI Application Image Troubleshooting
+    source: ../docs/oci-application-image-troubleshooting.md
+    id: oci-application-image-troubleshooting
+    description: Diagnose OCI release failures safely by phase.
   - title: Development
     source: ../docs/development.md
     id: development
@@ -87,3 +115,36 @@ tutorialItems:
   - title: Package Release Workflow
     source: ../docs/tutorial/14-package-release-workflow.md
     id: tutorial/package-release-workflow
+  - title: Mixed Node/Python Toolchain
+    source: ../docs/tutorial/15-mixed-node-python-toolchain.md
+    id: tutorial/mixed-node-python-toolchain
+  - title: OCI Application Images
+    children:
+      - title: Overview
+        source: ../docs/tutorial/oci-application-images/README.md
+        id: tutorial/oci-application-images
+        description: Publish, inspect, deploy, hand off, and roll back a signed image.
+      - title: 1 - Build And Scan Target
+        source: ../docs/tutorial/oci-application-images/01-build-and-scan-target.md
+        id: tutorial/oci-application-images/build-and-scan-target
+      - title: 2 - Provider-Off Dry Run
+        source: ../docs/tutorial/oci-application-images/02-provider-off-dry-run.md
+        id: tutorial/oci-application-images/provider-off-dry-run
+      - title: 3 - Registry And Cosign Bootstrap
+        source: ../docs/tutorial/oci-application-images/03-registry-and-cosign-bootstrap.md
+        id: tutorial/oci-application-images/registry-and-cosign-bootstrap
+      - title: 4 - Publish And Inspect
+        source: ../docs/tutorial/oci-application-images/04-publish-and-inspect.md
+        id: tutorial/oci-application-images/publish-and-inspect
+      - title: 5 - Deploy The Digest
+        source: ../docs/tutorial/oci-application-images/05-deploy-the-digest.md
+        id: tutorial/oci-application-images/deploy-the-digest
+      - title: 6 - GitHub Actions
+        source: ../docs/tutorial/oci-application-images/06-github-actions.md
+        id: tutorial/oci-application-images/github-actions
+      - title: 7 - Split Stages And Rollback
+        source: ../docs/tutorial/oci-application-images/07-split-stages-and-rollback.md
+        id: tutorial/oci-application-images/split-stages-and-rollback
+      - title: 8 - Environment Profiles
+        source: ../docs/tutorial/oci-application-images/08-environment-profiles.md
+        id: tutorial/oci-application-images/environment-profiles

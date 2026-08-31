@@ -1,7 +1,11 @@
 import { Directory, Socket } from "@dagger.io/dagger";
+import type { ProtectedApplicationImageCredential } from "../../application-images/environment-boundary.ts";
 import type { DeploymentPlan } from "../../model/deployment-plan.ts";
 import type { DeployTargetResult } from "../../model/deploy-result.ts";
-import type { PackageManifest } from "../../model/package-manifest.ts";
+import {
+  getOwnPackageManifestArtifact,
+  type PackageManifest,
+} from "../../model/package-manifest.ts";
 import type {
   ToolchainImagePolicy,
   ToolchainImageProvider,
@@ -26,6 +30,7 @@ export async function executeDeploymentPlan(
   dockerSocket?: Socket,
   deployTagTokenEnv: string = "",
   runtimeFiles?: Directory,
+  protectedApplicationImageCredentials: ProtectedApplicationImageCredential[] = [],
 ): Promise<DeployTargetResult[]> {
   const results: DeployTargetResult[] = [];
 
@@ -41,7 +46,10 @@ export async function executeDeploymentPlan(
     const waveResults = await Promise.all(
       wave.map(async (entry) => {
         try {
-          const artifact = packageManifest.artifacts[entry.target];
+          const artifact = getOwnPackageManifestArtifact(
+            packageManifest,
+            entry.target,
+          );
 
           if (artifact === undefined) {
             throw new Error(
@@ -66,6 +74,7 @@ export async function executeDeploymentPlan(
             dockerSocket,
             deployTagTokenEnv,
             runtimeFiles,
+            protectedApplicationImageCredentials,
           );
         } catch (error) {
           const message =
